@@ -136,8 +136,8 @@ class DerivWS:
                 async for raw in self.ws:
                     data = json.loads(raw)
                     msg_type = data.get("msg_type")
-                    req_id = str(data.get("req_id")) if data.get("req_id") is not None else None
-                    if req_id and req_id in self.pending:
+                    req_id = data.get("req_id")
+                    if req_id is not None and req_id in self.pending:
                         fut = self.pending.pop(req_id)
                         if not fut.done():
                             fut.set_result(data)
