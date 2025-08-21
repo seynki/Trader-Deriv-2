@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,18 +6,24 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime
+import asyncio
+import json
+import time
 
+# 3rd party realtime
+import websockets
+from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection (MUST use env)
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'test_database')]
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -25,8 +31,40 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# -------------------------------------------------------------
+# Deriv Integration (Demo-ready): WS ticks + proposal/buy
+# -------------------------------------------------------------
+DERIV_APP_ID = os.environ.get("DERIV_APP_ID")
+DERIV_API_TOKEN = os.environ.get("DERIV_API_TOKEN")
+DERIV_WS_URL = os.environ.get("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
 
-# Define Models
+SUPPORTED_SYMBOLS = [
+    "CRYETHUSD",  # Crypto ETH/USD
+    "FRXUSDJPY",  # Forex USD/JPY
+    "US30",       # Wall St 30
+    # Volatility indices examples
+    "1HZ10V",     # Volatility 10 (1s)
+    "R_10",       # Volatility 10 Index
+    "R_15",       # Volatility 15 Index
+]
+
+class BuyRequest(BaseModel):
+    symbol: str
+    contract_type: str  # CALL or PUT (for simplicity)
+    duration: int = 5
+    duration_unit: str = "t"  # ticks by default
+    stake: float = 1.0
+    currency: str = "USD"
+    max_price: Optional[float] = None
+    barrier: Optional[str] = None
+
+class DerivStatus(BaseModel):
+    connected: bool
+    authenticated: bool
+    environment: str = "DEMO"
+    symbols: List[str] = Field(default_factory=list)
+    last_heartbeat: Optional[int] = None
+
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
@@ -35,7 +73,141 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
-# Add your routes to the router instead of directly to app
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("deriv")
+
+class DerivWS:
+    """Minimal Deriv WS manager with auto reconnect and tick broadcasting."""
+    def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
+        self.app_id = app_id
+        self.token = token
+        self.ws_url = ws_url
+        self.ws: Optional[websockets.WebSocketClientProtocol] = None
+        self.connected = False
+        self.authenticated = False
+        self.loop_task: Optional[asyncio.Task] = None
+        self.subscribed_symbols: Dict[str, bool] = {}
+        # per-symbol subscribers: symbol -> set of asyncio.Queue
+        self.queues: Dict[str, List[asyncio.Queue]] = {}
+        self.last_heartbeat: Optional[int] = None
+        self._lock = asyncio.Lock()
+
+    def _build_uri(self) -> str:
+        if not self.app_id:
+            # Deriv recommends using an app_id; we still allow anon for read-only
+            return f"{self.ws_url}"
+        return f"{self.ws_url}?app_id={self.app_id}"
+
+    async def start(self):
+        if self.loop_task and not self.loop_task.done():
+            return
+        self.loop_task = asyncio.create_task(self._run())
+
+    async def stop(self):
+        if self.loop_task:
+            self.loop_task.cancel()
+        if self.ws:
+            await self.ws.close()
+        self.connected = False
+        self.authenticated = False
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential_jitter(initial=2, max=20))
+    async def _connect(self):
+        uri = self._build_uri()
+        logger.info(f"Connecting to Deriv WS: {uri}")
+        self.ws = await websockets.connect(uri, ping_interval=20, ping_timeout=10)
+        self.connected = True
+        logger.info("Connected to Deriv WS")
+        if self.token:
+            await self._send({"authorize": self.token})
+
+    async def _send(self, payload: Dict[str, Any]):
+        if not self.ws:
+            return
+        await self.ws.send(json.dumps(payload))
+
+    async def _run(self):
+        while True:
+            try:
+                await self._connect()
+                async for raw in self.ws:
+                    data = json.loads(raw)
+                    msg_type = data.get("msg_type")
+                    if msg_type == "authorize":
+                        self.authenticated = data.get("error") is None
+                        logger.info(f"Authorize status: {self.authenticated}")
+                    elif msg_type == "tick":
+                        tick = data.get("tick", {})
+                        symbol = tick.get("symbol")
+                        if symbol and symbol in self.queues:
+                            message = {
+                                "type": "tick",
+                                "symbol": symbol,
+                                "price": tick.get("quote"),
+                                "timestamp": tick.get("epoch"),
+                                "ask": tick.get("ask"),
+                                "bid": tick.get("bid"),
+                            }
+                            for q in list(self.queues.get(symbol, [])):
+                                # Don't await put forever; make it non-blocking
+                                if not q.full():
+                                    q.put_nowait(message)
+                    elif msg_type == "heartbeat":
+                        self.last_heartbeat = int(time.time())
+                    elif msg_type == "error":
+                        logger.warning(f"Deriv error: {data}")
+                    # Capture subscription ids to allow forget later if needed
+                    if "subscription" in data and "tick" in data:
+                        sub_id = data["subscription"].get("id")
+                        # we don't store sub_id now; minimal viable
+            except Exception as e:
+                logger.warning(f"WS loop error, will reconnect: {e}")
+                self.connected = False
+                self.authenticated = False
+                await asyncio.sleep(2)
+            finally:
+                try:
+                    if self.ws:
+                        await self.ws.close()
+                except Exception:
+                    pass
+
+    async def ensure_subscribed(self, symbol: str):
+        if symbol not in SUPPORTED_SYMBOLS:
+            # Allow dynamic, but log
+            logger.info(f"Subscribing non-whitelisted symbol: {symbol}")
+        async with self._lock:
+            if not self.subscribed_symbols.get(symbol):
+                await self._send({"ticks": symbol, "subscribe": 1})
+                self.subscribed_symbols[symbol] = True
+
+    async def add_queue(self, symbol: str) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self.queues.setdefault(symbol, []).append(q)
+        await self.ensure_subscribed(symbol)
+        return q
+
+    def remove_queue(self, symbol: str, q: asyncio.Queue):
+        if symbol in self.queues:
+            try:
+                self.queues[symbol].remove(q)
+            except ValueError:
+                pass
+
+# Single global instance
+_deriv = DerivWS(DERIV_APP_ID, DERIV_API_TOKEN, DERIV_WS_URL)
+
+@app.on_event("startup")
+async def _startup():
+    await _deriv.start()
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
+    await _deriv.stop()
+
+# ------------------- Public API -----------------------------
 @api_router.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -52,6 +224,155 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
+# Deriv helper endpoints
+@api_router.get("/deriv/status", response_model=DerivStatus)
+async def deriv_status():
+    return DerivStatus(
+        connected=_deriv.connected,
+        authenticated=_deriv.authenticated,
+        symbols=list(_deriv.subscribed_symbols.keys()),
+        last_heartbeat=_deriv.last_heartbeat,
+    )
+
+@api_router.post("/deriv/proposal")
+async def deriv_proposal(req: BuyRequest):
+    """Get a pricing proposal for a contract."""
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv not connected")
+    # Send proposal and wait for response inline using a temporary queue
+    tmp_q: asyncio.Queue = asyncio.Queue(maxsize=1)
+
+    async def wait_for_proposal(ws):
+        # we send with req_id to filter
+        req_id = str(uuid.uuid4())
+        payload = {
+            "proposal": 1,
+            "amount": float(req.stake),
+            "basis": "stake",
+            "contract_type": req.contract_type,
+            "currency": req.currency,
+            "duration": int(req.duration),
+            "duration_unit": req.duration_unit,
+            "symbol": req.symbol,
+            "req_id": req_id,
+        }
+        if req.barrier:
+            payload["barrier"] = req.barrier
+        await _deriv._send(payload)
+        t0 = time.time()
+        # Listen from the ws directly for this req_id
+        while time.time() - t0 < 10:
+            try:
+                raw = await asyncio.wait_for(_deriv.ws.recv(), timeout=10)
+                data = json.loads(raw)
+                if data.get("req_id") == req_id and data.get("msg_type") == "proposal":
+                    await tmp_q.put(data)
+                    return
+            except asyncio.TimeoutError:
+                break
+        raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
+
+    await wait_for_proposal(_deriv.ws)
+    data = await tmp_q.get()
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "Proposal error"))
+    p = data.get("proposal", {})
+    return {
+        "id": p.get("id"),
+        "symbol": p.get("symbol"),
+        "contract_type": p.get("contract_type"),
+        "ask_price": float(p.get("ask_price", 0) or 0),
+        "payout": float(p.get("payout", 0) or 0),
+        "spot": p.get("spot"),
+        "barrier": p.get("barrier"),
+    }
+
+@api_router.post("/deriv/buy")
+async def deriv_buy(req: BuyRequest):
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv not connected")
+    # 1) get proposal
+    proposal = await deriv_proposal(req)
+    # 2) send buy for proposal id
+    req_id = str(uuid.uuid4())
+    await _deriv._send({
+        "buy": proposal["id"],
+        "price": req.max_price or proposal["ask_price"],
+        "subscribe": 1,
+        "req_id": req_id,
+    })
+    # wait for buy response
+    t0 = time.time()
+    while time.time() - t0 < 10:
+        raw = await asyncio.wait_for(_deriv.ws.recv(), timeout=10)
+        data = json.loads(raw)
+        if data.get("req_id") == req_id and data.get("msg_type") == "buy":
+            if data.get("error"):
+                raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
+            b = data.get("buy", {})
+            return {
+                "message": "purchased",
+                "contract_id": b.get("contract_id"),
+                "buy_price": b.get("buy_price"),
+                "payout": b.get("payout"),
+                "transaction_id": b.get("transaction_id"),
+            }
+    raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+
+# WebSocket endpoint to push ticks to clients
+@app.websocket("/api/ws/ticks")
+async def ws_ticks(websocket: WebSocket):
+    await websocket.accept()
+    queues: Dict[str, asyncio.Queue] = {}
+    try:
+        # Wait for a subscribe message
+        init = await websocket.receive_text()
+        try:
+            msg = json.loads(init)
+        except json.JSONDecodeError:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON"}))
+            await websocket.close()
+            return
+        symbols = msg.get("symbols") or []
+        if not symbols:
+            await websocket.send_text(json.dumps({"type": "error", "message": "No symbols provided"}))
+            await websocket.close()
+            return
+        # Add queues per symbol
+        for s in symbols:
+            q = await _deriv.add_queue(s)
+            queues[s] = q
+        await websocket.send_text(json.dumps({"type": "subscribed", "symbols": list(queues.keys())}))
+        # Fan-out loop
+        while True:
+            # multiplex: get from any queue with timeout to also handle pings
+            get_tasks = [asyncio.create_task(q.get()) for q in queues.values()]
+            done, pending = await asyncio.wait(get_tasks, return_when=asyncio.FIRST_COMPLETED, timeout=15)
+            for p in pending:
+                p.cancel()
+            if not done:
+                # heartbeat
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                continue
+            for d in done:
+                try:
+                    data = d.result()
+                    await websocket.send_text(json.dumps(data))
+                except Exception:
+                    pass
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"Client WS error: {e}")
+    finally:
+        # cleanup
+        for s, q in queues.items():
+            _deriv.remove_queue(s, q)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -62,14 +383,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
