@@ -285,29 +285,29 @@ async def deriv_buy(req: BuyRequest):
     proposal = await deriv_proposal(req)
     # 2) send buy for proposal id
     req_id = str(uuid.uuid4())
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
     await _deriv._send({
         "buy": proposal["id"],
         "price": req.max_price or proposal["ask_price"],
         "subscribe": 1,
         "req_id": req_id,
     })
-    # wait for buy response
-    t0 = time.time()
-    while time.time() - t0 < 10:
-        raw = await asyncio.wait_for(_deriv.ws.recv(), timeout=10)
-        data = json.loads(raw)
-        if data.get("req_id") == req_id and data.get("msg_type") == "buy":
-            if data.get("error"):
-                raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-            b = data.get("buy", {})
-            return {
-                "message": "purchased",
-                "contract_id": b.get("contract_id"),
-                "buy_price": b.get("buy_price"),
-                "payout": b.get("payout"),
-                "transaction_id": b.get("transaction_id"),
-            }
-    raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
+    b = data.get("buy", {})
+    return {
+        "message": "purchased",
+        "contract_id": b.get("contract_id"),
+        "buy_price": b.get("buy_price"),
+        "payout": b.get("payout"),
+        "transaction_id": b.get("transaction_id"),
+    }
 
 # WebSocket endpoint to push ticks to clients
 @app.websocket("/api/ws/ticks")
