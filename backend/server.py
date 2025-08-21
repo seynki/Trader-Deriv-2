@@ -78,7 +78,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("deriv")
 
 class DerivWS:
-    """Minimal Deriv WS manager with auto reconnect and tick broadcasting."""
+    """Minimal Deriv WS manager with auto reconnect, dispatcher and tick broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
         self.app_id = app_id
         self.token = token
@@ -88,10 +88,12 @@ class DerivWS:
         self.authenticated = False
         self.loop_task: Optional[asyncio.Task] = None
         self.subscribed_symbols: Dict[str, bool] = {}
-        # per-symbol subscribers: symbol -> set of asyncio.Queue
+        # per-symbol subscribers: symbol -> list of asyncio.Queue
         self.queues: Dict[str, List[asyncio.Queue]] = {}
         self.last_heartbeat: Optional[int] = None
         self._lock = asyncio.Lock()
+        # pending req_id -> Future
+        self.pending: Dict[str, asyncio.Future] = {}
 
     def _build_uri(self) -> str:
         if not self.app_id:
