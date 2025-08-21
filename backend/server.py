@@ -242,7 +242,7 @@ async def deriv_proposal(req: BuyRequest):
     """Get a pricing proposal for a contract."""
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
-    req_id = str(uuid.uuid4())
+    req_id = int(time.time() * 1000)
     payload = {
         "proposal": 1,
         "amount": float(req.stake),
