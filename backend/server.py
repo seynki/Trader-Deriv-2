@@ -242,41 +242,28 @@ async def deriv_proposal(req: BuyRequest):
     """Get a pricing proposal for a contract."""
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
-    # Send proposal and wait for response inline using a temporary queue
-    tmp_q: asyncio.Queue = asyncio.Queue(maxsize=1)
-
-    async def wait_for_proposal(ws):
-        # we send with req_id to filter
-        req_id = str(uuid.uuid4())
-        payload = {
-            "proposal": 1,
-            "amount": float(req.stake),
-            "basis": "stake",
-            "contract_type": req.contract_type,
-            "currency": req.currency,
-            "duration": int(req.duration),
-            "duration_unit": req.duration_unit,
-            "symbol": req.symbol,
-            "req_id": req_id,
-        }
-        if req.barrier:
-            payload["barrier"] = req.barrier
-        await _deriv._send(payload)
-        t0 = time.time()
-        # Listen from the ws directly for this req_id
-        while time.time() - t0 < 10:
-            try:
-                raw = await asyncio.wait_for(_deriv.ws.recv(), timeout=10)
-                data = json.loads(raw)
-                if data.get("req_id") == req_id and data.get("msg_type") == "proposal":
-                    await tmp_q.put(data)
-                    return
-            except asyncio.TimeoutError:
-                break
+    req_id = str(uuid.uuid4())
+    payload = {
+        "proposal": 1,
+        "amount": float(req.stake),
+        "basis": "stake",
+        "contract_type": req.contract_type,
+        "currency": req.currency,
+        "duration": int(req.duration),
+        "duration_unit": req.duration_unit,
+        "symbol": req.symbol,
+        "req_id": req_id,
+    }
+    if req.barrier:
+        payload["barrier"] = req.barrier
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send(payload)
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
-
-    await wait_for_proposal(_deriv.ws)
-    data = await tmp_q.get()
     if data.get("error"):
         raise HTTPException(status_code=400, detail=data["error"].get("message", "Proposal error"))
     p = data.get("proposal", {})
