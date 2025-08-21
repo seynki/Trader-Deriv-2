@@ -136,6 +136,12 @@ class DerivWS:
                 async for raw in self.ws:
                     data = json.loads(raw)
                     msg_type = data.get("msg_type")
+                    req_id = str(data.get("req_id")) if data.get("req_id") is not None else None
+                    if req_id and req_id in self.pending:
+                        fut = self.pending.pop(req_id)
+                        if not fut.done():
+                            fut.set_result(data)
+                            continue
                     if msg_type == "authorize":
                         self.authenticated = data.get("error") is None
                         logger.info(f"Authorize status: {self.authenticated}")
@@ -152,17 +158,12 @@ class DerivWS:
                                 "bid": tick.get("bid"),
                             }
                             for q in list(self.queues.get(symbol, [])):
-                                # Don't await put forever; make it non-blocking
                                 if not q.full():
                                     q.put_nowait(message)
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
                         logger.warning(f"Deriv error: {data}")
-                    # Capture subscription ids to allow forget later if needed
-                    if "subscription" in data and "tick" in data:
-                        sub_id = data["subscription"].get("id")
-                        # we don't store sub_id now; minimal viable
             except Exception as e:
                 logger.warning(f"WS loop error, will reconnect: {e}")
                 self.connected = False
