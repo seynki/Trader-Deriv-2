@@ -284,7 +284,7 @@ async def deriv_buy(req: BuyRequest):
     # 1) get proposal
     proposal = await deriv_proposal(req)
     # 2) send buy for proposal id
-    req_id = str(uuid.uuid4())
+    req_id = int(time.time() * 1000)
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
     await _deriv._send({
