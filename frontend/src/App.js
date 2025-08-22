@@ -146,6 +146,27 @@ export default function App() {
     // warmup backend
     axios.get(`${API}/deriv/status`).catch(() => {});
   }, []);
+  // Carregar contracts_for dos símbolos atuais e ajustar UI conforme oferta oficial
+  useEffect(() => {
+    const fetchContracts = async () => {
+      const entries = await Promise.all(symbols.map(async (s) => {
+        try {
+          const { data } = await axios.get(`${API}/deriv/contracts_for/${s}`);
+          return [s, data];
+        } catch {
+          return [s, null];
+        }
+      }));
+      const map = Object.fromEntries(entries);
+      setContractsFor(map);
+      // Ajuste default de unidade
+      const first = symbols[0];
+      const units = map[first]?.duration_units || [];
+      if (units.length) setDurationUnit(units.includes("t") ? "t" : units[0]);
+    };
+    fetchContracts();
+  }, [symbols.join(",")]);
+
 
   return (
     <ToastProvider>
