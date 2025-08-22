@@ -167,6 +167,18 @@ export default function App() {
     fetchContracts();
   }, [symbols.join(",")]);
 
+                  {/* Ajuste de unidades conforme contracts_for */}
+                  {contractsFor[symbols[0]]?.duration_units?.length ? (
+                    <Select value={durationUnit} onValueChange={setDurationUnit}>
+                      <SelectTrigger className="w-24"><SelectValue placeholder="Unid."/></SelectTrigger>
+                      <SelectContent>
+                        {contractsFor[symbols[0]].duration_units.map((u) => (
+                          <SelectItem key={u} value={u}>{u === "t" ? "Ticks" : u === "s" ? "Segundos" : u === "m" ? "Minutos" : u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+
 
   return (
     <ToastProvider>
