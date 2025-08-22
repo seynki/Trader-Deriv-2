@@ -364,6 +364,28 @@ async def deriv_proposal(req: BuyRequest):
 async def deriv_buy(req: BuyRequest):
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
+@api_router.post("/deriv/sell")
+async def deriv_sell(req: SellRequest):
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv not connected")
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send({
+        "sell": req.contract_id,
+        "price": req.price or 0,
+        "req_id": req_id,
+    })
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for sell response")
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "Sell error"))
+    s = data.get("sell", {})
+    return {"message": "sold", "contract_id": s.get("contract_id"), "sold_for": s.get("sold_for")}
+
     # 1) get proposal
     proposal = await deriv_proposal(req)
     # 2) send buy for proposal id
