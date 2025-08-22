@@ -198,6 +198,19 @@ export default function App() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">TypeA – Trading</h1>
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Índices Volatility (1s)</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-3">
+                  {["1HZ10V","1HZ25V","1HZ50V","1HZ75V","1HZ100V"].map((sym) => (
+                    <Button key={sym} variant={symbols.includes(sym) ? "default" : "secondary"} onClick={() => {
+                      setSymbols((prev) => prev.includes(sym) ? prev.filter((x) => x !== sym) : [...prev, sym]);
+                    }}>{sym}</Button>
+                  ))}
+                </CardContent>
+              </Card>
+
               <div className="mt-1"><HeaderStatus status={connected} /></div>
             </div>
             <div className="flex gap-3 items-center">
