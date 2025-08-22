@@ -86,8 +86,8 @@ function LiveCard({ symbol, tick, onBuy, contracts }) {
       <CardContent className="flex items-center justify-between gap-3">
         <div className="text-xs opacity-70">{tick?.timestamp ? new Date(tick.timestamp * 1000).toLocaleTimeString() : "--:--"}</div>
         <div className="flex gap-2">
-          <Button size="sm" className="btn-buy" onClick={() => onBuy(symbol, "CALL")}>Buy CALL</Button>
-          <Button size="sm" variant="outline" className="btn-sell" onClick={() => onBuy(symbol, "PUT")}>Buy PUT</Button>
+          <Button size="sm" className="btn-buy" disabled={!(contracts?.contract_types||[]).includes("CALL")} onClick={() => onBuy(symbol, "CALL")}>Buy CALL</Button>
+          <Button size="sm" variant="outline" className="btn-sell" disabled={!(contracts?.contract_types||[]).includes("PUT")} onClick={() => onBuy(symbol, "PUT")}>Buy PUT</Button>
         </div>
       </CardContent>
     </Card>
