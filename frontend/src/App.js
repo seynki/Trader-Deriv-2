@@ -182,6 +182,8 @@ export default function App() {
 
   return (
     <ToastProvider>
+              {/* Desabilitar botões se tipo de contrato não existir para símbolo */}
+
       <div className="min-h-screen bg-app text-slate-50">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between mb-6">
