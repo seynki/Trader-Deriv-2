@@ -277,9 +277,12 @@ async def deriv_contracts_for(symbol: str, currency: str = "USD"):
         raise HTTPException(status_code=504, detail="Timeout waiting for contracts_for")
 
     if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "contracts_for error"))
+        msg = data["error"].get("message", "contracts_for error")
+        raise HTTPException(status_code=400, detail=msg)
 
     cf = data.get("contracts_for", {})
+    if not cf:
+        raise HTTPException(status_code=400, detail="There's no contract available for this symbol.")
     available = cf.get("available", [])
     types = set()
     durations: Dict[str, Dict[str, int]] = {}
