@@ -237,6 +237,82 @@ async def deriv_status():
         last_heartbeat=_deriv.last_heartbeat,
     )
 
+# cache for contracts_for
+_contracts_cache: Dict[str, Dict[str, Any]] = {}
+_CONTRACTS_TTL = 60  # seconds
+
+def _parse_duration(s: Optional[str]):
+    if not s or not isinstance(s, str):
+        return None, None
+    try:
+        num = int(''.join(ch for ch in s if ch.isdigit()))
+        unit = ''.join(ch for ch in s if ch.isalpha())
+        return num, unit
+    except Exception:
+        return None, None
+
+@api_router.get("/deriv/contracts_for/{symbol}")
+async def deriv_contracts_for(symbol: str, currency: str = "USD"):
+    # TTL cache
+    now = time.time()
+    cached = _contracts_cache.get(symbol)
+    if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
+        return cached["data"]
+
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv not connected")
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send({
+        "contracts_for": symbol,
+        "currency": currency,
+        "product_type": "basic",
+        "req_id": req_id,
+    })
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for contracts_for")
+
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "contracts_for error"))
+
+    cf = data.get("contracts_for", {})
+    available = cf.get("available", [])
+    types = set()
+    durations: Dict[str, Dict[str, int]] = {}
+    barrier_categories = set()
+
+    for item in available:
+        ctype = item.get("contract_type") or item.get("trade_type")
+        if ctype:
+            types.add(ctype)
+        min_d, min_u = _parse_duration(item.get("min_duration"))
+        max_d, max_u = _parse_duration(item.get("max_duration"))
+        if min_u and min_d is not None:
+            d = durations.setdefault(min_u, {"min": min_d, "max": min_d})
+            d["min"] = min(d["min"], min_d)
+        if max_u and max_d is not None:
+            d = durations.setdefault(max_u, {"min": max_d, "max": max_d})
+            d["max"] = max(d["max"], max_d)
+        bc = item.get("barrier_category")
+        if bc:
+            barrier_categories.add(bc)
+
+    result = {
+        "symbol": symbol,
+        "contract_types": sorted(types),
+        "durations": durations,
+        "duration_units": list(durations.keys()),
+        "barriers": sorted(barrier_categories),
+        "has_barrier": len(barrier_categories) > 0,
+    }
+
+    _contracts_cache[symbol] = {"_ts": now, "data": result}
+    return result
+
 @api_router.post("/deriv/proposal")
 async def deriv_proposal(req: BuyRequest):
     """Get a pricing proposal for a contract."""
