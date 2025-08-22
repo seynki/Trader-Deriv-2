@@ -58,6 +58,10 @@ class BuyRequest(BaseModel):
     max_price: Optional[float] = None
     barrier: Optional[str] = None
 
+class SellRequest(BaseModel):
+    contract_id: int
+    price: Optional[float] = None  # 0 = market
+
 class DerivStatus(BaseModel):
     connected: bool
     authenticated: bool
