@@ -18,9 +18,18 @@ const API = `${BACKEND_URL}/api`;
 
 const defaultSymbols = ["CRYETHUSD", "FRXUSDJPY", "US30"];
 const derivedSymbols = [
+  // 1-second variants
   { value: "1HZ10V", label: "Volatility 10 (1s)" },
+  { value: "1HZ25V", label: "Volatility 25 (1s)" },
+  { value: "1HZ50V", label: "Volatility 50 (1s)" },
+  { value: "1HZ75V", label: "Volatility 75 (1s)" },
+  { value: "1HZ100V", label: "Volatility 100 (1s)" },
+  // standard volatility indices
   { value: "R_10", label: "Volatility 10 Index" },
-  { value: "R_15", label: "Volatility 15 Index" },
+  { value: "R_25", label: "Volatility 25 Index" },
+  { value: "R_50", label: "Volatility 50 Index" },
+  { value: "R_75", label: "Volatility 75 Index" },
+  { value: "R_100", label: "Volatility 100 Index" },
 ];
 
 function wsUrlFromEnv() {
