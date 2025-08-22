@@ -75,7 +75,7 @@ function HeaderStatus({ status }) {
   );
 }
 
-function LiveCard({ symbol, tick, onBuy }) {
+function LiveCard({ symbol, tick, onBuy, contracts }) {
   const price = tick?.price ?? "-";
   return (
     <Card className="live-card">
