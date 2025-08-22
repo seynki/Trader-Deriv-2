@@ -216,7 +216,7 @@ export default function App() {
 
             <TabsContent value="ao-vivo" className="mt-6 grid md:grid-cols-3 gap-4">
               {symbols.map((s) => (
-                <LiveCard key={s} symbol={s} tick={ticks[s]} onBuy={buy} />
+                <LiveCard key={s} symbol={s} tick={ticks[s]} onBuy={buy} contracts={contractsFor[s]} />
               ))}
             </TabsContent>
 
