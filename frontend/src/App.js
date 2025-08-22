@@ -211,6 +211,19 @@ export default function App() {
                 </CardContent>
               </Card>
 
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Índices Volatility</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-3">
+                  {["R_10","R_25","R_50","R_75","R_100"].map((sym) => (
+                    <Button key={sym} variant={symbols.includes(sym) ? "default" : "secondary"} onClick={() => {
+                      setSymbols((prev) => prev.includes(sym) ? prev.filter((x) => x !== sym) : [...prev, sym]);
+                    }}>{sym}</Button>
+                  ))}
+                </CardContent>
+              </Card>
+
               <div className="mt-1"><HeaderStatus status={connected} /></div>
             </div>
             <div className="flex gap-3 items-center">
