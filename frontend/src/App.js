@@ -133,6 +133,7 @@ export default function App() {
   const [duration, setDuration] = useState(5);
   const [durationUnit, setDurationUnit] = useState("t");
   const [contractsFor, setContractsFor] = useState({});
+  const [openContract, setOpenContract] = useState(null);
 
   const buy = async (symbol, contractType) => {
     try {
