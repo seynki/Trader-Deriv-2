@@ -164,7 +164,9 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
     }
     if (type === "ACCUMULATOR") {
       const ct = ((support.accumulator?.contract_types)||[]).map((x)=>x.toUpperCase());
-      return ct.includes("ACCU") || ct.includes("ACCUMULATOR");
+      // Aceita ACCU/ACCUMULATOR do product_type=accumulator OU, quando o backend caiu para basic, os tipos aparecerem em basic
+      const basicCt = ((support.basic?.contract_types)||[]).map((x)=>x.toUpperCase());
+      return ct.includes("ACCU") || ct.includes("ACCUMULATOR") || basicCt.includes("ACCU") || basicCt.includes("ACCUMULATOR");
     }
     if (type === "TURBOS") {
       const ct = (support.turbos?.contract_types||[]).map((x)=>x.toUpperCase());
