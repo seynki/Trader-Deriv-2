@@ -139,10 +139,15 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
     (async () => {
       try {
         const [basic, multipliers, turbos, accumulator] = await Promise.all([
-          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=basic`).then(r=>r.data).catch(()=>null),
-          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=multipliers`).then(r=>r.data).catch(()=>null),
-          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=turbos`).then(r=>r.data).catch(()=>null),
-          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=accumulator`).then(r=>r.data).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=basic`).then(r=> (r.data.results?.[symbol] || r.data)).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=multipliers`).then(r=> (r.data.results?.[symbol] || r.data)).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=turbos`).then(r=> (r.data.results?.[symbol] || r.data)).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=accumulator`).then(r=> {
+            // Prefer the first_supported symbol result, otherwise base
+            const data = r.data;
+            if (data.first_supported && data.results && data.results[data.first_supported]) return data.results[data.first_supported];
+            return data.results?.[symbol] || data;
+          }).catch(()=>null),
         ]);
         if (!cancelled) setSupport({ basic, multipliers, turbos, accumulator });
       } catch (e) {
