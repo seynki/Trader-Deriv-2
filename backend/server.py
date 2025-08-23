@@ -61,7 +61,7 @@ class BuyRequest(BaseModel):
     # General
     symbol: str
     type: Optional[str] = "CALLPUT"  # CALLPUT | ACCUMULATOR | TURBOS | MULTIPLIERS
-    contract_type: Optional[str] = None  # e.g., CALL/PUT, TURBOSLONG/TURBOSSHORT, MULTUP/MULTDOWN, ACCUMULATOR
+    contract_type: Optional[str] = None  # e.g., CALL/PUT, TURBOSLONG/TURBOSSHORT, MULTUP/MULTDOWN, ACCU
     duration: Optional[int] = 5
     duration_unit: Optional[str] = "t"  # ticks by default
     stake: float = 1.0
@@ -73,6 +73,7 @@ class BuyRequest(BaseModel):
     strike: Optional[str] = None  # e.g., "ATM"
     limit_order: Optional[Dict[str, Any]] = None  # {take_profit, stop_loss}
     product_type: Optional[str] = None
+    growth_rate: Optional[float] = None  # for ACCUMULATOR (e.g., 0.03)
     extra: Optional[Dict[str, Any]] = None  # passthrough
 
 class SellRequest(BaseModel):
