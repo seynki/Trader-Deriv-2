@@ -173,6 +173,11 @@ class DerivWS:
                             continue
                     if msg_type == "authorize":
                         self.authenticated = data.get("error") is None
+                        if self.authenticated:
+                            auth = data.get("authorize", {})
+                            self.last_authorize = auth
+                            self.landing_company_name = auth.get("landing_company_name") or auth.get("landing_company_fullname")
+                            self.currency = auth.get("currency")
                         logger.info(f"Authorize status: {self.authenticated}")
                     elif msg_type == "tick":
                         tick = data.get("tick", {})
