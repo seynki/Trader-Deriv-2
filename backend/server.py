@@ -331,10 +331,11 @@ def _parse_duration(s: Optional[str]):
         return None, None
 
 @api_router.get("/deriv/contracts_for/{symbol}")
-async def deriv_contracts_for(symbol: str, currency: str = "USD"):
-    # TTL cache
+async def deriv_contracts_for(symbol: str, currency: str = "USD", product_type: Optional[str] = None):
+    # TTL cache key includes product_type
     now = time.time()
-    cached = _contracts_cache.get(symbol)
+    cache_key = f"{symbol}:{product_type or 'basic'}:{currency}"
+    cached = _contracts_cache.get(cache_key)
     if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
         return cached["data"]
 
@@ -343,12 +344,15 @@ async def deriv_contracts_for(symbol: str, currency: str = "USD"):
     req_id = int(time.time() * 1000)
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
-    await _deriv._send({
+    payload = {
         "contracts_for": symbol,
         "currency": currency,
-        "product_type": "basic",
         "req_id": req_id,
-    })
+    }
+    # Only send product_type if provided; Deriv defaults basic otherwise
+    if product_type:
+        payload["product_type"] = product_type
+    await _deriv._send(payload)
     try:
         data = await asyncio.wait_for(fut, timeout=10)
     except asyncio.TimeoutError:
@@ -390,9 +394,10 @@ async def deriv_contracts_for(symbol: str, currency: str = "USD"):
         "duration_units": list(durations.keys()),
         "barriers": sorted(barrier_categories),
         "has_barrier": len(barrier_categories) > 0,
+        "product_type": product_type or "basic",
     }
 
-    _contracts_cache[symbol] = {"_ts": now, "data": result}
+    _contracts_cache[cache_key] = {"_ts": now, "data": result}
     return result
 
 # ---------------- Proposal/Buy -----------------
@@ -418,10 +423,10 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
         if req.barrier:
             base["barrier"] = req.barrier
     elif t == "ACCUMULATOR":
-        # According to Deriv API, accumulator is placed via buy with parameters contract_type 'ACCU'
+        # Accumulator uses buy with parameters contract_type ACCU
         base = {
             "buy": 1,
-            "price": float(req.max_price or req.stake),
+            "price": float(req.max_price or 0),
             "parameters": {
                 "amount": float(req.stake),
                 "basis": "stake",
@@ -437,7 +442,7 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
     elif t == "TURBOS":
         base = {
             "buy": 1,
-            "price": float(req.max_price or req.stake),
+            "price": float(req.max_price or 0),
             "parameters": {
                 "amount": float(req.stake),
                 "basis": "stake",
@@ -450,7 +455,7 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
     elif t == "MULTIPLIERS":
         base = {
             "buy": 1,
-            "price": float(req.max_price or req.stake),
+            "price": float(req.max_price or 0),
             "parameters": {
                 "amount": float(req.stake),
                 "basis": "stake",
@@ -480,11 +485,18 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
 
 @api_router.post("/deriv/proposal")
 async def deriv_proposal(req: BuyRequest):
-    """Get a pricing proposal for a contract. Supports CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS."""
+    """Get a pricing proposal for a contract. Supports CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS.
+    Note: For ACCUMULATOR/TURBOS/MULTIPLIERS we build a buy parameters payload, but here we only return an error
+    if type isn't CALLPUT since proposal isn't applicable."""
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
+    if (req.type or "CALLPUT").upper() != "CALLPUT":
+        raise HTTPException(status_code=400, detail="proposal only applies to CALL/PUT vanilla options")
+
     req_id = int(time.time() * 1000)
     payload = build_proposal_payload(req)
+    if "proposal" not in payload:
+        raise HTTPException(status_code=400, detail="Invalid proposal payload")
     payload["req_id"] = req_id
 
     fut = asyncio.get_running_loop().create_future()
@@ -512,26 +524,46 @@ async def deriv_proposal(req: BuyRequest):
 async def deriv_buy(req: BuyRequest):
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
-    # 1) proposal
-    proposal = await deriv_proposal(req)
-    # 2) send buy for proposal id
-    req_id = int(time.time() * 1000)
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
-    await _deriv._send({
-        "buy": proposal["id"],
-        "price": req.max_price or proposal["ask_price"],
-        "subscribe": 1,
-        "req_id": req_id,
-    })
-    try:
-        data = await asyncio.wait_for(fut, timeout=12)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-    if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-    b = data.get("buy", {})
+
+    t = (req.type or "CALLPUT").upper()
+    if t == "CALLPUT":
+        # 1) proposal
+        proposal = await deriv_proposal(BuyRequest(**{**req.model_dump(), "type": "CALLPUT"}))
+        # 2) send buy for proposal id
+        req_id = int(time.time() * 1000)
+        fut = asyncio.get_running_loop().create_future()
+        _deriv.pending[req_id] = fut
+        await _deriv._send({
+            "buy": proposal["id"],
+            "price": req.max_price or proposal["ask_price"],
+            "subscribe": 1,
+            "req_id": req_id,
+        })
+        try:
+            data = await asyncio.wait_for(fut, timeout=12)
+        except asyncio.TimeoutError:
+            _deriv.pending.pop(req_id, None)
+            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+        if data.get("error"):
+            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
+        b = data.get("buy", {})
+    else:
+        # Direct buy with parameters
+        payload = build_proposal_payload(req)
+        req_id = int(time.time() * 1000)
+        fut = asyncio.get_running_loop().create_future()
+        _deriv.pending[req_id] = fut
+        payload["req_id"] = req_id
+        await _deriv._send(payload)
+        try:
+            data = await asyncio.wait_for(fut, timeout=12)
+        except asyncio.TimeoutError:
+            _deriv.pending.pop(req_id, None)
+            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+        if data.get("error"):
+            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
+        b = data.get("buy", {})
+
     # Try to prime contract subscription as soon as we know the id
     try:
         cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
@@ -542,7 +574,7 @@ async def deriv_buy(req: BuyRequest):
     return {
         "message": "purchased",
         "contract_id": b.get("contract_id"),
-        "buy_price": b.get("buy_price"),
+        "buy_price": b.get("buy_price") or b.get("price"),
         "payout": b.get("payout"),
         "transaction_id": b.get("transaction_id"),
     }

@@ -122,15 +122,58 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
   const [strike, setStrike] = useState("ATM");
   const [tp, setTp] = useState(50);
   const [sl, setSl] = useState(20);
+  const [growthRate, setGrowthRate] = useState(0.03);
   const [lastSignal, setLastSignal] = useState(null);
   const [avg, setAvg] = useState(null);
+  const [lastError, setLastError] = useState(null);
+  const [support, setSupport] = useState({ basic: null, multipliers: null, turbos: null, accumulator: null });
+
   const wsRef = useRef(null);
   const pricesRef = useRef([]);
   const prevRelationRef = useRef(null);
   const lastTradeAtRef = useRef(0);
 
+  // Fetch suporte de tipos por símbolo
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [basic, multipliers, turbos, accumulator] = await Promise.all([
+          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=basic`).then(r=>r.data).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=multipliers`).then(r=>r.data).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=turbos`).then(r=>r.data).catch(()=>null),
+          axios.get(`${API}/deriv/contracts_for/${symbol}?product_type=accumulator`).then(r=>r.data).catch(()=>null),
+        ]);
+        if (!cancelled) setSupport({ basic, multipliers, turbos, accumulator });
+      } catch (e) {
+        if (!cancelled) setSupport({ basic: null, multipliers: null, turbos: null, accumulator: null });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [symbol]);
+
+  const isTypeSupported = (type) => {
+    const up = (x) => (x||"").toUpperCase();
+    if (type === "CALLPUT") {
+      const ct = (support.basic?.contract_types)||[];
+      return ct.includes("CALL") && ct.includes("PUT");
+    }
+    if (type === "ACCUMULATOR") {
+      const ct = (support.accumulator?.contract_types)||[];
+      return ct.includes("ACCU");
+    }
+    if (type === "TURBOS") {
+      const ct = (support.turbos?.contract_types)||[];
+      return ct.includes("TURBOSLONG") || ct.includes("TURBOSSHORT");
+    }
+    if (type === "MULTIPLIERS") {
+      const ct = (support.multipliers?.contract_types)||[];
+      return ct.includes("MULTUP") || ct.includes("MULTDOWN");
+    }
+    return false;
+  };
+
   function buildPayloadForSide(side) {
-    // side: "CALL"|"PUT" semantic; map para tipos alternativos
     if (contractEngine === "CALLPUT") {
       return {
         type: "CALLPUT",
@@ -148,7 +191,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         symbol,
         stake: Number(stake),
         currency: "USD",
-        growth_rate: 0.03,
+        growth_rate: Number(growthRate),
         limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
       };
     }
@@ -216,13 +259,20 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             const side = relation === "above" ? "CALL" : "PUT";
             setLastSignal({ ts: now, side, price: last, avg: a });
             lastTradeAtRef.current = now;
+            // Verifica suporte
+            if (!isTypeSupported(contractEngine)) {
+              setLastError(`Tipo ${contractEngine} não suportado para ${symbol}.`);
+              return;
+            }
             // Dispara compra via backend seguro
             const payload = buildPayloadForSide(side);
-            buyAdvanced(payload);
+            buyAdvanced(payload, setLastError);
           }
           prevRelationRef.current = relation;
         }
-      } catch {}
+      } catch (e) {
+        setLastError(String(e?.message||e));
+      }
     };
     ws.onerror = () => {};
     ws.onclose = () => {};
@@ -230,7 +280,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
       try { ws.close(); } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit]);
+  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit, growthRate]);
 
   return (
     <Card>
@@ -238,13 +288,19 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         <CardTitle className="flex items-center gap-2"><Rocket size={18}/> Automação</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {lastError && (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 text-red-200 p-3 text-sm">
+            <div className="font-medium">Erro</div>
+            <div className="mt-1 whitespace-pre-wrap break-words">{String(lastError)}</div>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Entradas automáticas</div>
-            <div className="text-xs opacity-70">Regra: cruzamento da média simples. Backend seguro.</div>
+            <div className="text-xs opacity-70">Regra: cruzamento da média simples. Backend seguro. Exibe erros detalhados aqui.</div>
           </div>
           <div className="flex items-center gap-3">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
+            <Switch checked={enabled} onCheckedChange={(v)=>{ setLastError(null); setEnabled(v); }} />
             {enabled ? <Play size={16} className="text-emerald-500"/> : <Square size={16} className="text-slate-400"/>}
           </div>
         </div>
@@ -252,7 +308,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Símbolo</span>
-            <Select value={symbol} onValueChange={setSymbol}>
+            <Select value={symbol} onValueChange={(v)=>{ setSymbol(v); setLastError(null); }}>
               <SelectTrigger className="w-44"><SelectValue placeholder="Símbolo"/></SelectTrigger>
               <SelectContent>
                 {derivedSymbols.map((d) => (
@@ -271,13 +327,13 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Tipo</span>
-            <Select value={contractEngine} onValueChange={setContractEngine}>
+            <Select value={contractEngine} onValueChange={(v)=>{ setContractEngine(v); setLastError(null); }}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Tipo"/></SelectTrigger>
               <SelectContent>
-                <SelectItem value="CALLPUT">CALL/PUT</SelectItem>
-                <SelectItem value="ACCUMULATOR">ACCUMULATOR</SelectItem>
-                <SelectItem value="TURBOS">TURBOS</SelectItem>
-                <SelectItem value="MULTIPLIERS">MULTIPLIERS</SelectItem>
+                <SelectItem value="CALLPUT" disabled={!isTypeSupported("CALLPUT")}>CALL/PUT</SelectItem>
+                <SelectItem value="ACCUMULATOR" disabled={!isTypeSupported("ACCUMULATOR")}>ACCUMULATOR</SelectItem>
+                <SelectItem value="TURBOS" disabled={!isTypeSupported("TURBOS")}>TURBOS</SelectItem>
+                <SelectItem value="MULTIPLIERS" disabled={!isTypeSupported("MULTIPLIERS")}>MULTIPLIERS</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -294,6 +350,12 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <div className="flex items-center gap-2">
               <span className="text-sm opacity-80">Strike</span>
               <Input className="w-28" value={strike} onChange={(e) => setStrike(e.target.value)} placeholder="ATM" />
+            </div>
+          )}
+          {contractEngine === "ACCUMULATOR" && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm opacity-80">Growth</span>
+              <Input className="w-24" type="number" step="0.01" min={0.01} max={0.05} value={growthRate} onChange={(e) => setGrowthRate(Number(e.target.value||0.03))} />
             </div>
           )}
           {(contractEngine === "MULTIPLIERS" || contractEngine === "ACCUMULATOR") && (
@@ -359,6 +421,7 @@ export default function App() {
   const [contractsFor, setContractsFor] = useState({});
   const [openContract, setOpenContract] = useState(null);
   const contractWsRef = useRef(null);
+  const [lastError, setLastError] = useState(null);
 
   const buy = async (symbol, contractType) => {
     try {
@@ -390,12 +453,13 @@ export default function App() {
         ws.onerror = () => {};
       }
     } catch (e) {
-      const detail = e?.response?.data?.detail || e.message;
+      const detail = e?.response?.data?.detail || e?.message || "Erro desconhecido";
+      setLastError(`Falha na compra (manual): ${String(detail)}`);
       toast({ title: "Falha na compra", description: String(detail), variant: "destructive" });
     }
   };
 
-  const buyAdvanced = async (payload) => {
+  const buyAdvanced = async (payload, setErr) => {
     try {
       const res = await axios.post(`${API}/deriv/buy`, payload);
       const cid = res.data.contract_id;
@@ -415,7 +479,10 @@ export default function App() {
         };
       }
     } catch (e) {
-      const detail = e?.response?.data?.detail || e.message;
+      const detail = e?.response?.data?.detail || e?.message || "Erro desconhecido";
+      const more = e?.response?.data ? JSON.stringify(e.response.data) : "";
+      const msg = `Falha na compra (auto): ${detail}\n${more}`;
+      if (setErr) setErr(msg);
       toast({ title: "Falha na compra (auto)", description: String(detail), variant: "destructive" });
     }
   };
@@ -424,14 +491,14 @@ export default function App() {
     // warmup backend
     axios.get(`${API}/deriv/status`).catch(() => {});
   }, []);
-  // Carregar contracts_for dos símbolos atuais e ajustar UI conforme oferta oficial
+  // Carregar contracts_for (basic) dos símbolos atuais e ajustar UI CALL/PUT
   useEffect(() => {
     const fetchContracts = async () => {
       const entries = await Promise.all(symbols.map(async (s) => {
         try {
-          const { data } = await axios.get(`${API}/deriv/contracts_for/${s}`);
+          const { data } = await axios.get(`${API}/deriv/contracts_for/${s}?product_type=basic`);
           return [s, data];
-        } catch {
+        } catch (err) {
           return [s, null];
         }
       }));
@@ -527,6 +594,12 @@ export default function App() {
 
             <TabsContent value="auto" className="mt-6">
               <AutomacaoPanel buyAdvanced={buyAdvanced} stake={stake} duration={duration} durationUnit={durationUnit} />
+              {lastError && (
+                <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 text-red-200 p-3 text-sm">
+                  <div className="font-medium">Erro global</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words">{String(lastError)}</div>
+                </div>
+              )}
               <ContractPanel contract={openContract} />
             </TabsContent>
           </Tabs>
