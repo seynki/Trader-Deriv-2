@@ -110,7 +110,7 @@
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
@@ -118,6 +118,9 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "TESTED: GET /api/deriv/status ✅ (connected=true, authenticated=true), POST /api/deriv/proposal ✅ (R_100 CALL returns valid proposal with id, ask_price=1.0, payout=1.95). Core Deriv integration working correctly. Fixed minor shutdown issue when MONGO_URL not set."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Atualizado payload builder para ACCU/MULTUP|MULTDOWN/TURBOSLONG|TURBOSSHORT via buy+parameters (price=0 por padrão), suporte product_type no contracts_for e erros detalhados. Precisa retestar status e contracts_for (vários product_type)."
 ##   - task: "Deriv: contracts_for cacheado"
 ##     implemented: true
 ##     working: true
