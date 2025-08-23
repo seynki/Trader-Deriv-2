@@ -448,13 +448,21 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
             }
         }
     elif t == "MULTIPLIERS":
-        base.update({
-            "contract_type": (ct or "MULTUP"),
-        })
+        base = {
+            "buy": 1,
+            "price": float(req.max_price or req.stake),
+            "parameters": {
+                "amount": float(req.stake),
+                "basis": "stake",
+                "contract_type": (ct or "MULTUP"),
+                "currency": req.currency,
+                "symbol": req.symbol,
+            }
+        }
         if req.multiplier:
-            base["multiplier"] = int(req.multiplier)
+            base["parameters"]["multiplier"] = int(req.multiplier)
         if req.limit_order:
-            base["limit_order"] = req.limit_order
+            base["parameters"]["limit_order"] = req.limit_order
     else:
         # Fallback: send as-is plus extras
         if ct:
