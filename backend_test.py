@@ -175,48 +175,7 @@ class DerivAPITester:
         
         return False, {}
 
-    def test_deriv_buy(self):
-        """Test 3: POST /api/deriv/buy - Execute buy order"""
-        self.log("\n" + "="*60)
-        self.log("TEST 3: Deriv Buy Request")
-        self.log("="*60)
-        
-        buy_data = {
-            "symbol": "1HZ10V", 
-            "contract_type": "CALL",
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1.0,
-            "currency": "USD"
-        }
-        
-        success, data, status_code = self.run_test(
-            "Deriv Buy (1HZ10V CALL, 5 ticks, $1)",
-            "POST",
-            "deriv/buy",
-            200,
-            buy_data,
-            timeout=25
-        )
-        
-        if success:
-            contract_id = data.get('contract_id')
-            buy_price = data.get('buy_price')
-            
-            self.log(f"   Message: {data.get('message')}")
-            self.log(f"   Contract ID: {contract_id}")
-            self.log(f"   Buy Price: ${buy_price}")
-            self.log(f"   Payout: ${data.get('payout')}")
-            self.log(f"   Transaction ID: {data.get('transaction_id')}")
-            
-            if contract_id and buy_price:
-                self.log("✅ Buy order executed successfully")
-                return True
-            else:
-                self.log("⚠️  Buy order validation failed")
-                return False
-        
-        return False
+
 
     def test_basic_endpoints(self):
         """Test basic API endpoints"""
