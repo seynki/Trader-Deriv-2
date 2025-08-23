@@ -119,6 +119,10 @@ class DerivWS:
         self._lock = asyncio.Lock()
         # pending req_id -> Future
         self.pending: Dict[str, asyncio.Future] = {}
+        # store last authorize details (for landing_company/currency defaults)
+        self.last_authorize: Dict[str, Any] = {}
+        self.landing_company_name: Optional[str] = None
+        self.currency: Optional[str] = None
 
     def _build_uri(self) -> str:
         if not self.app_id:
