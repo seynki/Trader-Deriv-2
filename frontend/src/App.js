@@ -330,13 +330,19 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <Select value={contractEngine} onValueChange={(v)=>{ setContractEngine(v); setLastError(null); }}>
               <SelectTrigger className="w-48"><SelectValue placeholder="Tipo"/></SelectTrigger>
               <SelectContent>
-                <SelectItem value="CALLPUT" disabled={!isTypeSupported("CALLPUT")}>CALL/PUT</SelectItem>
-                <SelectItem value="ACCUMULATOR" disabled={!isTypeSupported("ACCUMULATOR")}>ACCUMULATOR</SelectItem>
-                <SelectItem value="TURBOS" disabled={!isTypeSupported("TURBOS")}>TURBOS</SelectItem>
-                <SelectItem value="MULTIPLIERS" disabled={!isTypeSupported("MULTIPLIERS")}>MULTIPLIERS</SelectItem>
+                <SelectItem value="CALLPUT">CALL/PUT</SelectItem>
+                <SelectItem value="ACCUMULATOR">ACCUMULATOR</SelectItem>
+                <SelectItem value="TURBOS">TURBOS</SelectItem>
+                <SelectItem value="MULTIPLIERS">MULTIPLIERS</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {/* Aviso de suporte quando o tipo selecionado pode não ser suportado */}
+          {contractEngine !== "CALLPUT" && !isTypeSupported(contractEngine) ? (
+            <div className="text-xs text-amber-300">
+              Aviso: o tipo {contractEngine} pode não ser suportado para {symbol}. Você ainda pode tentar operar; se falhar, verifique os parâmetros e o símbolo.
+            </div>
+          ) : null}
 
           {contractEngine === "MULTIPLIERS" && (
             <>
