@@ -148,6 +148,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         symbol,
         stake: Number(stake),
         currency: "USD",
+        growth_rate: 0.03,
         limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
       };
     }
