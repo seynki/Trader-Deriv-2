@@ -112,21 +112,116 @@ function LiveCard({ symbol, tick, onBuy, contracts }) {
   );
 }
 
-function AutomacaoPanel() {
+function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
   const [enabled, setEnabled] = useState(false);
+  const [symbol, setSymbol] = useState(defaultSymbol);
+  const [period, setPeriod] = useState(20); // últimos N preços
+  const [cooldown, setCooldown] = useState(30); // segundos entre trades
+  const [lastSignal, setLastSignal] = useState(null);
+  const [avg, setAvg] = useState(null);
+  const wsRef = useRef(null);
+  const pricesRef = useRef([]);
+  const prevRelationRef = useRef(null);
+  const lastTradeAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      try { wsRef.current?.close(); } catch {}
+      wsRef.current = null;
+      return;
+    }
+    // Abrir WS para ticks do símbolo escolhido via backend seguro
+    const url = wsTicksUrl();
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ symbols: [symbol] }));
+    };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "tick" && msg.symbol === symbol) {
+          const price = Number(msg.price);
+          if (!Number.isFinite(price)) return;
+          const arr = pricesRef.current.slice();
+          arr.push(price);
+          if (arr.length > period) arr.shift();
+          pricesRef.current = arr;
+          const a = arr.reduce((s, x) => s + x, 0) / Math.max(arr.length, 1);
+          setAvg(a);
+          if (arr.length < Math.max(3, period)) return; // aguarda dados suficientes
+          // relação com a média
+          const last = arr[arr.length - 1];
+          const prev = arr[arr.length - 2];
+          const relation = last > a ? "above" : last < a ? "below" : "equal";
+          const prevRel = prevRelationRef.current;
+          const now = Date.now();
+          const cooled = now - lastTradeAtRef.current > cooldown * 1000;
+          // Gatilho: cruzamento da média e respeita cooldown
+          if (prevRel && relation !== prevRel && relation !== "equal" && cooled) {
+            const side = relation === "above" ? "CALL" : "PUT";
+            setLastSignal({ ts: now, side, price: last, avg: a });
+            lastTradeAtRef.current = now;
+            // Dispara compra via backend seguro
+            buy(symbol, side);
+          }
+          prevRelationRef.current = relation;
+        }
+      } catch {}
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {};
+    return () => {
+      try { ws.close(); } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, symbol, period, cooldown]);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Rocket size={18}/> Automação</CardTitle>
       </CardHeader>
-      <CardContent className="flex items-center justify-between">
-        <div>
-          <div className="font-medium">Entradas automáticas</div>
-          <div className="text-xs opacity-70">Quando ativo, o sistema poderá executar as melhores ações conforme regras.</div>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium">Entradas automáticas (regra: cruzamento da média simples)</div>
+            <div className="text-xs opacity-70">CALL quando o preço cruza acima da média; PUT quando cruza abaixo. Usa backend seguro.</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={enabled} onCheckedChange={setEnabled} />
+            {enabled ? <Play size={16} className="text-emerald-500"/> : <Square size={16} className="text-slate-400"/>}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-          {enabled ? <Play size={16} className="text-emerald-500"/> : <Square size={16} className="text-slate-400"/>}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80">Símbolo</span>
+            <Select value={symbol} onValueChange={setSymbol}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="Símbolo"/></SelectTrigger>
+              <SelectContent>
+                {derivedSymbols.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80">Período</span>
+            <Input className="w-24" type="number" min={5} max={200} value={period} onChange={(e) => setPeriod(Number(e.target.value||20))} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80">Cooldown (s)</span>
+            <Input className="w-24" type="number" min={0} max={600} value={cooldown} onChange={(e) => setCooldown(Number(e.target.value||30))} />
+          </div>
+          <div className="flex items-center gap-2 text-sm opacity-80">
+            <span>Média:</span>
+            <span className="font-mono">{avg ? avg.toFixed(4) : "-"}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm opacity-80">
+            <span>Último sinal:</span>
+            <span>{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side}` : "-"}</span>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -309,7 +404,7 @@ export default function App() {
             </TabsContent>
 
             <TabsContent value="auto" className="mt-6">
-              <AutomacaoPanel />
+              <AutomacaoPanel buy={buy} />
               <ContractPanel contract={openContract} />
             </TabsContent>
           </Tabs>
