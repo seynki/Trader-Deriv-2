@@ -112,17 +112,70 @@ function LiveCard({ symbol, tick, onBuy, contracts }) {
   );
 }
 
-function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
+function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSymbol = "R_10" }) {
   const [enabled, setEnabled] = useState(false);
   const [symbol, setSymbol] = useState(defaultSymbol);
   const [period, setPeriod] = useState(20); // últimos N preços
   const [cooldown, setCooldown] = useState(30); // segundos entre trades
+  const [contractEngine, setContractEngine] = useState("CALLPUT"); // CALLPUT | ACCUMULATOR | TURBOS | MULTIPLIERS
+  const [multiplier, setMultiplier] = useState(200);
+  const [strike, setStrike] = useState("ATM");
+  const [tp, setTp] = useState(50);
+  const [sl, setSl] = useState(20);
   const [lastSignal, setLastSignal] = useState(null);
   const [avg, setAvg] = useState(null);
   const wsRef = useRef(null);
   const pricesRef = useRef([]);
   const prevRelationRef = useRef(null);
   const lastTradeAtRef = useRef(0);
+
+  function buildPayloadForSide(side) {
+    // side: "CALL"|"PUT" semantic; map para tipos alternativos
+    if (contractEngine === "CALLPUT") {
+      return {
+        type: "CALLPUT",
+        symbol,
+        contract_type: side, // CALL ou PUT
+        duration: Number(duration),
+        duration_unit: durationUnit,
+        stake: Number(stake),
+        currency: "USD",
+      };
+    }
+    if (contractEngine === "ACCUMULATOR") {
+      return {
+        type: "ACCUMULATOR",
+        symbol,
+        stake: Number(stake),
+        currency: "USD",
+        limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
+      };
+    }
+    if (contractEngine === "TURBOS") {
+      const ct = side === "CALL" ? "TURBOSLONG" : "TURBOSSHORT";
+      return {
+        type: "TURBOS",
+        symbol,
+        contract_type: ct,
+        stake: Number(stake),
+        currency: "USD",
+        strike: String(strike || "ATM"),
+      };
+    }
+    if (contractEngine === "MULTIPLIERS") {
+      const ct = side === "CALL" ? "MULTUP" : "MULTDOWN";
+      return {
+        type: "MULTIPLIERS",
+        symbol,
+        contract_type: ct,
+        stake: Number(stake),
+        currency: "USD",
+        multiplier: Number(multiplier || 200),
+        limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
+      };
+    }
+    return { symbol, contract_type: side, stake: Number(stake), currency: "USD" };
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -163,7 +216,8 @@ function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
             setLastSignal({ ts: now, side, price: last, avg: a });
             lastTradeAtRef.current = now;
             // Dispara compra via backend seguro
-            buy(symbol, side);
+            const payload = buildPayloadForSide(side);
+            buyAdvanced(payload);
           }
           prevRelationRef.current = relation;
         }
@@ -175,7 +229,7 @@ function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
       try { ws.close(); } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, symbol, period, cooldown]);
+  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit]);
 
   return (
     <Card>
@@ -185,8 +239,8 @@ function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-medium">Entradas automáticas (regra: cruzamento da média simples)</div>
-            <div className="text-xs opacity-70">CALL quando o preço cruza acima da média; PUT quando cruza abaixo. Usa backend seguro.</div>
+            <div className="font-medium">Entradas automáticas</div>
+            <div className="text-xs opacity-70">Regra: cruzamento da média simples. Backend seguro.</div>
           </div>
           <div className="flex items-center gap-3">
             <Switch checked={enabled} onCheckedChange={setEnabled} />
@@ -214,6 +268,45 @@ function AutomacaoPanel({ buy, defaultSymbol = "R_10" }) {
             <span className="text-sm opacity-80">Cooldown (s)</span>
             <Input className="w-24" type="number" min={0} max={600} value={cooldown} onChange={(e) => setCooldown(Number(e.target.value||30))} />
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80">Tipo</span>
+            <Select value={contractEngine} onValueChange={setContractEngine}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Tipo"/></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CALLPUT">CALL/PUT</SelectItem>
+                <SelectItem value="ACCUMULATOR">ACCUMULATOR</SelectItem>
+                <SelectItem value="TURBOS">TURBOS</SelectItem>
+                <SelectItem value="MULTIPLIERS">MULTIPLIERS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {contractEngine === "MULTIPLIERS" && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-sm opacity-80">Multiplier</span>
+                <Input className="w-24" type="number" min={1} max={2000} value={multiplier} onChange={(e) => setMultiplier(Number(e.target.value||200))} />
+              </div>
+            </>
+          )}
+          {contractEngine === "TURBOS" && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm opacity-80">Strike</span>
+              <Input className="w-28" value={strike} onChange={(e) => setStrike(e.target.value)} placeholder="ATM" />
+            </div>
+          )}
+          {(contractEngine === "MULTIPLIERS" || contractEngine === "ACCUMULATOR") && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-sm opacity-80">TP</span>
+                <Input className="w-24" type="number" value={tp} onChange={(e) => setTp(Number(e.target.value||50))} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm opacity-80">SL</span>
+                <Input className="w-24" type="number" value={sl} onChange={(e) => setSl(Number(e.target.value||20))} />
+              </div>
+            </>
+          )}
           <div className="flex items-center gap-2 text-sm opacity-80">
             <span>Média:</span>
             <span className="font-mono">{avg ? avg.toFixed(4) : "-"}</span>
@@ -245,8 +338,10 @@ function ContractPanel({ contract }) {
         <div><span className="opacity-70">Lance:</span> {fmt(contract.bid_price)}</div>
         <div><span className="opacity-70">Payout:</span> {fmt(contract.payout)}</div>
         <div><span className="opacity-70">Lucro:</span> {fmt(contract.profit)}</div>
-        <div><span className="opacity-70">Início:</span> {contract.date_start ? new Date(contract.date_start * 1000).toLocaleTimeString() : '-'}</div>
-        <div><span className="opacity-70">Expira:</span> {contract.date_expiry ? new Date(contract.date_expiry * 1000).toLocaleTimeString() : '-'}</div>
+        <div><span className="opacity-70">Início:</span> {contract.date_start ? new Date(contract.date_start * 1000).toLocaleTimeString() : '-'}
+        </div>
+        <div><span className="opacity-70">Expira:</span> {contract.date_expiry ? new Date(contract.date_expiry * 1000).toLocaleTimeString() : '-'}
+        </div>
       </CardContent>
     </Card>
   );
@@ -267,6 +362,7 @@ export default function App() {
   const buy = async (symbol, contractType) => {
     try {
       const res = await axios.post(`${API}/deriv/buy`, {
+        type: "CALLPUT",
         symbol,
         contract_type: contractType,
         duration: Number(duration),
@@ -295,6 +391,31 @@ export default function App() {
     } catch (e) {
       const detail = e?.response?.data?.detail || e.message;
       toast({ title: "Falha na compra", description: String(detail), variant: "destructive" });
+    }
+  };
+
+  const buyAdvanced = async (payload) => {
+    try {
+      const res = await axios.post(`${API}/deriv/buy`, payload);
+      const cid = res.data.contract_id;
+      toast({ title: "Compra enviada (auto)", description: `Contrato #${cid || "-"}` });
+      if (cid) {
+        try { if (contractWsRef.current) contractWsRef.current.close(); } catch {}
+        const url = wsContractUrl(cid);
+        const ws = new WebSocket(url);
+        contractWsRef.current = ws;
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === "contract") {
+              setOpenContract(msg);
+            }
+          } catch {}
+        };
+      }
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e.message;
+      toast({ title: "Falha na compra (auto)", description: String(detail), variant: "destructive" });
     }
   };
 
@@ -404,7 +525,7 @@ export default function App() {
             </TabsContent>
 
             <TabsContent value="auto" className="mt-6">
-              <AutomacaoPanel buy={buy} />
+              <AutomacaoPanel buyAdvanced={buyAdvanced} stake={stake} duration={duration} durationUnit={durationUnit} />
               <ContractPanel contract={openContract} />
             </TabsContent>
           </Tabs>

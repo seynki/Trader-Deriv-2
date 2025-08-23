@@ -58,14 +58,22 @@ SUPPORTED_SYMBOLS = [
 ]
 
 class BuyRequest(BaseModel):
+    # General
     symbol: str
-    contract_type: str  # CALL or PUT (for simplicity)
-    duration: int = 5
-    duration_unit: str = "t"  # ticks by default
+    type: Optional[str] = "CALLPUT"  # CALLPUT | ACCUMULATOR | TURBOS | MULTIPLIERS
+    contract_type: Optional[str] = None  # e.g., CALL/PUT, TURBOSLONG/TURBOSSHORT, MULTUP/MULTDOWN, ACCUMULATOR
+    duration: Optional[int] = 5
+    duration_unit: Optional[str] = "t"  # ticks by default
     stake: float = 1.0
     currency: str = "USD"
     max_price: Optional[float] = None
     barrier: Optional[str] = None
+    # Specific extras
+    multiplier: Optional[int] = None
+    strike: Optional[str] = None  # e.g., "ATM"
+    limit_order: Optional[Dict[str, Any]] = None  # {take_profit, stop_loss}
+    product_type: Optional[str] = None
+    extra: Optional[Dict[str, Any]] = None  # passthrough
 
 class SellRequest(BaseModel):
     contract_id: int
@@ -286,11 +294,14 @@ async def root():
 async def create_status_check(input: StatusCheckCreate):
     status_dict = input.dict()
     status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
+    if db:
+        _ = await db.status_checks.insert_one(status_obj.dict())
     return status_obj
 
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks():
+    if not db:
+        return []
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
@@ -383,30 +394,76 @@ async def deriv_contracts_for(symbol: str, currency: str = "USD"):
     _contracts_cache[symbol] = {"_ts": now, "data": result}
     return result
 
-@api_router.post("/deriv/proposal")
-async def deriv_proposal(req: BuyRequest):
-    """Get a pricing proposal for a contract."""
-    if not _deriv.connected:
-        raise HTTPException(status_code=503, detail="Deriv not connected")
-    req_id = int(time.time() * 1000)
-    payload = {
+# ---------------- Proposal/Buy -----------------
+
+def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
+    base: Dict[str, Any] = {
         "proposal": 1,
         "amount": float(req.stake),
         "basis": "stake",
-        "contract_type": req.contract_type,
         "currency": req.currency,
-        "duration": int(req.duration),
-        "duration_unit": req.duration_unit,
         "symbol": req.symbol,
-        "req_id": req_id,
     }
-    if req.barrier:
-        payload["barrier"] = req.barrier
+    t = (req.type or "CALLPUT").upper()
+    # Default contract_type fallback
+    ct = (req.contract_type or "CALL").upper() if t == "CALLPUT" else (req.contract_type.upper() if req.contract_type else None)
+
+    if t == "CALLPUT":
+        base.update({
+            "contract_type": ct,
+            "duration": int(req.duration or 5),
+            "duration_unit": req.duration_unit or "t",
+        })
+        if req.barrier:
+            base["barrier"] = req.barrier
+    elif t == "ACCUMULATOR":
+        base.update({
+            "contract_type": "ACCUMULATOR",
+        })
+        if req.limit_order:
+            base["limit_order"] = req.limit_order
+    elif t == "TURBOS":
+        base.update({
+            "contract_type": (ct or "TURBOSLONG"),
+            "strike": req.strike or "ATM",
+        })
+    elif t == "MULTIPLIERS":
+        base.update({
+            "contract_type": (ct or "MULTUP"),
+        })
+        if req.multiplier:
+            base["multiplier"] = int(req.multiplier)
+        if req.limit_order:
+            base["limit_order"] = req.limit_order
+    else:
+        # Fallback: send as-is plus extras
+        if ct:
+            base["contract_type"] = ct
+        if req.duration:
+            base["duration"] = int(req.duration)
+        if req.duration_unit:
+            base["duration_unit"] = req.duration_unit
+        if req.barrier:
+            base["barrier"] = req.barrier
+
+    if req.extra:
+        base.update(req.extra)
+    return base
+
+@api_router.post("/deriv/proposal")
+async def deriv_proposal(req: BuyRequest):
+    """Get a pricing proposal for a contract. Supports CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS."""
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv not connected")
+    req_id = int(time.time() * 1000)
+    payload = build_proposal_payload(req)
+    payload["req_id"] = req_id
+
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
     await _deriv._send(payload)
     try:
-        data = await asyncio.wait_for(fut, timeout=10)
+        data = await asyncio.wait_for(fut, timeout=12)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
@@ -440,7 +497,7 @@ async def deriv_buy(req: BuyRequest):
         "req_id": req_id,
     })
     try:
-        data = await asyncio.wait_for(fut, timeout=10)
+        data = await asyncio.wait_for(fut, timeout=12)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
