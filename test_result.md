@@ -121,6 +121,9 @@
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Atualizado payload builder para ACCU/MULTUP|MULTDOWN/TURBOSLONG|TURBOSSHORT via buy+parameters (price=0 por padrão), suporte product_type no contracts_for e erros detalhados. Precisa retestar status e contracts_for (vários product_type)."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "contracts_for agora aceita product_type=accumulator/multipliers/turbos e inclui currency/landing_company (defaults vindos de authorize). Adicionado endpoint GET /api/deriv/contracts_for_smart/{symbol} que tenta o símbolo e faz fallback automático para _1HZ quando apropriado. Resposta inclui currency e landing_company. Precisa retestar."
 ##   - task: "Deriv: contracts_for cacheado"
 ##     implemented: true
 ##     working: true
