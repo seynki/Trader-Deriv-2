@@ -358,12 +358,15 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
     _deriv.pending[req_id] = fut
     payload = {
         "contracts_for": symbol,
-        "currency": currency,
+        "currency": resolved_currency,
         "req_id": req_id,
     }
-    # Only send product_type if provided; Deriv defaults basic otherwise
+    # Send product_type if the caller specified it (accumulator, turbos, multipliers, basic)
     if product_type:
         payload["product_type"] = product_type
+    # Include landing_company when available to get account-specific availability
+    if resolved_lc != "any":
+        payload["landing_company"] = resolved_lc
     await _deriv._send(payload)
     try:
         data = await asyncio.wait_for(fut, timeout=10)
