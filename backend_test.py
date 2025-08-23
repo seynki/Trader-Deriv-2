@@ -194,11 +194,12 @@ class DerivAPITester:
         return success
 
     def run_all_tests(self):
-        """Run all backend API tests"""
-        self.log("🚀 Starting Deriv Backend API Tests")
+        """Run all backend API tests - NON-INVASIVE Deriv flow only"""
+        self.log("🚀 Starting Deriv Backend API Tests (NON-INVASIVE)")
         self.log(f"   Base URL: {self.base_url}")
         self.log(f"   API URL: {self.api_url}")
         self.log(f"   Timestamp: {datetime.now().isoformat()}")
+        self.log("   NOTE: NOT testing /api/deriv/buy to avoid real trades")
         
         # Test 0: Basic health
         basic_ok = self.test_basic_endpoints()
@@ -211,16 +212,17 @@ class DerivAPITester:
             self.print_summary()
             return False
         
-        # Test 2: Proposal
+        # Test 2: Contracts for R_100
+        contracts_ok, contracts_data = self.test_deriv_contracts_for()
+        
+        if not contracts_ok:
+            self.log("\n⚠️  Contracts_for failed, but continuing with proposal test.")
+        
+        # Test 3: Proposal for R_100
         proposal_ok, proposal_data = self.test_deriv_proposal()
         
         if not proposal_ok:
-            self.log("\n❌ CRITICAL: Proposal failed. Stopping buy test.")
-            self.print_summary()
-            return False
-        
-        # Test 3: Buy (only if proposal worked)
-        buy_ok = self.test_deriv_buy()
+            self.log("\n❌ CRITICAL: Proposal failed.")
         
         self.print_summary()
         return self.tests_passed == self.tests_run
