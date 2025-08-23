@@ -435,10 +435,18 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
         if req.limit_order:
             base["parameters"]["limit_order"] = req.limit_order
     elif t == "TURBOS":
-        base.update({
-            "contract_type": (ct or "TURBOSLONG"),
-            "strike": req.strike or "ATM",
-        })
+        base = {
+            "buy": 1,
+            "price": float(req.max_price or req.stake),
+            "parameters": {
+                "amount": float(req.stake),
+                "basis": "stake",
+                "contract_type": (ct or "TURBOSLONG"),
+                "currency": req.currency,
+                "symbol": req.symbol,
+                "strike": req.strike or "ATM",
+            }
+        }
     elif t == "MULTIPLIERS":
         base.update({
             "contract_type": (ct or "MULTUP"),
