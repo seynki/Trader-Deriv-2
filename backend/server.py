@@ -343,7 +343,10 @@ def _parse_duration(s: Optional[str]):
 async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
     # TTL cache key includes product_type
     now = time.time()
-    cache_key = f"{symbol}:{product_type or 'basic'}:{currency}"
+    # Derive defaults from last authorize when not provided
+    resolved_currency = currency or _deriv.currency or "USD"
+    resolved_lc = (landing_company or _deriv.landing_company_name or "").lower() or "any"
+    cache_key = f"{symbol}:{product_type or 'basic'}:{resolved_currency}:{resolved_lc}"
     cached = _contracts_cache.get(cache_key)
     if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
         return cached["data"]
