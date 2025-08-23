@@ -101,3 +101,55 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement: "Integrar fluxo Deriv authorize → proposal → buy → track contract (Buy CALL/PUT) com backend seguro e painel de acompanhamento no frontend."
+## backend:
+##   - task: "Deriv: proposal/buy + WS track contract + fixes"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementado /api/deriv/buy corrigido (antes estava quebrado), mantido /api/deriv/proposal, adicionado WS /api/ws/contract/{id} para acompanhar contrato (proposal_open_contract). WS de ticks mantido. Adicionadas DERIV_APP_ID e DERIV_API_TOKEN em backend/.env. Evitado crash quando MONGO_URL ausente."
+##   - task: "Deriv: contracts_for cacheado"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "medium"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Endpoint /api/deriv/contracts_for/{symbol} com TTL cache 60s para mapear contract_types e duration_units."
+## frontend:
+##   - task: "Botões Buy CALL/PUT usando backend + painel de acompanhamento de contrato"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/frontend/src/App.js"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Após compra, conecta WS /api/ws/contract/{id} e atualiza ContractPanel (aba Automação). Desabilita botões quando tipo de contrato não ofertado para símbolo."
+## metadata:
+##   created_by: "main_agent"
+##   version: "1.0"
+##   test_sequence: 1
+##   run_ui: false
+## test_plan:
+##   current_focus:
+##     - "Backend Deriv status e contracts_for"
+##     - "Backend proposal (sem executar buy real)"
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor testar apenas GET /api/deriv/status, GET /api/deriv/contracts_for/R_100 e POST /api/deriv/proposal (CALL, stake=1, duration=5, unit=t). NÃO executar /api/deriv/buy sem autorização explícita do usuário (pode gerar trade real)."
