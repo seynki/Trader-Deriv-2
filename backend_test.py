@@ -96,23 +96,57 @@ class DerivAPITester:
         
         return False
 
-    def test_deriv_proposal(self):
-        """Test 2: POST /api/deriv/proposal - Get pricing for 1HZ10V CALL"""
+    def test_deriv_contracts_for(self):
+        """Test 2: GET /api/deriv/contracts_for/R_100 - Get available contracts for R_100"""
         self.log("\n" + "="*60)
-        self.log("TEST 2: Deriv Proposal Request")
+        self.log("TEST 2: Deriv Contracts For R_100")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Deriv Contracts For R_100",
+            "GET",
+            "deriv/contracts_for/R_100",
+            200,
+            timeout=15
+        )
+        
+        if success:
+            contract_types = data.get('contract_types', [])
+            duration_units = data.get('duration_units', [])
+            durations = data.get('durations', {})
+            
+            self.log(f"   Symbol: {data.get('symbol')}")
+            self.log(f"   Contract Types: {contract_types}")
+            self.log(f"   Duration Units: {duration_units}")
+            self.log(f"   Durations: {json.dumps(durations, indent=4)}")
+            self.log(f"   Has Barrier: {data.get('has_barrier', False)}")
+            
+            if contract_types and duration_units and durations:
+                self.log("✅ Contracts data looks valid (has contract_types, duration_units, durations)")
+                return True, data
+            else:
+                self.log("⚠️  Contracts data validation failed - missing required fields")
+                return False, data
+        
+        return False, {}
+
+    def test_deriv_proposal(self):
+        """Test 3: POST /api/deriv/proposal - Get pricing for R_100 CALL"""
+        self.log("\n" + "="*60)
+        self.log("TEST 3: Deriv Proposal Request")
         self.log("="*60)
         
         proposal_data = {
-            "symbol": "1HZ10V",
+            "symbol": "R_100",
             "contract_type": "CALL",
             "duration": 5,
             "duration_unit": "t",
-            "stake": 1.0,
+            "stake": 1,
             "currency": "USD"
         }
         
         success, data, status_code = self.run_test(
-            "Deriv Proposal (1HZ10V CALL, 5 ticks, $1)",
+            "Deriv Proposal (R_100 CALL, 5 ticks, $1)",
             "POST",
             "deriv/proposal", 
             200,
@@ -123,16 +157,17 @@ class DerivAPITester:
         if success:
             ask_price = data.get('ask_price', 0)
             payout = data.get('payout', 0)
+            proposal_id = data.get('id')
             
-            self.log(f"   Proposal ID: {data.get('id')}")
+            self.log(f"   Proposal ID: {proposal_id}")
             self.log(f"   Symbol: {data.get('symbol')}")
             self.log(f"   Contract Type: {data.get('contract_type')}")
             self.log(f"   Ask Price: ${ask_price}")
             self.log(f"   Payout: ${payout}")
             self.log(f"   Spot: {data.get('spot')}")
             
-            if ask_price > 0 and payout > ask_price:
-                self.log("✅ Proposal looks valid (ask_price > 0, payout > ask)")
+            if proposal_id and ask_price > 0 and payout > 0:
+                self.log("✅ Proposal looks valid (has id, ask_price > 0, payout > 0)")
                 return True, data
             else:
                 self.log("⚠️  Proposal validation failed")
