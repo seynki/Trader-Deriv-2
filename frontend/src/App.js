@@ -153,21 +153,20 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
   }, [symbol]);
 
   const isTypeSupported = (type) => {
-    const up = (x) => (x||"").toUpperCase();
     if (type === "CALLPUT") {
       const ct = (support.basic?.contract_types)||[];
       return ct.includes("CALL") && ct.includes("PUT");
     }
     if (type === "ACCUMULATOR") {
-      const ct = (support.accumulator?.contract_types)||[];
-      return ct.includes("ACCU");
+      const ct = ((support.accumulator?.contract_types)||[]).map((x)=>x.toUpperCase());
+      return ct.includes("ACCU") || ct.includes("ACCUMULATOR");
     }
     if (type === "TURBOS") {
-      const ct = (support.turbos?.contract_types)||[];
+      const ct = (support.turbos?.contract_types||[]).map((x)=>x.toUpperCase());
       return ct.includes("TURBOSLONG") || ct.includes("TURBOSSHORT");
     }
     if (type === "MULTIPLIERS") {
-      const ct = (support.multipliers?.contract_types)||[];
+      const ct = (support.multipliers?.contract_types||[]).map((x)=>x.toUpperCase());
       return ct.includes("MULTUP") || ct.includes("MULTDOWN");
     }
     return false;
