@@ -21,9 +21,14 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection (MUST use env)
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'test_database')]
+mongo_url = os.environ.get('MONGO_URL')
+if mongo_url:
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[os.environ.get('DB_NAME', 'test_database')]
+else:
+    client = None
+    db = None
+    logging.warning("MONGO_URL not set; database features disabled. Set backend/.env with MONGO_URL or inject env.")
 
 # Create the main app without a prefix
 app = FastAPI()
