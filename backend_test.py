@@ -130,47 +130,179 @@ class DerivAPITester:
         
         return False, {}
 
-    def test_deriv_proposal(self):
-        """Test 3: POST /api/deriv/proposal - Get pricing for R_100 CALL"""
+    def test_deriv_contracts_for_r10_accumulator(self):
+        """Test 3: GET /api/deriv/contracts_for/R_10?product_type=accumulator"""
         self.log("\n" + "="*60)
-        self.log("TEST 3: Deriv Proposal Request")
+        self.log("TEST 3: Deriv Contracts For R_10 (Accumulator)")
         self.log("="*60)
         
-        proposal_data = {
-            "symbol": "R_100",
-            "contract_type": "CALL",
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1,
-            "currency": "USD"
-        }
-        
         success, data, status_code = self.run_test(
-            "Deriv Proposal (R_100 CALL, 5 ticks, $1)",
-            "POST",
-            "deriv/proposal", 
+            "Deriv Contracts For R_10 (product_type=accumulator)",
+            "GET",
+            "deriv/contracts_for/R_10?product_type=accumulator",
             200,
-            proposal_data,
-            timeout=20
+            timeout=15
         )
         
         if success:
-            ask_price = data.get('ask_price', 0)
-            payout = data.get('payout', 0)
-            proposal_id = data.get('id')
+            product_type = data.get('product_type')
+            currency = data.get('currency')
+            contract_types = data.get('contract_types', [])
             
-            self.log(f"   Proposal ID: {proposal_id}")
             self.log(f"   Symbol: {data.get('symbol')}")
-            self.log(f"   Contract Type: {data.get('contract_type')}")
-            self.log(f"   Ask Price: ${ask_price}")
-            self.log(f"   Payout: ${payout}")
-            self.log(f"   Spot: {data.get('spot')}")
+            self.log(f"   Product Type: {product_type}")
+            self.log(f"   Currency: {currency}")
+            self.log(f"   Contract Types: {contract_types}")
+            self.log(f"   Landing Company: {data.get('landing_company')}")
             
-            if proposal_id and ask_price > 0 and payout > 0:
-                self.log("✅ Proposal looks valid (has id, ask_price > 0, payout > 0)")
+            # Validate required fields
+            valid = True
+            if product_type != 'accumulator':
+                self.log("❌ Product type should be 'accumulator'")
+                valid = False
+            if not currency:
+                self.log("❌ Currency should not be empty")
+                valid = False
+            
+            # Contract types can be empty (depends on landing_company)
+            if not contract_types:
+                self.log("⚠️  Contract types list is empty (acceptable, depends on landing_company)")
+            
+            if valid:
+                self.log("✅ R_10 accumulator contracts data is valid")
                 return True, data
             else:
-                self.log("⚠️  Proposal validation failed")
+                self.log("❌ R_10 accumulator contracts validation failed")
+                return False, data
+        
+        return False, {}
+
+    def test_deriv_contracts_for_smart_r10_accumulator(self):
+        """Test 4: GET /api/deriv/contracts_for_smart/R_10?product_type=accumulator"""
+        self.log("\n" + "="*60)
+        self.log("TEST 4: Deriv Contracts For Smart R_10 (Accumulator)")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Deriv Contracts For Smart R_10 (product_type=accumulator)",
+            "GET",
+            "deriv/contracts_for_smart/R_10?product_type=accumulator",
+            200,
+            timeout=15
+        )
+        
+        if success:
+            tried = data.get('tried', [])
+            first_supported = data.get('first_supported')
+            results = data.get('results', {})
+            product_type = data.get('product_type')
+            
+            self.log(f"   Tried: {tried}")
+            self.log(f"   First Supported: {first_supported}")
+            self.log(f"   Product Type: {product_type}")
+            self.log(f"   Results Keys: {list(results.keys())}")
+            
+            # Validate required structure
+            valid = True
+            if not isinstance(tried, list):
+                self.log("❌ 'tried' should be a list")
+                valid = False
+            if not isinstance(results, dict):
+                self.log("❌ 'results' should be a dict")
+                valid = False
+            if product_type != 'accumulator':
+                self.log("❌ Product type should be 'accumulator'")
+                valid = False
+            
+            if valid:
+                self.log("✅ R_10 smart accumulator contracts structure is valid")
+                return True, data
+            else:
+                self.log("❌ R_10 smart accumulator contracts validation failed")
+                return False, data
+        
+        return False, {}
+
+    def test_deriv_contracts_for_r10_turbos(self):
+        """Test 5: GET /api/deriv/contracts_for/R_10?product_type=turbos"""
+        self.log("\n" + "="*60)
+        self.log("TEST 5: Deriv Contracts For R_10 (Turbos)")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Deriv Contracts For R_10 (product_type=turbos)",
+            "GET",
+            "deriv/contracts_for/R_10?product_type=turbos",
+            200,
+            timeout=15
+        )
+        
+        if success:
+            product_type = data.get('product_type')
+            currency = data.get('currency')
+            contract_types = data.get('contract_types', [])
+            
+            self.log(f"   Symbol: {data.get('symbol')}")
+            self.log(f"   Product Type: {product_type}")
+            self.log(f"   Currency: {currency}")
+            self.log(f"   Contract Types: {contract_types}")
+            
+            # Validate required fields
+            valid = True
+            if product_type != 'turbos':
+                self.log("❌ Product type should be 'turbos'")
+                valid = False
+            if not currency:
+                self.log("❌ Currency should not be empty")
+                valid = False
+            
+            if valid:
+                self.log("✅ R_10 turbos contracts data is valid")
+                return True, data
+            else:
+                self.log("❌ R_10 turbos contracts validation failed")
+                return False, data
+        
+        return False, {}
+
+    def test_deriv_contracts_for_r10_multipliers(self):
+        """Test 6: GET /api/deriv/contracts_for/R_10?product_type=multipliers"""
+        self.log("\n" + "="*60)
+        self.log("TEST 6: Deriv Contracts For R_10 (Multipliers)")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Deriv Contracts For R_10 (product_type=multipliers)",
+            "GET",
+            "deriv/contracts_for/R_10?product_type=multipliers",
+            200,
+            timeout=15
+        )
+        
+        if success:
+            product_type = data.get('product_type')
+            currency = data.get('currency')
+            contract_types = data.get('contract_types', [])
+            
+            self.log(f"   Symbol: {data.get('symbol')}")
+            self.log(f"   Product Type: {product_type}")
+            self.log(f"   Currency: {currency}")
+            self.log(f"   Contract Types: {contract_types}")
+            
+            # Validate required fields
+            valid = True
+            if product_type != 'multipliers':
+                self.log("❌ Product type should be 'multipliers'")
+                valid = False
+            if not currency:
+                self.log("❌ Currency should not be empty")
+                valid = False
+            
+            if valid:
+                self.log("✅ R_10 multipliers contracts data is valid")
+                return True, data
+            else:
+                self.log("❌ R_10 multipliers contracts validation failed")
                 return False, data
         
         return False, {}
