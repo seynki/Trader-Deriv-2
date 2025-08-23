@@ -32,7 +32,7 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 # -------------------------------------------------------------
-# Deriv Integration (Demo-ready): WS ticks + proposal/buy
+# Deriv Integration (Demo-ready): WS ticks + proposal/buy + tracking
 # -------------------------------------------------------------
 DERIV_APP_ID = os.environ.get("DERIV_APP_ID")
 DERIV_API_TOKEN = os.environ.get("DERIV_API_TOKEN")
@@ -46,6 +46,10 @@ SUPPORTED_SYMBOLS = [
     "1HZ10V",     # Volatility 10 (1s)
     "R_10",       # Volatility 10 Index
     "R_15",       # Volatility 15 Index
+    "R_25",
+    "R_50",
+    "R_75",
+    "R_100",
 ]
 
 class BuyRequest(BaseModel):
@@ -82,7 +86,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("deriv")
 
 class DerivWS:
-    """Minimal Deriv WS manager with auto reconnect, dispatcher and tick broadcasting."""
+    """Minimal Deriv WS manager with auto reconnect, dispatcher, tick and contract broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
         self.app_id = app_id
         self.token = token
@@ -94,6 +98,9 @@ class DerivWS:
         self.subscribed_symbols: Dict[str, bool] = {}
         # per-symbol subscribers: symbol -> list of asyncio.Queue
         self.queues: Dict[str, List[asyncio.Queue]] = {}
+        # contract tracking: contract_id -> list of queues
+        self.contract_queues: Dict[int, List[asyncio.Queue]] = {}
+        self.contract_subscribed: Dict[int, bool] = {}
         self.last_heartbeat: Optional[int] = None
         self._lock = asyncio.Lock()
         # pending req_id -> Future
@@ -164,6 +171,33 @@ class DerivWS:
                             for q in list(self.queues.get(symbol, [])):
                                 if not q.full():
                                     q.put_nowait(message)
+                    elif msg_type == "proposal_open_contract":
+                        poc = data.get("proposal_open_contract", {})
+                        cid = poc.get("contract_id")
+                        try:
+                            cid_int = int(cid) if cid is not None else None
+                        except Exception:
+                            cid_int = None
+                        if cid_int is not None and cid_int in self.contract_queues:
+                            message = {
+                                "type": "contract",
+                                "contract_id": cid_int,
+                                "underlying": poc.get("underlying"),
+                                "tick_count": poc.get("current_spot_time"),
+                                "entry_spot": poc.get("entry_spot"),
+                                "current_spot": poc.get("current_spot"),
+                                "buy_price": poc.get("buy_price"),
+                                "bid_price": poc.get("bid_price"),
+                                "profit": poc.get("profit"),
+                                "payout": poc.get("payout"),
+                                "status": poc.get("status"),
+                                "is_expired": poc.get("is_expired"),
+                                "date_start": poc.get("date_start"),
+                                "date_expiry": poc.get("date_expiry"),
+                            }
+                            for q in list(self.contract_queues.get(cid_int, [])):
+                                if not q.full():
+                                    q.put_nowait(message)
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
@@ -199,6 +233,29 @@ class DerivWS:
         if symbol in self.queues:
             try:
                 self.queues[symbol].remove(q)
+            except ValueError:
+                pass
+
+    async def ensure_contract_subscription(self, contract_id: int):
+        async with self._lock:
+            if not self.contract_subscribed.get(contract_id):
+                await self._send({
+                    "proposal_open_contract": 1,
+                    "contract_id": contract_id,
+                    "subscribe": 1,
+                })
+                self.contract_subscribed[contract_id] = True
+
+    async def add_contract_queue(self, contract_id: int) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self.contract_queues.setdefault(contract_id, []).append(q)
+        await self.ensure_contract_subscription(contract_id)
+        return q
+
+    def remove_contract_queue(self, contract_id: int, q: asyncio.Queue):
+        if contract_id in self.contract_queues:
+            try:
+                self.contract_queues[contract_id].remove(q)
             except ValueError:
                 pass
 
@@ -364,6 +421,41 @@ async def deriv_proposal(req: BuyRequest):
 async def deriv_buy(req: BuyRequest):
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
+    # 1) proposal
+    proposal = await deriv_proposal(req)
+    # 2) send buy for proposal id
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send({
+        "buy": proposal["id"],
+        "price": req.max_price or proposal["ask_price"],
+        "subscribe": 1,
+        "req_id": req_id,
+    })
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
+    b = data.get("buy", {})
+    # Try to prime contract subscription as soon as we know the id
+    try:
+        cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
+        if cid:
+            await _deriv.ensure_contract_subscription(cid)
+    except Exception:
+        pass
+    return {
+        "message": "purchased",
+        "contract_id": b.get("contract_id"),
+        "buy_price": b.get("buy_price"),
+        "payout": b.get("payout"),
+        "transaction_id": b.get("transaction_id"),
+    }
+
 @api_router.post("/deriv/sell")
 async def deriv_sell(req: SellRequest):
     if not _deriv.connected:
@@ -385,34 +477,6 @@ async def deriv_sell(req: SellRequest):
         raise HTTPException(status_code=400, detail=data["error"].get("message", "Sell error"))
     s = data.get("sell", {})
     return {"message": "sold", "contract_id": s.get("contract_id"), "sold_for": s.get("sold_for")}
-
-    # 1) get proposal
-    proposal = await deriv_proposal(req)
-    # 2) send buy for proposal id
-    req_id = int(time.time() * 1000)
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
-    await _deriv._send({
-        "buy": proposal["id"],
-        "price": req.max_price or proposal["ask_price"],
-        "subscribe": 1,
-        "req_id": req_id,
-    })
-    try:
-        data = await asyncio.wait_for(fut, timeout=10)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-    if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-    b = data.get("buy", {})
-    return {
-        "message": "purchased",
-        "contract_id": b.get("contract_id"),
-        "buy_price": b.get("buy_price"),
-        "payout": b.get("payout"),
-        "transaction_id": b.get("transaction_id"),
-    }
 
 # WebSocket endpoint to push ticks to clients
 @app.websocket("/api/ws/ticks")
@@ -463,6 +527,32 @@ async def ws_ticks(websocket: WebSocket):
         # cleanup
         for s, q in queues.items():
             _deriv.remove_queue(s, q)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+# WebSocket endpoint to track a contract lifecycle
+@app.websocket("/api/ws/contract/{contract_id}")
+async def ws_contract(websocket: WebSocket, contract_id: int):
+    await websocket.accept()
+    q: Optional[asyncio.Queue] = None
+    try:
+        q = await _deriv.add_contract_queue(contract_id)
+        await websocket.send_text(json.dumps({"type": "subscribed", "contract_id": contract_id}))
+        while True:
+            try:
+                data = await asyncio.wait_for(q.get(), timeout=25)
+                await websocket.send_text(json.dumps(data))
+            except asyncio.TimeoutError:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"Client WS (contract) error: {e}")
+    finally:
+        if q is not None:
+            _deriv.remove_contract_queue(contract_id, q)
         try:
             await websocket.close()
         except Exception:

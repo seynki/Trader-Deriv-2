@@ -32,14 +32,23 @@ const derivedSymbols = [
   { value: "R_100", label: "Volatility 100 Index" },
 ];
 
-function wsUrlFromEnv() {
+function wsHostFromEnv() {
   try {
     const u = new URL(BACKEND_URL);
     const isSecure = u.protocol === "https:";
-    return `${isSecure ? "wss" : "ws"}://${u.host}/api/ws/ticks`;
+    return { base: `${isSecure ? "wss" : "ws"}://${u.host}` };
   } catch {
-    return "/api/ws/ticks"; // fallback (ingress will route)
+    return { base: "" }; // relative WS paths
   }
+}
+
+function wsTicksUrl() {
+  const { base } = wsHostFromEnv();
+  return base ? `${base}/api/ws/ticks` : `/api/ws/ticks`;
+}
+function wsContractUrl(contractId) {
+  const { base } = wsHostFromEnv();
+  return base ? `${base}/api/ws/contract/${contractId}` : `/api/ws/contract/${contractId}`;
 }
 
 function useDerivTicks(symbols) {
@@ -48,7 +57,7 @@ function useDerivTicks(symbols) {
   const wsRef = useRef(null);
   useEffect(() => {
     if (!symbols || symbols.length === 0) return;
-    const url = wsUrlFromEnv();
+    const url = wsTicksUrl();
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -124,6 +133,30 @@ function AutomacaoPanel() {
   );
 }
 
+function ContractPanel({ contract }) {
+  if (!contract) return null;
+  const fmt = (v) => (v === undefined || v === null ? "-" : v);
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Contrato #{fmt(contract.contract_id)}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3 text-sm">
+        <div><span className="opacity-70">Ativo:</span> {fmt(contract.underlying)}</div>
+        <div><span className="opacity-70">Status:</span> {fmt(contract.status)}</div>
+        <div><span className="opacity-70">Entrada:</span> {fmt(contract.entry_spot)}</div>
+        <div><span className="opacity-70">Atual:</span> {fmt(contract.current_spot)}</div>
+        <div><span className="opacity-70">Compra:</span> {fmt(contract.buy_price)}</div>
+        <div><span className="opacity-70">Lance:</span> {fmt(contract.bid_price)}</div>
+        <div><span className="opacity-70">Payout:</span> {fmt(contract.payout)}</div>
+        <div><span className="opacity-70">Lucro:</span> {fmt(contract.profit)}</div>
+        <div><span className="opacity-70">Início:</span> {contract.date_start ? new Date(contract.date_start * 1000).toLocaleTimeString() : '-'}</div>
+        <div><span className="opacity-70">Expira:</span> {contract.date_expiry ? new Date(contract.date_expiry * 1000).toLocaleTimeString() : '-'}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function App() {
   const { toast } = useToast();
   const [symbols, setSymbols] = useState(defaultSymbols);
@@ -134,6 +167,7 @@ export default function App() {
   const [durationUnit, setDurationUnit] = useState("t");
   const [contractsFor, setContractsFor] = useState({});
   const [openContract, setOpenContract] = useState(null);
+  const contractWsRef = useRef(null);
 
   const buy = async (symbol, contractType) => {
     try {
@@ -145,7 +179,24 @@ export default function App() {
         stake: Number(stake),
         currency: "USD",
       });
-      toast({ title: `Compra enviada (${contractType})`, description: `Contrato #${res.data.contract_id || "-"}` });
+      const cid = res.data.contract_id;
+      toast({ title: `Compra enviada (${contractType})`, description: `Contrato #${cid || "-"}` });
+      // Track contract via WS
+      if (cid) {
+        try { if (contractWsRef.current) contractWsRef.current.close(); } catch {}
+        const url = wsContractUrl(cid);
+        const ws = new WebSocket(url);
+        contractWsRef.current = ws;
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === "contract") {
+              setOpenContract(msg);
+            }
+          } catch {}
+        };
+        ws.onerror = () => {};
+      }
     } catch (e) {
       const detail = e?.response?.data?.detail || e.message;
       toast({ title: "Falha na compra", description: String(detail), variant: "destructive" });
@@ -177,23 +228,9 @@ export default function App() {
     fetchContracts();
   }, [symbols.join(",")]);
 
-                  {/* Ajuste de unidades conforme contracts_for */}
-                  {contractsFor[symbols[0]]?.duration_units?.length ? (
-                    <Select value={durationUnit} onValueChange={setDurationUnit}>
-                      <SelectTrigger className="w-24"><SelectValue placeholder="Unid."/></SelectTrigger>
-                      <SelectContent>
-                        {contractsFor[symbols[0]].duration_units.map((u) => (
-                          <SelectItem key={u} value={u}>{u === "t" ? "Ticks" : u === "s" ? "Segundos" : u === "m" ? "Minutos" : u}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-
-
   return (
     <ToastProvider>
-              {/* Desabilitar botões se tipo de contrato não existir para símbolo */}
-
+      {/* Desabilitar botões se tipo de contrato não existir para símbolo */}
       <div className="min-h-screen bg-app text-slate-50">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center justify-between mb-6">
@@ -273,6 +310,7 @@ export default function App() {
 
             <TabsContent value="auto" className="mt-6">
               <AutomacaoPanel />
+              <ContractPanel contract={openContract} />
             </TabsContent>
           </Tabs>
         </div>
