@@ -410,6 +410,8 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
         "barriers": sorted(barrier_categories),
         "has_barrier": len(barrier_categories) > 0,
         "product_type": product_type or "basic",
+        "currency": resolved_currency,
+        "landing_company": None if resolved_lc == "any" else resolved_lc,
     }
 
     _contracts_cache[cache_key] = {"_ts": now, "data": result}
