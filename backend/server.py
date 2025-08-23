@@ -418,11 +418,22 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
         if req.barrier:
             base["barrier"] = req.barrier
     elif t == "ACCUMULATOR":
-        base.update({
-            "contract_type": "ACCUMULATOR",
-        })
+        # According to Deriv API, accumulator is placed via buy with parameters contract_type 'ACCU'
+        base = {
+            "buy": 1,
+            "price": float(req.max_price or req.stake),
+            "parameters": {
+                "amount": float(req.stake),
+                "basis": "stake",
+                "contract_type": "ACCU",
+                "currency": req.currency,
+                "symbol": req.symbol,
+            }
+        }
+        if req.growth_rate is not None:
+            base["parameters"]["growth_rate"] = float(req.growth_rate)
         if req.limit_order:
-            base["limit_order"] = req.limit_order
+            base["parameters"]["limit_order"] = req.limit_order
     elif t == "TURBOS":
         base.update({
             "contract_type": (ct or "TURBOSLONG"),
