@@ -149,7 +149,7 @@
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
-##       -comment: "Após compra, conecta WS /api/ws/contract/{id} e atualiza ContractPanel (aba Automação). Desabilita botões quando tipo de contrato não ofertado para símbolo."
+##       -comment: "Após compra, conecta WS /api/ws/contract/{id} e atualiza ContractPanel (aba Automação). Desabilita botões quando tipo de contrato não ofertado para símbolo. Atualizada checagem de suporte: usa /api/deriv/contracts_for_smart com product_type correto (basic/multipliers/turbos/accumulator) e fallback para _1HZ quando preciso."
 ## metadata:
 ##   created_by: "main_agent"
 ##   version: "1.0"
