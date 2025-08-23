@@ -160,8 +160,8 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Backend Deriv status e contracts_for (product_type variados + smart fallback)"
-##     - "Backend proposal (sem executar buy real)"
+##     - "Backend Deriv status e contracts_for (product_type variados + smart fallback) - COMPLETED"
+##     - "Backend proposal (sem executar buy real) - COMPLETED"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
