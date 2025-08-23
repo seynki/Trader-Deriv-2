@@ -417,6 +417,61 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
     _contracts_cache[cache_key] = {"_ts": now, "data": result}
     return result
 
+
+@api_router.get("/deriv/contracts_for_smart/{symbol}")
+async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
+    """Smart helper: checks symbol with correct product_type and falls back to 1HZ variant.
+    Example: R_10 -> try R_10 first, then R_10_1HZ if not supported for the requested product_type.
+    """
+    base_symbol = symbol
+    tried: List[str] = []
+    results: Dict[str, Any] = {}
+
+    async def query(sym: str):
+        return await deriv_contracts_for(sym, currency=currency, product_type=product_type, landing_company=landing_company)
+
+    # Try the provided symbol first
+    try:
+        res0 = await query(base_symbol)
+        tried.append(base_symbol)
+        results[base_symbol] = res0
+    except HTTPException as e:
+        results[base_symbol] = {"error": e.detail}
+
+    def has_support(res: Dict[str, Any]) -> bool:
+        if not isinstance(res, dict):
+            return False
+        types = set(res.get("contract_types") or [])
+        if not types:
+            return False
+        if product_type and str(product_type).lower() == "accumulator":
+            return "ACCUMULATOR" in types or "ACCU" in types
+        return True
+
+    first_supported = base_symbol if has_support(results.get(base_symbol, {})) else None
+
+    # If not supported, try 1HZ alias
+    if first_supported is None:
+        alt = None
+        if base_symbol.startswith("R_") and not base_symbol.endswith("_1HZ"):
+            alt = f"{base_symbol}_1HZ"
+        if alt:
+            try:
+                res1 = await query(alt)
+                tried.append(alt)
+                results[alt] = res1
+                if has_support(res1):
+                    first_supported = alt
+            except HTTPException as e:
+                results[alt] = {"error": e.detail}
+
+    return {
+        "tried": tried,
+        "first_supported": first_supported,
+        "results": results,
+        "product_type": product_type or "basic",
+    }
+
 # ---------------- Proposal/Buy -----------------
 
 def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
