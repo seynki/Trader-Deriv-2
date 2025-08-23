@@ -143,8 +143,8 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=multipliers`).then(r=> (r.data.results?.[symbol] || r.data)).catch(()=>null),
           axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=turbos`).then(r=> (r.data.results?.[symbol] || r.data)).catch(()=>null),
           axios.get(`${API}/deriv/contracts_for_smart/${symbol}?product_type=accumulator`).then(r=> {
-            // Prefer the first_supported symbol result, otherwise base
             const data = r.data;
+            // Usar o resultado escolhido pelo backend (already smart with basic fallback)
             if (data.first_supported && data.results && data.results[data.first_supported]) return data.results[data.first_supported];
             return data.results?.[symbol] || data;
           }).catch(()=>null),
