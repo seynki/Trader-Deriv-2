@@ -336,7 +336,7 @@ class DerivAPITester:
         # Test 0: Basic health
         basic_ok = self.test_basic_endpoints()
         
-        # Test 1: Deriv status
+        # Test 1: Deriv status - REQUIRED
         status_ok = self.test_deriv_status()
         
         if not status_ok:
@@ -344,19 +344,53 @@ class DerivAPITester:
             self.print_summary()
             return False
         
-        # Test 2: Contracts for R_100
+        # Test 2: Contracts for R_100 (legacy test)
         contracts_ok, contracts_data = self.test_deriv_contracts_for()
         
-        if not contracts_ok:
-            self.log("\n⚠️  Contracts_for failed, but continuing with proposal test.")
+        # Test 3: R_10 Accumulator contracts
+        r10_acc_ok, r10_acc_data = self.test_deriv_contracts_for_r10_accumulator()
         
-        # Test 3: Proposal for R_100
-        proposal_ok, proposal_data = self.test_deriv_proposal()
+        # Test 4: R_10 Smart Accumulator contracts
+        r10_smart_acc_ok, r10_smart_acc_data = self.test_deriv_contracts_for_smart_r10_accumulator()
         
-        if not proposal_ok:
-            self.log("\n❌ CRITICAL: Proposal failed.")
+        # Test 5: R_10 Turbos contracts
+        r10_turbos_ok, r10_turbos_data = self.test_deriv_contracts_for_r10_turbos()
+        
+        # Test 6: R_10 Multipliers contracts
+        r10_mult_ok, r10_mult_data = self.test_deriv_contracts_for_r10_multipliers()
         
         self.print_summary()
+        
+        # Summary of key findings
+        self.log("\n" + "="*60)
+        self.log("KEY FINDINGS SUMMARY")
+        self.log("="*60)
+        
+        if status_ok:
+            self.log("✅ Deriv Status: Connected and authenticated")
+        else:
+            self.log("❌ Deriv Status: Connection issues")
+            
+        if r10_acc_ok:
+            self.log("✅ R_10 Accumulator: Working correctly")
+        else:
+            self.log("❌ R_10 Accumulator: Issues detected")
+            
+        if r10_smart_acc_ok:
+            self.log("✅ R_10 Smart Accumulator: Working correctly")
+        else:
+            self.log("❌ R_10 Smart Accumulator: Issues detected")
+            
+        if r10_turbos_ok:
+            self.log("✅ R_10 Turbos: Working correctly")
+        else:
+            self.log("❌ R_10 Turbos: Issues detected")
+            
+        if r10_mult_ok:
+            self.log("✅ R_10 Multipliers: Working correctly")
+        else:
+            self.log("❌ R_10 Multipliers: Issues detected")
+        
         return self.tests_passed == self.tests_run
 
     def print_summary(self):
