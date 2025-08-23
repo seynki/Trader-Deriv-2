@@ -340,7 +340,7 @@ def _parse_duration(s: Optional[str]):
         return None, None
 
 @api_router.get("/deriv/contracts_for/{symbol}")
-async def deriv_contracts_for(symbol: str, currency: str = "USD", product_type: Optional[str] = None):
+async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
     # TTL cache key includes product_type
     now = time.time()
     cache_key = f"{symbol}:{product_type or 'basic'}:{currency}"
