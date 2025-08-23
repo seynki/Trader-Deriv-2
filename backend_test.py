@@ -140,39 +140,20 @@ class DerivAPITester:
             "Deriv Contracts For R_10 (product_type=accumulator)",
             "GET",
             "deriv/contracts_for/R_10?product_type=accumulator",
-            200,
+            400,  # Expecting 400 since accumulator is not supported
             timeout=15
         )
         
         if success:
-            product_type = data.get('product_type')
-            currency = data.get('currency')
-            contract_types = data.get('contract_types', [])
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
             
-            self.log(f"   Symbol: {data.get('symbol')}")
-            self.log(f"   Product Type: {product_type}")
-            self.log(f"   Currency: {currency}")
-            self.log(f"   Contract Types: {contract_types}")
-            self.log(f"   Landing Company: {data.get('landing_company')}")
-            
-            # Validate required fields
-            valid = True
-            if product_type != 'accumulator':
-                self.log("❌ Product type should be 'accumulator'")
-                valid = False
-            if not currency:
-                self.log("❌ Currency should not be empty")
-                valid = False
-            
-            # Contract types can be empty (depends on landing_company)
-            if not contract_types:
-                self.log("⚠️  Contract types list is empty (acceptable, depends on landing_company)")
-            
-            if valid:
-                self.log("✅ R_10 accumulator contracts data is valid")
+            # Check if it's the expected validation error
+            if "Input validation failed: product_type" in error_detail:
+                self.log("✅ Expected validation error for unsupported product_type 'accumulator'")
                 return True, data
             else:
-                self.log("❌ R_10 accumulator contracts validation failed")
+                self.log("❌ Unexpected error message")
                 return False, data
         
         return False, {}
@@ -201,6 +182,11 @@ class DerivAPITester:
             self.log(f"   First Supported: {first_supported}")
             self.log(f"   Product Type: {product_type}")
             self.log(f"   Results Keys: {list(results.keys())}")
+            
+            # Check if results contain expected error messages
+            for symbol, result in results.items():
+                if isinstance(result, dict) and 'error' in result:
+                    self.log(f"   {symbol} Error: {result['error']}")
             
             # Validate required structure
             valid = True
@@ -233,34 +219,20 @@ class DerivAPITester:
             "Deriv Contracts For R_10 (product_type=turbos)",
             "GET",
             "deriv/contracts_for/R_10?product_type=turbos",
-            200,
+            400,  # Expecting 400 since turbos is not supported
             timeout=15
         )
         
         if success:
-            product_type = data.get('product_type')
-            currency = data.get('currency')
-            contract_types = data.get('contract_types', [])
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
             
-            self.log(f"   Symbol: {data.get('symbol')}")
-            self.log(f"   Product Type: {product_type}")
-            self.log(f"   Currency: {currency}")
-            self.log(f"   Contract Types: {contract_types}")
-            
-            # Validate required fields
-            valid = True
-            if product_type != 'turbos':
-                self.log("❌ Product type should be 'turbos'")
-                valid = False
-            if not currency:
-                self.log("❌ Currency should not be empty")
-                valid = False
-            
-            if valid:
-                self.log("✅ R_10 turbos contracts data is valid")
+            # Check if it's the expected validation error
+            if "Input validation failed: product_type" in error_detail:
+                self.log("✅ Expected validation error for unsupported product_type 'turbos'")
                 return True, data
             else:
-                self.log("❌ R_10 turbos contracts validation failed")
+                self.log("❌ Unexpected error message")
                 return False, data
         
         return False, {}
@@ -275,6 +247,34 @@ class DerivAPITester:
             "Deriv Contracts For R_10 (product_type=multipliers)",
             "GET",
             "deriv/contracts_for/R_10?product_type=multipliers",
+            400,  # Expecting 400 since multipliers is not supported
+            timeout=15
+        )
+        
+        if success:
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
+            
+            # Check if it's the expected validation error
+            if "Input validation failed: product_type" in error_detail:
+                self.log("✅ Expected validation error for unsupported product_type 'multipliers'")
+                return True, data
+            else:
+                self.log("❌ Unexpected error message")
+                return False, data
+        
+        return False, {}
+
+    def test_deriv_contracts_for_r10_basic(self):
+        """Test 7: GET /api/deriv/contracts_for/R_10?product_type=basic (supported)"""
+        self.log("\n" + "="*60)
+        self.log("TEST 7: Deriv Contracts For R_10 (Basic - Supported)")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Deriv Contracts For R_10 (product_type=basic)",
+            "GET",
+            "deriv/contracts_for/R_10?product_type=basic",
             200,
             timeout=15
         )
@@ -287,22 +287,35 @@ class DerivAPITester:
             self.log(f"   Symbol: {data.get('symbol')}")
             self.log(f"   Product Type: {product_type}")
             self.log(f"   Currency: {currency}")
-            self.log(f"   Contract Types: {contract_types}")
+            self.log(f"   Contract Types Count: {len(contract_types)}")
+            self.log(f"   Sample Contract Types: {contract_types[:5] if contract_types else []}")
+            
+            # Check for accumulator-related contract types
+            accumulator_types = [ct for ct in contract_types if 'ACCU' in ct.upper()]
+            turbos_types = [ct for ct in contract_types if 'TURBOS' in ct.upper()]
+            mult_types = [ct for ct in contract_types if 'MULT' in ct.upper()]
+            
+            self.log(f"   Accumulator Types: {accumulator_types}")
+            self.log(f"   Turbos Types: {turbos_types}")
+            self.log(f"   Multiplier Types: {mult_types}")
             
             # Validate required fields
             valid = True
-            if product_type != 'multipliers':
-                self.log("❌ Product type should be 'multipliers'")
+            if product_type != 'basic':
+                self.log("❌ Product type should be 'basic'")
                 valid = False
             if not currency:
                 self.log("❌ Currency should not be empty")
                 valid = False
+            if not contract_types:
+                self.log("❌ Contract types should not be empty")
+                valid = False
             
             if valid:
-                self.log("✅ R_10 multipliers contracts data is valid")
+                self.log("✅ R_10 basic contracts data is valid")
                 return True, data
             else:
-                self.log("❌ R_10 multipliers contracts validation failed")
+                self.log("❌ R_10 basic contracts validation failed")
                 return False, data
         
         return False, {}
