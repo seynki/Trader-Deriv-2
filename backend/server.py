@@ -421,34 +421,52 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
 @api_router.get("/deriv/contracts_for_smart/{symbol}")
 async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
     """Smart helper: checks symbol with correct product_type and falls back to 1HZ variant.
-    Example: R_10 -> try R_10 first, then R_10_1HZ if not supported for the requested product_type.
+    Extra: quando product_type não é aceito pela Deriv (ou não retorna suporte), tenta novamente com 'basic' e valida se os tipos específicos existem.
     """
     base_symbol = symbol
     tried: List[str] = []
     results: Dict[str, Any] = {}
 
-    async def query(sym: str):
-        return await deriv_contracts_for(sym, currency=currency, product_type=product_type, landing_company=landing_company)
+    desired = (product_type or "basic").lower()
 
-    # Try the provided symbol first
-    try:
-        res0 = await query(base_symbol)
-        tried.append(base_symbol)
-        results[base_symbol] = res0
-    except HTTPException as e:
-        results[base_symbol] = {"error": e.detail}
-
-    def has_support(res: Dict[str, Any]) -> bool:
+    def types_match_for_product(res: Dict[str, Any]) -> bool:
         if not isinstance(res, dict):
             return False
-        types = set(res.get("contract_types") or [])
+        types = {str(t).upper() for t in (res.get("contract_types") or [])}
         if not types:
             return False
-        if product_type and str(product_type).lower() == "accumulator":
-            return "ACCUMULATOR" in types or "ACCU" in types
+        if desired == "accumulator":
+            return "ACCU" in types or "ACCUMULATOR" in types
+        if desired == "turbos":
+            return "TURBOSLONG" in types or "TURBOSSHORT" in types
+        if desired == "multipliers":
+            return "MULTUP" in types or "MULTDOWN" in types
         return True
 
-    first_supported = base_symbol if has_support(results.get(base_symbol, {})) else None
+    async def query_with_pt_fallback(sym: str):
+        # 1) tentativa com product_type pedido
+        primary: Any = None
+        try:
+            primary = await deriv_contracts_for(sym, currency=currency, product_type=product_type, landing_company=landing_company)
+        except HTTPException as e:
+            primary = {"error": e.detail}
+        # 2) se não suportou, tenta com basic
+        chosen = primary
+        fallback: Any = None
+        if (not types_match_for_product(primary)) and desired in {"accumulator", "turbos", "multipliers"}:
+            try:
+                fallback = await deriv_contracts_for(sym, currency=currency, product_type="basic", landing_company=landing_company)
+                if types_match_for_product(fallback):
+                    chosen = fallback
+            except HTTPException as e2:
+                fallback = {"error": e2.detail}
+        return {"primary": primary, "fallback": fallback, "chosen": chosen}
+
+    # Try provided symbol first
+    res0 = await query_with_pt_fallback(base_symbol)
+    tried.append(base_symbol)
+    results[base_symbol] = res0["chosen"]
+    first_supported = base_symbol if types_match_for_product(res0["chosen"]) else None
 
     # If not supported, try 1HZ alias
     if first_supported is None:
@@ -456,14 +474,11 @@ async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None,
         if base_symbol.startswith("R_") and not base_symbol.endswith("_1HZ"):
             alt = f"{base_symbol}_1HZ"
         if alt:
-            try:
-                res1 = await query(alt)
-                tried.append(alt)
-                results[alt] = res1
-                if has_support(res1):
-                    first_supported = alt
-            except HTTPException as e:
-                results[alt] = {"error": e.detail}
+            res1 = await query_with_pt_fallback(alt)
+            tried.append(alt)
+            results[alt] = res1["chosen"]
+            if types_match_for_product(res1["chosen"]):
+                first_supported = alt
 
     return {
         "tried": tried,
