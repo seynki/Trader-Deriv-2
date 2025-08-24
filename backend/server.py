@@ -1113,6 +1113,7 @@ class StrategyRunner:
         self.running = False
 
     def status(self) -> StrategyStatus:
+        win_rate = (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
         return StrategyStatus(
             running=self.running,
             mode=self.mode,
@@ -1123,6 +1124,10 @@ class StrategyRunner:
             last_signal=self.last_signal,
             last_reason=self.last_reason,
             last_run_at=self.last_run_at,
+            total_trades=self.total_trades,
+            wins=self.wins,
+            losses=self.losses,
+            win_rate=win_rate,
         )
 
 _strategy = StrategyRunner()
