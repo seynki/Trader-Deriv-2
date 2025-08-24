@@ -207,4 +207,7 @@
 ##       -comment: "Atualizado DerivWS para registrar pnl ao receber proposal_open_contract is_expired. Evita dupla contagem usando no_stats_contracts quando StrategyRunner-live marca req.extra.no_stats. StrategyStatus agora reflete estatísticas globais de QUALQUER trade (manual/auto/estratégia)."
 ## agent_communication:
 ##   -agent: "main"
+##   -message: "RETEST REQUEST: Corrigi o loop do WS para sempre processar proposal_open_contract (mesmo sem ouvintes) e atualizar _global_stats quando is_expired=true. Também adicionei controle de dupla contagem (stats_recorded) e filtro no_stats para StrategyRunner live. Favor repetir o teste de consolidação disparando um buy CALLPUT (R_10, 5t, stake=1) e aguardando expirar; validar incremento de total_trades e W/L/PnL."
+
+##   -agent: "main"
 ##   -message: "Por favor, testar consolidação de estatísticas: 1) Capturar baseline com GET /api/strategy/status 2) Executar POST /api/deriv/buy (type=CALLPUT, symbol=R_10, duration=5, duration_unit=t, stake=1, currency=USD) 3) Anotar contract_id retornado e aguardar ~60s; o backend escuta a Deriv e, quando o contrato expira, atualiza as métricas globais 4) Validar que GET /api/strategy/status mostra total_trades incrementado +1 e wins/losses ajustados 5) Repetir GET por 2 ciclos e verificar que o mesmo contrato não é contado 2x. IMPORTANTE: uso de conta DEMO."
