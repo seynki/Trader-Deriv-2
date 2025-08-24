@@ -469,12 +469,12 @@ class DerivAPITester:
         return success
 
     def run_all_tests(self):
-        """Run all backend API tests - NON-INVASIVE Deriv flow only"""
-        self.log("🚀 Starting Deriv Backend API Tests (NON-INVASIVE)")
+        """Run all backend API tests - FOCUSED ON ACCUMULATOR TESTING"""
+        self.log("🚀 Starting Deriv Backend API Tests - ACCUMULATOR FOCUS")
         self.log(f"   Base URL: {self.base_url}")
         self.log(f"   API URL: {self.api_url}")
         self.log(f"   Timestamp: {datetime.now().isoformat()}")
-        self.log("   NOTE: NOT testing /api/deriv/buy to avoid real trades")
+        self.log("   FOCUS: Testing ACCUMULATOR buy endpoint with stop_loss filtering")
         
         # Test 0: Basic health
         basic_ok = self.test_basic_endpoints()
@@ -504,6 +504,13 @@ class DerivAPITester:
         
         # Test 7: R_10 Basic contracts (should work)
         r10_basic_ok, r10_basic_data = self.test_deriv_contracts_for_r10_basic()
+        
+        # NEW TESTS: ACCUMULATOR BUY PAYLOAD VALIDATION
+        # Test 8: ACCUMULATOR buy with R_10 - stop_loss filtering
+        acc_buy_r10_ok, acc_buy_r10_data = self.test_accumulator_buy_payload_validation()
+        
+        # Test 9: ACCUMULATOR buy with R_10_1HZ - stop_loss filtering  
+        acc_buy_r10_1hz_ok, acc_buy_r10_1hz_data = self.test_accumulator_buy_r10_1hz_payload_validation()
         
         self.print_summary()
         
@@ -541,12 +548,35 @@ class DerivAPITester:
             self.log("✅ R_10 Basic: Working correctly")
         else:
             self.log("❌ R_10 Basic: Issues detected")
+            
+        # NEW: ACCUMULATOR BUY VALIDATION RESULTS
+        if acc_buy_r10_ok:
+            self.log("✅ ACCUMULATOR R_10 Buy: stop_loss filtering working")
+        else:
+            self.log("❌ ACCUMULATOR R_10 Buy: stop_loss filtering FAILED")
+            
+        if acc_buy_r10_1hz_ok:
+            self.log("✅ ACCUMULATOR R_10_1HZ Buy: stop_loss filtering working")
+        else:
+            self.log("❌ ACCUMULATOR R_10_1HZ Buy: stop_loss filtering FAILED")
         
         # Additional analysis
         self.log("\n" + "="*60)
-        self.log("ANALYSIS")
+        self.log("ACCUMULATOR ANALYSIS")
         self.log("="*60)
-        self.log("📋 The Deriv API for this account/environment only supports 'basic' product_type.")
+        self.log("📋 ACCUMULATOR buy endpoint validation:")
+        self.log("   - Backend should remove 'stop_loss' from limit_order")
+        self.log("   - Backend should keep only 'take_profit' in limit_order")
+        self.log("   - This is because ACCU contracts don't support stop_loss")
+        
+        if acc_buy_r10_ok and acc_buy_r10_1hz_ok:
+            self.log("✅ CRITICAL SUCCESS: Both R_10 and R_10_1HZ ACCUMULATOR buy endpoints")
+            self.log("   properly filter out stop_loss as expected!")
+        elif not acc_buy_r10_ok or not acc_buy_r10_1hz_ok:
+            self.log("❌ CRITICAL ISSUE: ACCUMULATOR buy endpoint stop_loss filtering failed!")
+            self.log("   This could cause Deriv API errors when users try to buy ACCUMULATOR contracts")
+        
+        self.log("\n📋 The Deriv API for this account/environment only supports 'basic' product_type.")
         self.log("📋 Product types 'accumulator', 'turbos', 'multipliers' return validation errors.")
         self.log("📋 However, the basic product_type includes contract types like:")
         if r10_basic_ok and r10_basic_data:
