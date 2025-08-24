@@ -1045,6 +1045,8 @@ class StrategyRunner:
             stake=stake,
             currency="USD",
         )
+        # mark to avoid double-counting in deriv_buy tracking
+        req.extra = {**(req.extra or {}), "no_stats": True}
         try:
             buy_res = await deriv_buy(req)
         except HTTPException as e:
