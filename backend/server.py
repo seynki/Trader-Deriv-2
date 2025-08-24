@@ -219,6 +219,17 @@ class DerivWS:
                                 "status": poc.get("status"),
                                 "is_expired": poc.get("is_expired"),
                                 "date_start": poc.get("date_start"),
+                            # Record final result into global stats when contract ends (once per contract)
+                            try:
+                                if poc.get("is_expired") and cid_int is not None and cid_int not in self.stats_recorded:
+                                    # Skip contracts explicitly marked as no_stats
+                                    if cid_int not in self.no_stats_contracts:
+                                        pr = float(poc.get("profit") or 0.0)
+                                        await _global_stats.update(pr)
+                                    self.stats_recorded.add(cid_int)
+                            except Exception as _e:
+                                logger.warning(f"Stats update failed for contract {cid_int}: {_e}")
+
                                 "date_expiry": poc.get("date_expiry"),
                             }
                             for q in list(self.contract_queues.get(cid_int, [])):
