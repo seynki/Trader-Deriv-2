@@ -1056,22 +1056,25 @@ class StrategyRunner:
         # wait on contract updates until is_expired and profit known
         q = await _deriv.add_contract_queue(int(cid))
         profit: float = 0.0
+        seen: Set[str] = set()
         try:
             t0 = time.time()
             while True:
                 try:
                     mtxt = await asyncio.wait_for(q.get(), timeout=30)
                 except asyncio.TimeoutError:
-                    if time.time() - t0 > 120:
+                    if time.time() - t0 > 180:
                         break
                     continue
                 if isinstance(mtxt, dict) and mtxt.get("type") == "contract":
                     poc = mtxt
+                    # update partial profit during the trade (live feedback)
+                    try:
+                        curp = float(poc.get("profit") or 0.0)
+                        profit = curp
+                    except Exception:
+                        pass
                     if poc.get("is_expired"):
-                        try:
-                            profit = float(poc.get("profit") or 0.0)
-                        except Exception:
-                            profit = 0.0
                         break
         finally:
             _deriv.remove_contract_queue(int(cid), q)
