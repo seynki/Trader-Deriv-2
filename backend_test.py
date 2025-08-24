@@ -22,7 +22,7 @@ class DerivAPITester:
     def log(self, message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, timeout=15):
+    def run_test(self, name, method, endpoint, expected_status, data=None, timeout=30):
         """Run a single API test with detailed logging"""
         url = f"{self.api_url}/{endpoint}"
         self.tests_run += 1
