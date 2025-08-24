@@ -199,7 +199,8 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         max_price: Number(stake),
         currency: "USD",
         growth_rate: Number(growthRate),
-        limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
+        // ACCU não aceita stop_loss — só enviaremos take_profit
+        limit_order: { take_profit: Number(tp) },
       };
     }
     if (contractEngine === "TURBOS") {
