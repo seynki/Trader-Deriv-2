@@ -124,6 +124,9 @@
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "contracts_for agora aceita product_type=accumulator/multipliers/turbos e inclui currency/landing_company (defaults vindos de authorize). Adicionado endpoint GET /api/deriv/contracts_for_smart/{symbol} que tenta o símbolo e faz fallback automático para _1HZ quando apropriado. Resposta inclui currency e landing_company. Precisa retestar."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Fix ACCUMULATOR/MULTIPLIERS buy: quando max_price não informado, usar price=stake (teto) para evitar erro 'Contract's stake amount is more than the maximum purchase price'."
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "COMPREHENSIVE BACKEND TESTING COMPLETED: ✅ GET /api/deriv/status (connected=true, authenticated=true), ✅ GET /api/deriv/contracts_for/R_10?product_type=accumulator (correctly returns 400 validation error - Deriv API only supports 'basic' product_type for this account), ✅ GET /api/deriv/contracts_for_smart/R_10?product_type=accumulator (returns proper structure with tried=[], first_supported=null, results with error messages), ✅ GET /api/deriv/contracts_for/R_10?product_type=turbos (correctly returns 400 validation error), ✅ GET /api/deriv/contracts_for/R_10?product_type=multipliers (correctly returns 400 validation error). IMPORTANT FINDING: Deriv API for this account only accepts product_type='basic', but the basic type includes all contract types: ACCU, TURBOSLONG, TURBOSSHORT, MULTUP, MULTDOWN. All requested endpoints working as expected - validation errors are correct behavior from Deriv API."
