@@ -527,7 +527,16 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
         if req.growth_rate is not None:
             base["parameters"]["growth_rate"] = float(req.growth_rate)
         if req.limit_order:
-            base["parameters"]["limit_order"] = req.limit_order
+            # ACCU não aceita stop_loss; apenas take_profit é válido
+            lo = {}
+            try:
+                tp = req.limit_order.get("take_profit")
+                if tp is not None:
+                    lo["take_profit"] = float(tp)
+            except Exception:
+                pass
+            if lo:
+                base["parameters"]["limit_order"] = lo
     elif t == "TURBOS":
         base = {
             "buy": 1,
