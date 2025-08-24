@@ -1158,21 +1158,22 @@ class StrategyRunner:
         self.running = False
 
     def status(self) -> StrategyStatus:
-        win_rate = (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
+        # prefer global stats snapshot for UI consistency
+        snap = _global_stats.snapshot()
         return StrategyStatus(
             running=self.running,
             mode=self.mode,
             symbol=self.params.symbol,
             in_position=self.in_position,
-            daily_pnl=self.daily_pnl,
-            day=self.day.isoformat(),
+            daily_pnl=snap["daily_pnl"],
+            day=snap["day"],
             last_signal=self.last_signal,
             last_reason=self.last_reason,
             last_run_at=self.last_run_at,
-            total_trades=self.total_trades,
-            wins=self.wins,
-            losses=self.losses,
-            win_rate=win_rate,
+            total_trades=snap["total_trades"],
+            wins=snap["wins"],
+            losses=snap["losses"],
+            win_rate=snap["win_rate"],
         )
 
 _strategy = StrategyRunner()
