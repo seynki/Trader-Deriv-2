@@ -877,6 +877,46 @@ def _adx(high: List[float], low: List[float], close: List[float], period: int = 
         pad_len = 0
     return [None] * pad_len + adxR
 
+class GlobalTradeStats:
+    def __init__(self):
+        self.day: date = date.today()
+        self.daily_pnl: float = 0.0
+        self.total_trades: int = 0
+        self.wins: int = 0
+        self.losses: int = 0
+        self._lock = asyncio.Lock()
+
+    async def reset_if_new_day(self):
+        if date.today() != self.day:
+            self.day = date.today()
+            self.daily_pnl = 0.0
+            self.total_trades = 0
+            self.wins = 0
+            self.losses = 0
+
+    async def update(self, profit: float):
+        async with self._lock:
+            await self.reset_if_new_day()
+            self.daily_pnl += profit
+            self.total_trades += 1
+            if profit > 0:
+                self.wins += 1
+            else:
+                self.losses += 1
+
+    def snapshot(self):
+        wr = (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
+        return {
+            "day": self.day.isoformat(),
+            "daily_pnl": self.daily_pnl,
+            "total_trades": self.total_trades,
+            "wins": self.wins,
+            "losses": self.losses,
+            "win_rate": wr,
+        }
+
+_global_stats = GlobalTradeStats()
+
 class StrategyRunner:
     def __init__(self):
         self.task: Optional[asyncio.Task] = None
@@ -889,7 +929,7 @@ class StrategyRunner:
         self.last_reason: Optional[str] = None
         self.last_run_at: Optional[int] = None
         self.day: date = date.today()
-        # performance tracking
+        # performance tracking (runner-only)
         self.total_trades: int = 0
         self.wins: int = 0
         self.losses: int = 0
