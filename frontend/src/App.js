@@ -104,8 +104,103 @@ function LiveCard({ symbol, tick, onBuy, contracts }) {
       <CardContent className="flex items-center justify-between gap-3">
         <div className="text-xs opacity-70">{tick?.timestamp ? new Date(tick.timestamp * 1000).toLocaleTimeString() : "--:--"}</div>
         <div className="flex gap-2">
-          <Button size="sm" className="btn-buy" disabled={!(contracts?.contract_types||[]).includes("CALL")} onClick={() => onBuy(symbol, "CALL")}>Buy CALL</Button>
-          <Button size="sm" variant="outline" className="btn-sell" disabled={!(contracts?.contract_types||[]).includes("PUT")} onClick={() => onBuy(symbol, "PUT")}>Buy PUT</Button>
+          <Button size="sm" className="btn-buy" disabled={!((contracts?.contract_types||[]).includes("CALL"))} onClick={() => onBuy(symbol, "CALL")}>Buy CALL</Button>
+          <Button size="sm" variant="outline" className="btn-sell" disabled={!((contracts?.contract_types||[]).includes("PUT"))} onClick={() => onBuy(symbol, "PUT")}>Buy PUT</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StrategyPanel() {
+  const { toast } = useToast();
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const intervalRef = useRef(null);
+
+  const defaults = useMemo(() => ({
+    symbol: "R_100",
+    granularity: 60,
+    candle_len: 200,
+    duration: 5,
+    duration_unit: "t",
+    stake: 1,
+    daily_loss_limit: -20,
+    adx_trend: 22,
+    rsi_ob: 70,
+    rsi_os: 30,
+    bbands_k: 2,
+    mode: "paper",
+  }), []);
+
+  const fetchStatus = async () => {
+    try {
+      const { data } = await axios.get(`${API}/strategy/status`);
+      setStatus(data);
+    } catch (e) { /* ignore */ }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    intervalRef.current = setInterval(fetchStatus, 3000);
+    return () => { try { clearInterval(intervalRef.current); } catch {} };
+  }, []);
+
+  const start = async () => {
+    setLoading(true);
+    try {
+      await axios.post(`${API}/strategy/start`, defaults);
+      toast({ title: "Estratégia iniciada (paper)", description: `${defaults.symbol} • ${defaults.duration}${defaults.duration_unit}` });
+      await fetchStatus();
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e?.message || "Erro";
+      toast({ title: "Falha ao iniciar", description: String(detail), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stop = async () => {
+    setLoading(true);
+    try {
+      await axios.post(`${API}/strategy/stop`);
+      toast({ title: "Estratégia parada" });
+      await fetchStatus();
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e?.message || "Erro";
+      toast({ title: "Falha ao parar", description: String(detail), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const winRate = status?.win_rate ?? 0;
+  const wins = status?.wins ?? 0;
+  const losses = status?.losses ?? 0;
+  const total = status?.total_trades ?? 0;
+  const dpnl = status?.daily_pnl ?? 0;
+
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>Estratégia (ADX/RSI/MACD/BB)</span>
+          <div className="flex items-center gap-2 text-xs opacity-80">
+            <span className={`inline-flex h-2 w-2 rounded-full ${status?.running ? "bg-emerald-500" : "bg-slate-500"}`} />
+            <span>{status?.running ? "Rodando" : "Parada"}</span>
+            <span>• Modo: {status?.mode || "-"}</span>
+            <span>• Símbolo: {status?.symbol || "-"}</span>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="font-medium">Win rate: {winRate.toFixed(0)}% • Acertos: {wins} • Erros: {losses} • Total: {total}</div>
+        <div className="opacity-80">PnL dia: {dpnl.toFixed(2)}</div>
+        <div className="opacity-80">Último sinal: {status?.last_signal || "-"}</div>
+        <div className="opacity-80">Motivo: {status?.last_reason || "-"}</div>
+        <div className="ml-auto flex gap-2">
+          <Button disabled={loading || status?.running} onClick={start}>Start (paper)</Button>
+          <Button variant="outline" disabled={loading || !status?.running} onClick={stop}>Stop</Button>
         </div>
       </CardContent>
     </Card>
@@ -617,6 +712,8 @@ export default function App() {
             </TabsContent>
 
             <TabsContent value="auto" className="mt-6">
+              {/* Painel da Estratégia com métricas em tempo real */}
+              <StrategyPanel />
               <AutomacaoPanel buyAdvanced={buyAdvanced} stake={stake} duration={duration} durationUnit={durationUnit} />
               {lastError && (
                 <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 text-red-200 p-3 text-sm">
