@@ -510,10 +510,12 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
         if req.barrier:
             base["barrier"] = req.barrier
     elif t == "ACCUMULATOR":
-        # Accumulator uses buy with parameters contract_type ACCU
+        # Accumulator: buy direto com parameters (ACCU). 'price' é o preço máximo aceitável.
+        # Se não vier max_price, use a própria stake como teto para evitar o erro
+        # "Contract's stake amount is more than the maximum purchase price".
         base = {
             "buy": 1,
-            "price": float(req.max_price or 0),
+            "price": float(req.max_price if req.max_price is not None else req.stake),
             "parameters": {
                 "amount": float(req.stake),
                 "basis": "stake",
