@@ -731,6 +731,10 @@ class StrategyStatus(BaseModel):
     last_signal: Optional[str] = None
     last_reason: Optional[str] = None
     last_run_at: Optional[int] = None
+    total_trades: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: float = 0.0
 
 # ---- indicator helpers (python versions) ----
 
