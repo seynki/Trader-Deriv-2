@@ -147,15 +147,18 @@
 ## frontend:
 ##   - task: "Strategy Runner (ADX/RSI/MACD/BB + paper/live)"
 ##     implemented: true
-##     working: "NA"
+##     working: true
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: true
+##     needs_retesting: false
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Implementado StrategyRunner no backend com indicadores (SMA/EMA, RSI, MACD, Bollinger, ADX) e laço de execução. Endpoints: POST /api/strategy/start (params com defaults; modo=paper por padrão), POST /api/strategy/stop, GET /api/strategy/status. Paper-trade usa ticks e payout 0.95 simulado; live utiliza /api/deriv/buy CALL/PUT. Respeita DAILY_LOSS_LIMIT e cooldown. Sem mudanças no frontend ainda."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "STRATEGY RUNNER PAPER MODE TESTING COMPLETED: ✅ GET /api/strategy/status returns running=false initially ✅ POST /api/strategy/start with exact payload (symbol=R_100, granularity=60, candle_len=200, duration=5, duration_unit=t, stake=1, daily_loss_limit=-20, adx_trend=22, rsi_ob=70, rsi_os=30, bbands_k=2, mode=paper) successfully starts strategy ✅ Strategy shows activity with last_run_at timestamp updating ✅ POST /api/strategy/stop successfully stops strategy ✅ All endpoints working correctly in paper mode. Live mode NOT tested as requested."
 ##   - task: "Botões Buy CALL/PUT usando backend + painel de acompanhamento de contrato"
 ##     implemented: true
 ##     working: "NA"
