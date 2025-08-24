@@ -659,6 +659,233 @@ class DerivAPITester:
         
         return False, {}
 
+    def test_global_stats_consolidation(self):
+        """Test 15: Global Stats Consolidation - Manual trades update global metrics"""
+        self.log("\n" + "="*60)
+        self.log("TEST 15: Global Stats Consolidation (Manual Trade Tracking)")
+        self.log("="*60)
+        self.log("📋 Objective: Validate that global metrics (win rate, hits, errors, total and daily PnL)")
+        self.log("   are updated for ALL trades, including manual purchases via /api/deriv/buy,")
+        self.log("   without needing to start the strategy.")
+        
+        # Step 1: Get baseline metrics
+        self.log("\n🔍 Step 1: Getting baseline metrics from GET /api/strategy/status")
+        success, baseline_data, status_code = self.run_test(
+            "Baseline Strategy Status",
+            "GET",
+            "strategy/status",
+            200,
+            timeout=10
+        )
+        
+        if not success:
+            self.log("❌ FAILED: Could not get baseline metrics")
+            return False, {}
+        
+        baseline_total_trades = baseline_data.get('total_trades', 0)
+        baseline_wins = baseline_data.get('wins', 0)
+        baseline_losses = baseline_data.get('losses', 0)
+        baseline_daily_pnl = baseline_data.get('daily_pnl', 0.0)
+        baseline_win_rate = baseline_data.get('win_rate', 0.0)
+        
+        self.log(f"   📊 BASELINE METRICS:")
+        self.log(f"      Total Trades: {baseline_total_trades}")
+        self.log(f"      Wins: {baseline_wins}")
+        self.log(f"      Losses: {baseline_losses}")
+        self.log(f"      Daily PnL: {baseline_daily_pnl}")
+        self.log(f"      Win Rate: {baseline_win_rate}%")
+        
+        # Step 2: Execute manual buy
+        self.log("\n🔍 Step 2: Executing manual buy via POST /api/deriv/buy")
+        buy_payload = {
+            "type": "CALLPUT",
+            "symbol": "R_10",
+            "contract_type": "CALL",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "currency": "USD"
+        }
+        
+        success, buy_data, status_code = self.run_test(
+            "Manual Buy CALL Contract",
+            "POST",
+            "deriv/buy",
+            200,
+            data=buy_payload,
+            timeout=20
+        )
+        
+        if not success:
+            if status_code == 503:
+                self.log("⚠️  Deriv service not connected - cannot test manual buy")
+                self.log("✅ TEST SKIPPED: Service unavailable but endpoint reachable")
+                return True, {"skipped": "service_unavailable"}
+            else:
+                self.log("❌ FAILED: Manual buy failed")
+                return False, buy_data
+        
+        contract_id = buy_data.get('contract_id')
+        buy_price = buy_data.get('buy_price')
+        payout = buy_data.get('payout')
+        
+        self.log(f"   📋 BUY SUCCESSFUL:")
+        self.log(f"      Contract ID: {contract_id}")
+        self.log(f"      Buy Price: {buy_price}")
+        self.log(f"      Payout: {payout}")
+        
+        if not contract_id:
+            self.log("❌ FAILED: No contract_id returned from buy")
+            return False, buy_data
+        
+        # Step 3: Wait for contract expiration and monitor metrics
+        self.log(f"\n🔍 Step 3: Waiting for contract {contract_id} to expire and metrics to update")
+        self.log("   ⏳ The backend is subscribed to proposal_open_contract and will update")
+        self.log("      _global_stats automatically when is_expired=true is received.")
+        self.log("   ⏳ Monitoring for up to 3 minutes with 10-second intervals...")
+        
+        max_wait_time = 180  # 3 minutes
+        check_interval = 10  # 10 seconds
+        elapsed_time = 0
+        metrics_updated = False
+        final_data = None
+        
+        while elapsed_time < max_wait_time and not metrics_updated:
+            self.log(f"   ⏱️  Checking metrics... (elapsed: {elapsed_time}s)")
+            
+            success, current_data, status_code = self.run_test(
+                f"Strategy Status Check (t+{elapsed_time}s)",
+                "GET",
+                "strategy/status",
+                200,
+                timeout=10
+            )
+            
+            if success:
+                current_total_trades = current_data.get('total_trades', 0)
+                current_wins = current_data.get('wins', 0)
+                current_losses = current_data.get('losses', 0)
+                current_daily_pnl = current_data.get('daily_pnl', 0.0)
+                current_win_rate = current_data.get('win_rate', 0.0)
+                
+                self.log(f"      Current Total Trades: {current_total_trades} (baseline: {baseline_total_trades})")
+                
+                # Check if total_trades increased by 1
+                if current_total_trades == baseline_total_trades + 1:
+                    self.log("   ✅ METRICS UPDATED! Total trades increased by 1")
+                    self.log(f"      📊 UPDATED METRICS:")
+                    self.log(f"         Total Trades: {current_total_trades} (+1)")
+                    self.log(f"         Wins: {current_wins} (change: +{current_wins - baseline_wins})")
+                    self.log(f"         Losses: {current_losses} (change: +{current_losses - baseline_losses})")
+                    self.log(f"         Daily PnL: {current_daily_pnl} (change: {current_daily_pnl - baseline_daily_pnl:+.2f})")
+                    self.log(f"         Win Rate: {current_win_rate}% (baseline: {baseline_win_rate}%)")
+                    
+                    metrics_updated = True
+                    final_data = current_data
+                    break
+            
+            time.sleep(check_interval)
+            elapsed_time += check_interval
+        
+        if not metrics_updated:
+            self.log(f"   ⚠️  TIMEOUT: Metrics not updated after {max_wait_time} seconds")
+            self.log("   This could indicate:")
+            self.log("   - Contract hasn't expired yet (normal for longer durations)")
+            self.log("   - WebSocket connection issues")
+            self.log("   - Global stats update mechanism not working")
+            return False, {"timeout": True, "elapsed": elapsed_time}
+        
+        # Step 4: Verify metrics consistency
+        self.log("\n🔍 Step 4: Verifying metrics consistency")
+        
+        # Check that wins + losses = total_trades
+        final_total = final_data.get('total_trades', 0)
+        final_wins = final_data.get('wins', 0)
+        final_losses = final_data.get('losses', 0)
+        final_pnl = final_data.get('daily_pnl', 0.0)
+        final_win_rate = final_data.get('win_rate', 0.0)
+        
+        wins_losses_sum = final_wins + final_losses
+        expected_win_rate = (final_wins / final_total * 100.0) if final_total > 0 else 0.0
+        
+        consistency_checks = []
+        
+        # Check 1: wins + losses = total_trades
+        if wins_losses_sum == final_total:
+            self.log("   ✅ Consistency Check 1: wins + losses = total_trades")
+            consistency_checks.append(True)
+        else:
+            self.log(f"   ❌ Consistency Check 1: wins({final_wins}) + losses({final_losses}) = {wins_losses_sum} ≠ total_trades({final_total})")
+            consistency_checks.append(False)
+        
+        # Check 2: win_rate calculation
+        if abs(final_win_rate - expected_win_rate) < 0.1:  # Allow small floating point differences
+            self.log(f"   ✅ Consistency Check 2: win_rate calculation correct ({final_win_rate}% ≈ {expected_win_rate:.1f}%)")
+            consistency_checks.append(True)
+        else:
+            self.log(f"   ❌ Consistency Check 2: win_rate({final_win_rate}%) ≠ expected({expected_win_rate:.1f}%)")
+            consistency_checks.append(False)
+        
+        # Check 3: PnL change is reasonable (should be around +0.95 for win or -1.0 for loss in demo)
+        pnl_change = final_pnl - baseline_daily_pnl
+        reasonable_pnl = abs(pnl_change) >= 0.8 and abs(pnl_change) <= 2.0  # Allow some variance
+        
+        if reasonable_pnl:
+            self.log(f"   ✅ Consistency Check 3: PnL change reasonable ({pnl_change:+.2f})")
+            consistency_checks.append(True)
+        else:
+            self.log(f"   ❌ Consistency Check 3: PnL change suspicious ({pnl_change:+.2f}) - expected ~±1.0")
+            consistency_checks.append(False)
+        
+        # Step 5: Test for double counting prevention
+        self.log("\n🔍 Step 5: Testing double counting prevention")
+        self.log("   ⏳ Waiting additional 60 seconds to ensure same contract isn't counted twice...")
+        
+        time.sleep(60)
+        
+        success, double_check_data, status_code = self.run_test(
+            "Double Count Prevention Check",
+            "GET",
+            "strategy/status",
+            200,
+            timeout=10
+        )
+        
+        if success:
+            double_check_total = double_check_data.get('total_trades', 0)
+            
+            if double_check_total == final_total:
+                self.log(f"   ✅ Double Count Prevention: total_trades remained {double_check_total} (no double counting)")
+                consistency_checks.append(True)
+            else:
+                self.log(f"   ❌ Double Count Prevention: total_trades changed from {final_total} to {double_check_total} (possible double counting)")
+                consistency_checks.append(False)
+        else:
+            self.log("   ⚠️  Could not verify double counting prevention")
+            consistency_checks.append(False)
+        
+        # Final assessment
+        all_checks_passed = all(consistency_checks)
+        
+        self.log("\n" + "="*60)
+        self.log("GLOBAL STATS CONSOLIDATION TEST RESULTS")
+        self.log("="*60)
+        
+        if all_checks_passed:
+            self.log("🎉 ✅ ALL CHECKS PASSED!")
+            self.log("📋 Global stats consolidation is working correctly:")
+            self.log("   - Manual trades update global metrics automatically")
+            self.log("   - Metrics are consistent and properly calculated")
+            self.log("   - No double counting detected")
+            self.log("   - Backend properly listens to Deriv WebSocket for contract expiration")
+            return True, final_data
+        else:
+            self.log("⚠️  ❌ SOME CHECKS FAILED!")
+            self.log("📋 Issues detected in global stats consolidation")
+            failed_checks = sum(1 for check in consistency_checks if not check)
+            self.log(f"   {failed_checks}/{len(consistency_checks)} consistency checks failed")
+            return False, final_data
+
     def run_strategy_runner_tests(self):
         """Run Strategy Runner tests in paper mode only"""
         self.log("\n" + "🎯" + "="*58)
