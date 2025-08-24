@@ -1053,6 +1053,9 @@ class StrategyRunner:
                 if date.today() != self.day:
                     self.day = date.today()
                     self.daily_pnl = 0.0
+                    self.total_trades = 0
+                    self.wins = 0
+                    self.losses = 0
                 if self.daily_pnl <= self.params.daily_loss_limit:
                     logger.info("Daily loss limit reached. Stopping strategy.")
                     self.running = False
