@@ -889,6 +889,10 @@ class StrategyRunner:
         self.last_reason: Optional[str] = None
         self.last_run_at: Optional[int] = None
         self.day: date = date.today()
+        # performance tracking
+        self.total_trades: int = 0
+        self.wins: int = 0
+        self.losses: int = 0
 
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
         close = [float(c.get("close")) for c in candles]
