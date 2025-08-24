@@ -196,6 +196,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         type: "ACCUMULATOR",
         symbol,
         stake: Number(stake),
+        max_price: Number(stake),
         currency: "USD",
         growth_rate: Number(growthRate),
         limit_order: { take_profit: Number(tp), stop_loss: Number(sl) },
