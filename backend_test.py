@@ -980,12 +980,12 @@ class DerivAPITester:
         return success
 
     def run_all_tests(self):
-        """Run all backend API tests - NOW INCLUDING STRATEGY RUNNER TESTS"""
-        self.log("🚀 Starting Deriv Backend API Tests - STRATEGY RUNNER FOCUS")
+        """Run all backend API tests - FOCUS ON GLOBAL STATS CONSOLIDATION"""
+        self.log("🚀 Starting Deriv Backend API Tests - GLOBAL STATS CONSOLIDATION FOCUS")
         self.log(f"   Base URL: {self.base_url}")
         self.log(f"   API URL: {self.api_url}")
         self.log(f"   Timestamp: {datetime.now().isoformat()}")
-        self.log("   FOCUS: Testing Strategy Runner endpoints in paper mode")
+        self.log("   FOCUS: Testing Global Stats Consolidation for manual trades")
         
         # Test 0: Basic health
         basic_ok = self.test_basic_endpoints()
@@ -998,8 +998,12 @@ class DerivAPITester:
             self.print_summary()
             return False
         
-        # NEW: STRATEGY RUNNER TESTS (Tests 10-14)
-        strategy_tests_ok = self.run_strategy_runner_tests()
+        # NEW: GLOBAL STATS CONSOLIDATION TEST (Test 15)
+        self.log("\n" + "🎯" + "="*58)
+        self.log("GLOBAL STATS CONSOLIDATION TEST")
+        self.log("🎯" + "="*58)
+        
+        global_stats_ok, global_stats_data = self.test_global_stats_consolidation()
         
         self.print_summary()
         
@@ -1013,34 +1017,41 @@ class DerivAPITester:
         else:
             self.log("❌ Deriv Status: Connection issues")
             
-        if strategy_tests_ok:
-            self.log("✅ Strategy Runner: All paper mode tests passed")
+        if global_stats_ok:
+            self.log("✅ Global Stats Consolidation: Working correctly")
         else:
-            self.log("❌ Strategy Runner: Some tests failed")
+            self.log("❌ Global Stats Consolidation: Issues detected")
         
-        # Strategy Runner Analysis
+        # Global Stats Analysis
         self.log("\n" + "="*60)
-        self.log("STRATEGY RUNNER ANALYSIS")
+        self.log("GLOBAL STATS CONSOLIDATION ANALYSIS")
         self.log("="*60)
-        self.log("📋 Strategy Runner endpoints tested:")
-        self.log("   - GET /api/strategy/status (initial and running states)")
-        self.log("   - POST /api/strategy/start (paper mode only)")
-        self.log("   - POST /api/strategy/stop")
-        self.log("   - Paper mode trading simulation")
-        self.log("   - Signal generation and PnL tracking")
+        self.log("📋 Global stats consolidation tested:")
+        self.log("   - Manual trade via POST /api/deriv/buy")
+        self.log("   - Automatic metrics update via WebSocket")
+        self.log("   - Global stats consistency (wins/losses/total/PnL)")
+        self.log("   - Double counting prevention")
+        self.log("   - Win rate calculation accuracy")
         
-        if strategy_tests_ok:
-            self.log("✅ CRITICAL SUCCESS: Strategy Runner working correctly in paper mode!")
-            self.log("   - Starts and stops properly")
-            self.log("   - Generates trading signals")
-            self.log("   - Tracks daily PnL")
-            self.log("   - Safe paper trading mode")
+        if global_stats_ok:
+            self.log("✅ CRITICAL SUCCESS: Global stats consolidation working correctly!")
+            self.log("   - Manual trades update global metrics automatically")
+            self.log("   - No strategy startup required")
+            self.log("   - Proper WebSocket integration with Deriv")
+            self.log("   - Consistent metric calculations")
+            self.log("   - No double counting detected")
         else:
-            self.log("❌ CRITICAL ISSUE: Strategy Runner has problems!")
+            self.log("❌ CRITICAL ISSUE: Global stats consolidation has problems!")
             self.log("   Check individual test results above for details")
+            
+            if isinstance(global_stats_data, dict) and global_stats_data.get("skipped"):
+                self.log("   NOTE: Test was skipped due to service unavailability")
+            elif isinstance(global_stats_data, dict) and global_stats_data.get("timeout"):
+                self.log("   NOTE: Test timed out - contract may not have expired yet")
         
-        self.log("\n📋 IMPORTANT: Live mode was NOT tested as requested")
-        self.log("📋 Only paper mode trading was tested for safety")
+        self.log("\n📋 IMPORTANT: This test validates the core requirement that")
+        self.log("📋 global metrics are updated for ALL trades (manual + automated)")
+        self.log("📋 without requiring strategy activation")
         
         return self.tests_passed == self.tests_run
 
