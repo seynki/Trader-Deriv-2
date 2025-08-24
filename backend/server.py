@@ -204,7 +204,7 @@ class DerivWS:
                             cid_int = int(cid) if cid is not None else None
                         except Exception:
                             cid_int = None
-                        if cid_int is not None and cid_int in self.contract_queues:
+                        if cid_int is not None:
                             message = {
                                 "type": "contract",
                                 "contract_id": cid_int,
@@ -223,13 +223,14 @@ class DerivWS:
                             }
                             # Record final result into global stats when contract ends (once per contract)
                             try:
-                                if message.get("is_expired") and cid_int is not None and cid_int not in self.stats_recorded:
+                                if message.get("is_expired") and cid_int not in self.stats_recorded:
                                     if cid_int not in self.no_stats_contracts:
                                         pr = float(message.get("profit") or 0.0)
                                         await _global_stats.update(pr)
                                     self.stats_recorded.add(cid_int)
                             except Exception as _e:
                                 logger.warning(f"Stats update failed for contract {cid_int}: {_e}")
+                            # Broadcast to any listeners if present
                             for q in list(self.contract_queues.get(cid_int, [])):
                                 if not q.full():
                                     q.put_nowait(message)
