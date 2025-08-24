@@ -124,6 +124,9 @@ class DerivWS:
         self.landing_company_name: Optional[str] = None
         self.currency: Optional[str] = None
 
+        self.no_stats_contracts: Set[int] = set()
+        self.stats_recorded: Set[int] = set()
+
     def _build_uri(self) -> str:
         if not self.app_id:
             # Deriv recommends using an app_id; we still allow anon for read-only
