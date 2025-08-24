@@ -372,7 +372,17 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
               <Input className="w-24" type="number" step="0.01" min={0.01} max={0.05} value={growthRate} onChange={(e) => setGrowthRate(Number(e.target.value||0.03))} />
             </div>
           )}
-          {(contractEngine === "MULTIPLIERS" || contractEngine === "ACCUMULATOR") && (
+          {contractEngine === "ACCUMULATOR" && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-sm opacity-80">TP</span>
+                <Input className="w-24" type="number" value={tp} onChange={(e) => setTp(Number(e.target.value||50))} />
+              </div>
+              {/* SL oculto para ACCUMULATOR (não suportado pela Deriv) */}
+            </>
+          )}
+
+          {contractEngine === "MULTIPLIERS" && (
             <>
               <div className="flex items-center gap-2">
                 <span className="text-sm opacity-80">TP</span>
