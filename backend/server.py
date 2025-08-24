@@ -542,9 +542,10 @@ def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
             }
         }
     elif t == "MULTIPLIERS":
+        # Para multipliers, o 'price' também é um teto. Se não informado, usar stake por segurança.
         base = {
             "buy": 1,
-            "price": float(req.max_price or 0),
+            "price": float(req.max_price if req.max_price is not None else req.stake),
             "parameters": {
                 "amount": float(req.stake),
                 "basis": "stake",
