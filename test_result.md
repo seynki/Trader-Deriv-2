@@ -145,6 +145,17 @@
 ##       -agent: "testing"
 ##       -comment: "Minor: TESTED: GET /api/deriv/contracts_for/R_100 ✅ returns 200 with contract_types list (34 types including CALL/PUT), but durations/duration_units are empty due to parsing logic not finding min/max_duration fields in Deriv API response. Core functionality works, minor parsing issue."
 ## frontend:
+##   - task: "Strategy Runner (ADX/RSI/MACD/BB + paper/live)"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementado StrategyRunner no backend com indicadores (SMA/EMA, RSI, MACD, Bollinger, ADX) e laço de execução. Endpoints: POST /api/strategy/start (params com defaults; modo=paper por padrão), POST /api/strategy/stop, GET /api/strategy/status. Paper-trade usa ticks e payout 0.95 simulado; live utiliza /api/deriv/buy CALL/PUT. Respeita DAILY_LOSS_LIMIT e cooldown. Sem mudanças no frontend ainda."
 ##   - task: "Botões Buy CALL/PUT usando backend + painel de acompanhamento de contrato"
 ##     implemented: true
 ##     working: "NA"
