@@ -1079,7 +1079,13 @@ class StrategyRunner:
                 else:
                     pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
                 self.daily_pnl += pnl
-                logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} reason={self.last_reason}")
+                # update stats
+                self.total_trades += 1
+                if pnl > 0:
+                    self.wins += 1
+                else:
+                    self.losses += 1
+                logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} W/L={self.wins}/{self.losses} reason={self.last_reason}")
             except asyncio.CancelledError:
                 break
             except Exception as e:
