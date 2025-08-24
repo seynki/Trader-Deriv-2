@@ -681,6 +681,12 @@ async def deriv_buy(req: BuyRequest):
     try:
         cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
         if cid:
+            # mark no-stats contracts (e.g., StrategyRunner live mode) to avoid double counting
+            try:
+                if (req.extra or {}).get("no_stats"):
+                    _deriv.no_stats_contracts.add(cid)
+            except Exception:
+                pass
             await _deriv.ensure_contract_subscription(cid)
     except Exception:
         pass
