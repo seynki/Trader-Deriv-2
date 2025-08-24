@@ -194,3 +194,17 @@
 ##   -message: "ACCUMULATOR BUY TESTING COMPLETED (2025-08-24): ✅ CRITICAL SUCCESS - POST /api/deriv/buy with type=ACCUMULATOR properly filters out stop_loss from limit_order as expected! Tested both R_10 (successful buy executed - contract_id: 292071725688) and R_10_1HZ (asset not available but stop_loss filtering worked). Backend correctly removes stop_loss and keeps only take_profit in limit_order for ACCU contracts. This validates the implementation in build_proposal_payload function lines 530-540 where stop_loss is explicitly filtered out for ACCUMULATOR type. All backend ACCUMULATOR buy logic working as designed - no validation errors related to stop_loss detected."
 ##   -agent: "testing"
 ##   -message: "STRATEGY RUNNER TESTING COMPLETED (2025-08-24): ✅ ALL PAPER MODE TESTS PASSED - 1) GET /api/strategy/status returns running=false initially ✅ 2) POST /api/strategy/start with exact payload from review request successfully starts strategy (running=true) ✅ 3) Strategy shows activity with last_run_at timestamp updating (1756059703 → 1756059743) ✅ 4) POST /api/strategy/stop successfully stops strategy (running=false) ✅ 5) Final status confirms stopped state ✅. Strategy Runner core functionality working correctly in paper mode. No timeout issues detected in candles endpoint during testing period. Live mode was NOT tested as requested for safety."
+##   - task: "Global stats: consolidar manual+automação+estratégia"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Atualizado DerivWS para registrar pnl ao receber proposal_open_contract is_expired. Evita dupla contagem usando no_stats_contracts quando StrategyRunner-live marca req.extra.no_stats. StrategyStatus agora reflete estatísticas globais de QUALQUER trade (manual/auto/estratégia)."
+## agent_communication:
+##   -agent: "main"
+##   -message: "Por favor, testar consolidação de estatísticas: 1) Capturar baseline com GET /api/strategy/status 2) Executar POST /api/deriv/buy (type=CALLPUT, symbol=R_10, duration=5, duration_unit=t, stake=1, currency=USD) 3) Anotar contract_id retornado e aguardar ~60s; o backend escuta a Deriv e, quando o contrato expira, atualiza as métricas globais 4) Validar que GET /api/strategy/status mostra total_trades incrementado +1 e wins/losses ajustados 5) Repetir GET por 2 ciclos e verificar que o mesmo contrato não é contado 2x. IMPORTANTE: uso de conta DEMO."
