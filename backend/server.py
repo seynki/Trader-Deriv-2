@@ -1042,6 +1042,9 @@ class StrategyRunner:
         self.day = date.today()
         self.daily_pnl = 0.0
         self.in_position = False
+        self.total_trades = 0
+        self.wins = 0
+        self.losses = 0
         cooldown_seconds = 5
         logger.info(f"Strategy loop started: {self.params}")
         while self.running:
