@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: app-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-backend
+    working_dir: /app/backend
+    env_file:
+      - ./backend/.env  # carrega DERIV_* sem alterar arquivos
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/appdb
+      - DB_NAME=appdb
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app/backend
+    ports:
+      - "8001:8001"
+    depends_on:
+      - mongo
+    command: uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: app-frontend
+    working_dir: /app/frontend
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
+      - WDS_SOCKET_PORT=3000
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - HOST=0.0.0.0
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  frontend_node_modules:
