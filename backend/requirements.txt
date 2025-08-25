@@ -25,4 +25,7 @@ python-multipart>=0.0.9
 jq>=1.6.0
 typer>=0.9.0
 websockets>=12.0
+scikit-learn>=1.5.1
+joblib>=1.4.2
+
 tenacity>=8.2.0
