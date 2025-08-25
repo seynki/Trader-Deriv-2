@@ -4,7 +4,7 @@ WORKDIR /app/frontend
 
 # Instalar dependências primeiro (aproveitar cache)
 COPY frontend/package.json frontend/yarn.lock ./
-RUN corepack enable &amp;&amp; yarn install
+RUN corepack enable && yarn install
 
 # Copiar código (será sobrescrito por volume em dev)
 COPY frontend/ .
