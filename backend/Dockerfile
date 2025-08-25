@@ -10,7 +10,7 @@ WORKDIR /app/backend
 # Instalar dependências primeiro (aproveitar cache)
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -U pip \ 
-    &amp;&amp; pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copiar código (será sobrescrito por volume em dev)
 COPY backend/ .
