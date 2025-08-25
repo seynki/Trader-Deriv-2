@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Dependências básicas (evita falhas de build de libs python nativas)
 RUN apt-get update \ 
-    &amp;&amp; apt-get install -y --no-install-recommends build-essential \ 
+    && apt-get install -y --no-install-recommends build-essential \ 
     &amp;&amp; rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
