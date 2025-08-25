@@ -17,6 +17,19 @@ import time
 import websockets
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
+# ML imports
+import io
+from pathlib import Path as _Path
+import pandas as pd
+import numpy as np
+import pandas_ta as ta
+from joblib import dump, load
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+from fastapi import UploadFile, File, Form
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
