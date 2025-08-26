@@ -719,6 +719,7 @@ export default function App() {
               <TabsTrigger value="derived">Derived indices</TabsTrigger>
               <TabsTrigger value="auto">Automação</TabsTrigger>
             </TabsList>
+              <div className="ml-4"><span className="text-xs opacity-70">Modelo:</span></div>
 
             <TabsContent value="ao-vivo" className="mt-6 grid md:grid-cols-3 gap-4">
               {symbols.map((s) => (
