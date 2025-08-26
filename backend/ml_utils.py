@@ -9,6 +9,7 @@ from joblib import dump
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier, export_text
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from datetime import datetime
 
 ROOT = Path(__file__).parent
 ML_DIR = ROOT / "ml_models"
@@ -113,6 +114,9 @@ def load_champion() -> Dict[str, Any]:
 
 
 def save_champion(meta: Dict[str, Any]):
+    # ensure timestamp
+    if "updated_at" not in meta:
+        meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
     CHAMP_PATH.write_text(json.dumps(meta, indent=2))
 
 
@@ -124,8 +128,8 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
     X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan)
     mask = X.notna().all(axis=1) & y.notna()
     X, y = X[mask], y[mask]
-    if len(X) < 400:
-        raise ValueError("Dados insuficientes após limpeza (>= 400 linhas)")
+    if len(X) &lt; 400:
+        raise ValueError("Dados insuficientes após limpeza (&gt;= 400 linhas)")
     # temporal holdout
     n = len(X)
     cut = int(n * 0.8)
@@ -144,9 +148,9 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
     bt = backtest_simple(df.loc[Xte.index, "close"], pd.Series(p, index=Xte.index), horizon)
     # promoção automática
     champ = load_champion()
-    cond_f1 = metrics["f1"] >= 1.10 * float(champ.get("metrics", {}).get("f1", 0.0))
-    cond_prec = metrics["precision"] >= float(champ.get("metrics", {}).get("precision", 0.0))
-    cond_dd = bt["max_drawdown"] >= float(champ.get("backtest", {}).get("max_drawdown", -1e9))  # menos negativo é melhor
+    cond_f1 = metrics["f1"] &gt;= 1.10 * float(champ.get("metrics", {}).get("f1", 0.0))
+    cond_prec = metrics["precision"] &gt;= float(champ.get("metrics", {}).get("precision", 0.0))
+    cond_dd = bt["max_drawdown"] &gt;= float(champ.get("backtest", {}).get("max_drawdown", -1e9))  # menos negativo é melhor
     promoted = bool(cond_f1 and cond_prec and cond_dd)
     model_id = f"{save_prefix}_{model_type}"
     model_path = ML_DIR / f"{model_id}.joblib"
@@ -162,5 +166,7 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
             "ts_rows": int(len(Xtr)),
             "vs_rows": int(len(Xte)),
         }
+        # stamp time on champion metadata
+        meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
         save_champion(meta)
     return {"model_id": model_id, "metrics": metrics, "backtest": bt, "promoted": promoted}

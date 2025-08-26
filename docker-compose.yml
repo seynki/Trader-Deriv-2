@@ -23,6 +23,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app/backend
+      - ./data/ml:/data/ml
     ports:
       - "8001:8001"
     depends_on:
@@ -48,6 +49,29 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+  trainer:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-trainer
+    working_dir: /app/backend
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/appdb
+      - DB_NAME=appdb
+      - TRAIN_SYMBOL=R_100
+      - TRAIN_TIMEFRAME=3m
+      - TRAIN_HORIZON=3
+      - TRAIN_THRESHOLD=0.003
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app/backend
+      - ./data/ml:/data/ml
+    depends_on:
+      - mongo
+    command: python ml_trainer.py
 
 volumes:
   mongo_data:
