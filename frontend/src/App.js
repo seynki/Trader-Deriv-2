@@ -55,29 +55,48 @@ function useDerivTicks(symbols) {
   const [ticks, setTicks] = useState({});
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
+  const retryRef = useRef(null);
+  const stopRef = useRef(false);
+
   useEffect(() => {
     if (!symbols || symbols.length === 0) return;
-    const url = wsTicksUrl();
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    stopRef.current = false;
 
-    ws.onopen = () => {
-      setConnected(true);
-      ws.send(JSON.stringify({ symbols }));
-    };
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === "tick") {
-          setTicks((prev) => ({ ...prev, [msg.symbol]: msg }));
+    const connect = () => {
+      if (stopRef.current) return;
+      const url = wsTicksUrl();
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+        try { ws.send(JSON.stringify({ symbols })); } catch {}
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "tick") {
+            setTicks((prev) => ({ ...prev, [msg.symbol]: msg }));
+          }
+        } catch {}
+      };
+      const scheduleRetry = () => {
+        setConnected(false);
+        if (!stopRef.current) {
+          clearTimeout(retryRef.current);
+          retryRef.current = setTimeout(connect, 1500);
         }
-      } catch {}
+      };
+      ws.onclose = scheduleRetry;
+      ws.onerror = scheduleRetry;
     };
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
+
+    connect();
 
     return () => {
-      try { ws.close(); } catch {}
+      stopRef.current = true;
+      clearTimeout(retryRef.current);
+      try { wsRef.current && wsRef.current.close(); } catch {}
     };
   }, [symbols.join(",")]);
 
