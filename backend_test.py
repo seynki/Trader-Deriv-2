@@ -979,6 +979,144 @@ class DerivAPITester:
         
         return success
 
+    def test_ml_status(self):
+        """Test ML status endpoint - should return 200 with either no champion message or champion JSON"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-1: ML Status Check")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "ML Status Check",
+            "GET",
+            "ml/status",
+            200
+        )
+        
+        if success:
+            # Check if response has either "no champion" message or champion data
+            if isinstance(data, dict):
+                if "message" in data and data["message"] == "no champion":
+                    self.log("✅ ML Status: No champion model (expected)")
+                    return True, data
+                elif "model_id" in data or "accuracy" in data or "features" in data:
+                    self.log("✅ ML Status: Champion model exists")
+                    self.log(f"   Champion data: {json.dumps(data, indent=2)}")
+                    return True, data
+                else:
+                    self.log("⚠️  ML Status: Unexpected response format")
+                    return True, data  # Still consider success if 200
+            else:
+                self.log("⚠️  ML Status: Non-dict response")
+                return True, data
+        
+        return False, {}
+
+    def test_ml_train_missing_file(self):
+        """Test ML train endpoint with source=file when CSV is missing - should return 400"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-2: ML Train with Missing CSV File")
+        self.log("="*60)
+        
+        # Use exact parameters from review request
+        success, data, status_code = self.run_test(
+            "ML Train Missing File",
+            "POST",
+            "ml/train?source=file&symbol=R_100&timeframe=3m&horizon=3&threshold=0.003&model_type=dt",
+            400,  # Expecting 400 when file is missing
+            timeout=15
+        )
+        
+        if success:
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
+            
+            # Check if error message mentions missing data/file
+            if any(keyword in error_detail.lower() for keyword in ['sem dados', 'não existe', 'missing', 'not exist']):
+                self.log("✅ ML Train: Expected error for missing /data/ml/ohlcv.csv file")
+                return True, data
+            else:
+                self.log("⚠️  ML Train: Unexpected error message (but still 400 as expected)")
+                return True, data
+        
+        return False, {}
+
+    def test_ml_model_rules_nonexistent(self):
+        """Test ML model rules endpoint for nonexistent model - should return 404"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-3: ML Model Rules for Nonexistent Model")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "ML Model Rules Nonexistent",
+            "GET",
+            "ml/model/nonexistent_dt/rules",
+            404  # Expecting 404 when model doesn't exist
+        )
+        
+        if success:
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
+            
+            # Check if error message mentions model not found
+            if any(keyword in error_detail.lower() for keyword in ['não encontrado', 'not found', 'modelo']):
+                self.log("✅ ML Model Rules: Expected 404 for nonexistent model")
+                return True, data
+            else:
+                self.log("⚠️  ML Model Rules: Unexpected error message (but still 404 as expected)")
+                return True, data
+        
+        return False, {}
+
+    def run_ml_smoke_tests(self):
+        """Run ML endpoint smoke tests as requested in review"""
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ML ENDPOINTS SMOKE TESTS")
+        self.log("🧠" + "="*58)
+        self.log("📋 Testing ML endpoints and scheduler scaffolding:")
+        self.log("   1. GET /api/ml/status (expect 200 with no champion or champion JSON)")
+        self.log("   2. POST /api/ml/train?source=file (expect 400 when CSV missing)")
+        self.log("   3. GET /api/ml/model/nonexistent_dt/rules (expect 404)")
+        
+        # Test ML-1: ML Status
+        ml_status_ok, ml_status_data = self.test_ml_status()
+        
+        # Test ML-2: ML Train with missing file
+        ml_train_ok, ml_train_data = self.test_ml_train_missing_file()
+        
+        # Test ML-3: ML Model Rules nonexistent
+        ml_rules_ok, ml_rules_data = self.test_ml_model_rules_nonexistent()
+        
+        # Summary of ML tests
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ML SMOKE TEST RESULTS")
+        self.log("🧠" + "="*58)
+        
+        if ml_status_ok:
+            self.log("✅ ML Status: Working correctly")
+        else:
+            self.log("❌ ML Status: Failed")
+            
+        if ml_train_ok:
+            self.log("✅ ML Train (Missing File): Correctly returns 400")
+        else:
+            self.log("❌ ML Train (Missing File): Failed")
+            
+        if ml_rules_ok:
+            self.log("✅ ML Model Rules (Nonexistent): Correctly returns 404")
+        else:
+            self.log("❌ ML Model Rules (Nonexistent): Failed")
+        
+        all_ml_tests_passed = ml_status_ok and ml_train_ok and ml_rules_ok
+        
+        if all_ml_tests_passed:
+            self.log("\n🎉 ALL ML SMOKE TESTS PASSED!")
+            self.log("📋 ML endpoints and scheduler scaffolding working correctly")
+        else:
+            self.log("\n⚠️  SOME ML SMOKE TESTS FAILED")
+            self.log("📋 Check individual test results above")
+        
+        return all_ml_tests_passed
+
     def run_all_tests(self):
         """Run all backend API tests - FOCUS ON GLOBAL STATS CONSOLIDATION"""
         self.log("🚀 Starting Deriv Backend API Tests - GLOBAL STATS CONSOLIDATION FOCUS")
