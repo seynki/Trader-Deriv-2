@@ -1117,71 +1117,287 @@ class DerivAPITester:
         
         return all_ml_tests_passed
 
+    def diagnose_strategy_always_inactive_bug(self):
+        """Diagnose 'Estratégia (ADX/RSI/MACD/BB) sempre inativo' bug as requested"""
+        self.log("\n" + "🐛" + "="*58)
+        self.log("BUG DIAGNOSIS: 'Estratégia (ADX/RSI/MACD/BB) sempre inativo'")
+        self.log("🐛" + "="*58)
+        self.log("📋 Following exact diagnosis steps from review request:")
+        self.log("   1) GET /api/deriv/status - Check connected/authenticated")
+        self.log("   2) GET /api/strategy/status - Should be running=false initially")
+        self.log("   3) POST /api/strategy/start with exact JSON payload")
+        self.log("   4) Poll GET /api/strategy/status every 3s for 2 cycles")
+        self.log("   5) POST /api/strategy/stop to clean up")
+        self.log("   ⚠️  NOT calling any buy endpoints directly as requested")
+        
+        # Step 1: GET /api/deriv/status
+        self.log("\n🔍 STEP 1: GET /api/deriv/status")
+        success, deriv_data, status_code = self.run_test(
+            "Deriv Status Check",
+            "GET", 
+            "deriv/status",
+            200
+        )
+        
+        if not success:
+            self.log("❌ CRITICAL: Cannot get Deriv status - aborting diagnosis")
+            return False, {"error": "deriv_status_failed"}
+        
+        connected = deriv_data.get('connected', False)
+        authenticated = deriv_data.get('authenticated', False)
+        
+        self.log(f"   Connected: {connected}")
+        self.log(f"   Authenticated: {authenticated}")
+        
+        if not connected:
+            self.log("⚠️  WARNING: Deriv connected=false - this may cause strategy issues")
+        if not authenticated:
+            self.log("⚠️  WARNING: Deriv authenticated=false - this may cause strategy issues")
+        
+        # Step 2: GET /api/strategy/status (initial)
+        self.log("\n🔍 STEP 2: GET /api/strategy/status (initial)")
+        success, initial_status, status_code = self.run_test(
+            "Strategy Status Initial",
+            "GET",
+            "strategy/status", 
+            200
+        )
+        
+        if not success:
+            self.log("❌ CRITICAL: Cannot get strategy status - aborting diagnosis")
+            return False, {"error": "strategy_status_failed"}
+        
+        initial_running = initial_status.get('running', None)
+        self.log(f"   Running: {initial_running}")
+        self.log(f"   Mode: {initial_status.get('mode', '')}")
+        self.log(f"   Symbol: {initial_status.get('symbol', '')}")
+        
+        if initial_running != False:
+            self.log("⚠️  WARNING: Strategy should be running=false initially")
+        
+        # Step 3: POST /api/strategy/start with exact JSON payload
+        self.log("\n🔍 STEP 3: POST /api/strategy/start with exact JSON payload")
+        
+        # Exact payload from review request
+        exact_payload = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "candle_len": 200,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "daily_loss_limit": -20,
+            "adx_trend": 22,
+            "rsi_ob": 70,
+            "rsi_os": 30,
+            "bbands_k": 2,
+            "mode": "paper"
+        }
+        
+        self.log("   Using exact payload from review request:")
+        self.log(f"   {json.dumps(exact_payload, indent=4)}")
+        
+        success, start_data, status_code = self.run_test(
+            "Strategy Start with Exact Payload",
+            "POST",
+            "strategy/start",
+            200,
+            data=exact_payload,
+            timeout=15
+        )
+        
+        if not success:
+            self.log("❌ CRITICAL: Strategy start failed")
+            if status_code != 200:
+                self.log(f"   Expected 200, got {status_code}")
+                if 'detail' in start_data:
+                    self.log(f"   Error: {start_data['detail']}")
+            return False, {"error": "strategy_start_failed", "response": start_data}
+        
+        start_running = start_data.get('running', None)
+        self.log(f"   Response Running: {start_running}")
+        self.log(f"   Response Mode: {start_data.get('mode', '')}")
+        
+        if start_running != True:
+            self.log("❌ BUG DETECTED: Strategy start returned running=false or null")
+            self.log("   This indicates the strategy is not starting properly")
+            return False, {"bug": "strategy_not_starting", "response": start_data}
+        else:
+            self.log("✅ Strategy start returned running=true")
+        
+        # Step 4: Poll GET /api/strategy/status every 3s for 2 cycles
+        self.log("\n🔍 STEP 4: Poll GET /api/strategy/status every 3s for 2 cycles")
+        
+        poll_results = []
+        
+        for cycle in range(1, 3):  # 2 cycles
+            self.log(f"\n   📊 POLLING CYCLE {cycle}/2")
+            time.sleep(3)  # Wait 3 seconds as requested
+            
+            success, poll_data, status_code = self.run_test(
+                f"Strategy Status Poll Cycle {cycle}",
+                "GET",
+                "strategy/status",
+                200,
+                timeout=10
+            )
+            
+            if not success:
+                self.log(f"❌ Polling cycle {cycle} failed")
+                poll_results.append({"cycle": cycle, "success": False, "error": "request_failed"})
+                continue
+            
+            poll_running = poll_data.get('running', None)
+            poll_mode = poll_data.get('mode', '')
+            poll_symbol = poll_data.get('symbol', '')
+            poll_last_run_at = poll_data.get('last_run_at')
+            poll_last_signal = poll_data.get('last_signal')
+            poll_last_reason = poll_data.get('last_reason')
+            poll_daily_pnl = poll_data.get('daily_pnl', 0)
+            
+            self.log(f"      Running: {poll_running}")
+            self.log(f"      Mode: {poll_mode}")
+            self.log(f"      Symbol: {poll_symbol}")
+            self.log(f"      Last Run At: {poll_last_run_at}")
+            self.log(f"      Last Signal: {poll_last_signal}")
+            self.log(f"      Last Reason: {poll_last_reason}")
+            self.log(f"      Daily PnL: {poll_daily_pnl}")
+            
+            poll_results.append({
+                "cycle": cycle,
+                "success": True,
+                "running": poll_running,
+                "mode": poll_mode,
+                "symbol": poll_symbol,
+                "last_run_at": poll_last_run_at,
+                "last_signal": poll_last_signal,
+                "last_reason": poll_last_reason,
+                "daily_pnl": poll_daily_pnl
+            })
+            
+            if poll_running == False:
+                self.log(f"❌ BUG DETECTED: Strategy running=false in cycle {cycle}")
+                self.log("   Strategy became inactive after starting")
+            elif poll_running == True:
+                self.log(f"✅ Strategy still running=true in cycle {cycle}")
+            else:
+                self.log(f"⚠️  Strategy running={poll_running} in cycle {cycle}")
+        
+        # Step 5: POST /api/strategy/stop to clean up
+        self.log("\n🔍 STEP 5: POST /api/strategy/stop (cleanup)")
+        
+        success, stop_data, status_code = self.run_test(
+            "Strategy Stop Cleanup",
+            "POST",
+            "strategy/stop",
+            200,
+            timeout=10
+        )
+        
+        if not success:
+            self.log("⚠️  Strategy stop failed - may need manual cleanup")
+        else:
+            stop_running = stop_data.get('running', None)
+            self.log(f"   Cleanup Running: {stop_running}")
+            if stop_running == False:
+                self.log("✅ Strategy stopped successfully")
+            else:
+                self.log("⚠️  Strategy may not have stopped properly")
+        
+        # Analysis
+        self.log("\n" + "🐛" + "="*58)
+        self.log("BUG DIAGNOSIS ANALYSIS")
+        self.log("🐛" + "="*58)
+        
+        # Check for the "sempre inativo" bug
+        bug_detected = False
+        bug_details = []
+        
+        # Check if strategy failed to start
+        if start_running != True:
+            bug_detected = True
+            bug_details.append("Strategy failed to start (running != true after POST /api/strategy/start)")
+        
+        # Check if strategy became inactive during polling
+        for result in poll_results:
+            if result.get("success") and result.get("running") == False:
+                bug_detected = True
+                bug_details.append(f"Strategy became inactive during polling cycle {result['cycle']}")
+        
+        # Check if strategy never showed activity
+        has_activity = any(
+            result.get("last_run_at") is not None or 
+            result.get("last_signal") is not None or
+            result.get("last_reason") is not None or
+            result.get("daily_pnl", 0) != 0
+            for result in poll_results if result.get("success")
+        )
+        
+        if not has_activity:
+            bug_detected = True
+            bug_details.append("Strategy shows no activity (no last_run_at, signals, or PnL changes)")
+        
+        # Check Deriv connection issues
+        if not connected or not authenticated:
+            bug_details.append(f"Deriv connection issues: connected={connected}, authenticated={authenticated}")
+        
+        # Final diagnosis
+        if bug_detected:
+            self.log("🐛 BUG CONFIRMED: 'Estratégia sempre inativo' bug detected!")
+            self.log("📋 Issues found:")
+            for detail in bug_details:
+                self.log(f"   - {detail}")
+        else:
+            self.log("✅ NO BUG DETECTED: Strategy appears to be working correctly")
+            self.log("📋 All checks passed:")
+            self.log("   - Strategy started successfully (running=true)")
+            self.log("   - Strategy remained active during polling")
+            self.log("   - Strategy showed activity indicators")
+        
+        # Return comprehensive diagnosis data
+        diagnosis_data = {
+            "bug_detected": bug_detected,
+            "bug_details": bug_details,
+            "deriv_status": {
+                "connected": connected,
+                "authenticated": authenticated
+            },
+            "initial_status": initial_status,
+            "start_response": start_data,
+            "poll_results": poll_results,
+            "stop_response": stop_data if success else None
+        }
+        
+        return not bug_detected, diagnosis_data
+
     def run_all_tests(self):
-        """Run backend smoke tests for ML endpoints and scheduler scaffolding as requested"""
-        self.log("🚀 Starting Backend Smoke Tests - ML ENDPOINTS AND SCHEDULER SCAFFOLDING")
+        """Run the specific bug diagnosis as requested"""
+        self.log("🚀 Starting Bug Diagnosis - 'Estratégia (ADX/RSI/MACD/BB) sempre inativo'")
         self.log(f"   Base URL: {self.base_url}")
         self.log(f"   API URL: {self.api_url}")
         self.log(f"   Timestamp: {datetime.now().isoformat()}")
-        self.log("   FOCUS: ML endpoints smoke tests as per review request")
+        self.log("   FOCUS: Diagnose strategy always inactive bug")
         
-        # Test 0: Basic health
-        basic_ok = self.test_basic_endpoints()
-        
-        # Test 1: Deriv status - REQUIRED for review
-        status_ok = self.test_deriv_status()
-        
-        # NEW: ML SMOKE TESTS as requested in review
-        ml_tests_ok = self.run_ml_smoke_tests()
+        # Run the specific bug diagnosis
+        diagnosis_ok, diagnosis_data = self.diagnose_strategy_always_inactive_bug()
         
         self.print_summary()
         
-        # Summary of key findings
+        # Summary of diagnosis
         self.log("\n" + "="*60)
-        self.log("SMOKE TEST RESULTS SUMMARY")
+        self.log("BUG DIAGNOSIS RESULTS")
         self.log("="*60)
         
-        if basic_ok:
-            self.log("✅ Basic API: Root endpoint working")
+        if diagnosis_ok:
+            self.log("✅ DIAGNOSIS COMPLETE: No bug detected - strategy working correctly")
         else:
-            self.log("❌ Basic API: Root endpoint issues")
-        
-        if status_ok:
-            self.log("✅ Deriv Status: Connected and authenticated")
-        else:
-            self.log("❌ Deriv Status: Connection issues")
-            
-        if ml_tests_ok:
-            self.log("✅ ML Endpoints: All smoke tests passed")
-        else:
-            self.log("❌ ML Endpoints: Some smoke tests failed")
-        
-        # ML Smoke Test Analysis
-        self.log("\n" + "="*60)
-        self.log("ML ENDPOINTS SMOKE TEST ANALYSIS")
-        self.log("="*60)
-        self.log("📋 ML endpoints smoke tested as requested:")
-        self.log("   1. GET /api/status (service health)")
-        self.log("   2. GET /api/deriv/status (Deriv connection)")
-        self.log("   3. GET /api/ml/status (ML champion status)")
-        self.log("   4. POST /api/ml/train?source=file (missing CSV validation)")
-        self.log("   5. GET /api/ml/model/nonexistent_dt/rules (404 validation)")
-        
-        if basic_ok and status_ok and ml_tests_ok:
-            self.log("✅ SMOKE TESTS SUCCESS: All requested endpoints working correctly!")
-            self.log("   - Service is up and responding")
-            self.log("   - Deriv integration healthy")
-            self.log("   - ML endpoints properly scaffolded")
-            self.log("   - Error handling working as expected")
-        else:
-            self.log("❌ SMOKE TESTS ISSUES: Some endpoints have problems!")
-            self.log("   Check individual test results above for details")
+            self.log("❌ DIAGNOSIS COMPLETE: Bug confirmed - strategy always inactive")
         
         self.log("\n📋 REVIEW REQUEST COMPLETED:")
-        self.log("📋 Backend smoke tests for ML endpoints and scheduler scaffolding")
-        self.log("📋 All requested endpoints tested with curl-style calls and responses printed")
+        self.log("📋 Diagnosed 'Estratégia (ADX/RSI/MACD/BB) sempre inativo' bug")
+        self.log("📋 All requested steps executed with responses printed")
         
-        return self.tests_passed == self.tests_run
+        return diagnosis_ok
 
     def print_summary(self):
         """Print test summary"""
