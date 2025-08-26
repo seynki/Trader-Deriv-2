@@ -741,7 +741,10 @@ export default function App() {
 
             <TabsContent value="auto" className="mt-6">
               {/* Painel da Estratégia com métricas em tempo real */}
-              <StrategyPanel />
+              <div className="flex items-center gap-4 mb-2">
+                <MlIndicator active={statusMl} />
+              </div>
+              <StrategyPanel onMlActiveChange={(v)=>setStatusMl(v)} />
               <AutomacaoPanel buyAdvanced={buyAdvanced} stake={stake} duration={duration} durationUnit={durationUnit} />
               {lastError && (
                 <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 text-red-200 p-3 text-sm">
