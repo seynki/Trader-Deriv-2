@@ -1118,78 +1118,68 @@ class DerivAPITester:
         return all_ml_tests_passed
 
     def run_all_tests(self):
-        """Run all backend API tests - FOCUS ON GLOBAL STATS CONSOLIDATION"""
-        self.log("🚀 Starting Deriv Backend API Tests - GLOBAL STATS CONSOLIDATION FOCUS")
+        """Run backend smoke tests for ML endpoints and scheduler scaffolding as requested"""
+        self.log("🚀 Starting Backend Smoke Tests - ML ENDPOINTS AND SCHEDULER SCAFFOLDING")
         self.log(f"   Base URL: {self.base_url}")
         self.log(f"   API URL: {self.api_url}")
         self.log(f"   Timestamp: {datetime.now().isoformat()}")
-        self.log("   FOCUS: Testing Global Stats Consolidation for manual trades")
+        self.log("   FOCUS: ML endpoints smoke tests as per review request")
         
         # Test 0: Basic health
         basic_ok = self.test_basic_endpoints()
         
-        # Test 1: Deriv status - REQUIRED
+        # Test 1: Deriv status - REQUIRED for review
         status_ok = self.test_deriv_status()
         
-        if not status_ok:
-            self.log("\n❌ CRITICAL: Deriv connection failed. Stopping further tests.")
-            self.print_summary()
-            return False
-        
-        # NEW: GLOBAL STATS CONSOLIDATION TEST (Test 15)
-        self.log("\n" + "🎯" + "="*58)
-        self.log("GLOBAL STATS CONSOLIDATION TEST")
-        self.log("🎯" + "="*58)
-        
-        global_stats_ok, global_stats_data = self.test_global_stats_consolidation()
+        # NEW: ML SMOKE TESTS as requested in review
+        ml_tests_ok = self.run_ml_smoke_tests()
         
         self.print_summary()
         
         # Summary of key findings
         self.log("\n" + "="*60)
-        self.log("KEY FINDINGS SUMMARY")
+        self.log("SMOKE TEST RESULTS SUMMARY")
         self.log("="*60)
+        
+        if basic_ok:
+            self.log("✅ Basic API: Root endpoint working")
+        else:
+            self.log("❌ Basic API: Root endpoint issues")
         
         if status_ok:
             self.log("✅ Deriv Status: Connected and authenticated")
         else:
             self.log("❌ Deriv Status: Connection issues")
             
-        if global_stats_ok:
-            self.log("✅ Global Stats Consolidation: Working correctly")
+        if ml_tests_ok:
+            self.log("✅ ML Endpoints: All smoke tests passed")
         else:
-            self.log("❌ Global Stats Consolidation: Issues detected")
+            self.log("❌ ML Endpoints: Some smoke tests failed")
         
-        # Global Stats Analysis
+        # ML Smoke Test Analysis
         self.log("\n" + "="*60)
-        self.log("GLOBAL STATS CONSOLIDATION ANALYSIS")
+        self.log("ML ENDPOINTS SMOKE TEST ANALYSIS")
         self.log("="*60)
-        self.log("📋 Global stats consolidation tested:")
-        self.log("   - Manual trade via POST /api/deriv/buy")
-        self.log("   - Automatic metrics update via WebSocket")
-        self.log("   - Global stats consistency (wins/losses/total/PnL)")
-        self.log("   - Double counting prevention")
-        self.log("   - Win rate calculation accuracy")
+        self.log("📋 ML endpoints smoke tested as requested:")
+        self.log("   1. GET /api/status (service health)")
+        self.log("   2. GET /api/deriv/status (Deriv connection)")
+        self.log("   3. GET /api/ml/status (ML champion status)")
+        self.log("   4. POST /api/ml/train?source=file (missing CSV validation)")
+        self.log("   5. GET /api/ml/model/nonexistent_dt/rules (404 validation)")
         
-        if global_stats_ok:
-            self.log("✅ CRITICAL SUCCESS: Global stats consolidation working correctly!")
-            self.log("   - Manual trades update global metrics automatically")
-            self.log("   - No strategy startup required")
-            self.log("   - Proper WebSocket integration with Deriv")
-            self.log("   - Consistent metric calculations")
-            self.log("   - No double counting detected")
+        if basic_ok and status_ok and ml_tests_ok:
+            self.log("✅ SMOKE TESTS SUCCESS: All requested endpoints working correctly!")
+            self.log("   - Service is up and responding")
+            self.log("   - Deriv integration healthy")
+            self.log("   - ML endpoints properly scaffolded")
+            self.log("   - Error handling working as expected")
         else:
-            self.log("❌ CRITICAL ISSUE: Global stats consolidation has problems!")
+            self.log("❌ SMOKE TESTS ISSUES: Some endpoints have problems!")
             self.log("   Check individual test results above for details")
-            
-            if isinstance(global_stats_data, dict) and global_stats_data.get("skipped"):
-                self.log("   NOTE: Test was skipped due to service unavailability")
-            elif isinstance(global_stats_data, dict) and global_stats_data.get("timeout"):
-                self.log("   NOTE: Test timed out - contract may not have expired yet")
         
-        self.log("\n📋 IMPORTANT: This test validates the core requirement that")
-        self.log("📋 global metrics are updated for ALL trades (manual + automated)")
-        self.log("📋 without requiring strategy activation")
+        self.log("\n📋 REVIEW REQUEST COMPLETED:")
+        self.log("📋 Backend smoke tests for ML endpoints and scheduler scaffolding")
+        self.log("📋 All requested endpoints tested with curl-style calls and responses printed")
         
         return self.tests_passed == self.tests_run
 
