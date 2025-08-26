@@ -140,7 +140,7 @@ function LiveCard({ symbol, tick, onBuy, contracts }) {
   );
 }
 
-function StrategyPanel() {
+function StrategyPanel({ onMlActiveChange }) {
   const { toast } = useToast();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
