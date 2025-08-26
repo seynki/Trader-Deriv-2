@@ -743,6 +743,8 @@ export default function App() {
             </TabsContent>
 
             <TabsContent value="auto" className="mt-6">
+              {/* Painel de ML */}
+              <MlPanel />
               {/* Painel da Estratégia com métricas em tempo real */}
               <div className="flex items-center gap-4 mb-2">
                 <MlIndicator active={statusMl} />
