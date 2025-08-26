@@ -112,6 +112,15 @@ function HeaderStatus({ status }) {
   );
 }
 
+function MlIndicator({ active }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className={`inline-flex h-2 w-2 rounded-full ${active ? "bg-emerald-500" : "bg-slate-500"}`} />
+      <span className="opacity-80">ML {active ? "Ativo" : "Inativo"}</span>
+    </div>
+  );
+}
+
 function LiveCard({ symbol, tick, onBuy, contracts }) {
   const price = tick?.price ?? "-";
   return (
