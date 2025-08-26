@@ -208,6 +208,20 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "GLOBAL STATS CONSOLIDATION TESTING COMPLETED (2025-08-24): ✅ CRITICAL SUCCESS - All consolidation tests passed! 1) GET /api/strategy/status baseline: total_trades=0, wins=0, losses=0, daily_pnl=0.0, win_rate=0.0% ✅ 2) POST /api/deriv/buy CALLPUT R_10 CALL 5t stake=1 USD executed successfully - contract_id: 292129637308, buy_price: 1, payout: 1.95 ✅ 3) Polled GET /api/strategy/status every 10s - metrics updated after 20s when contract expired: total_trades=1 (+1), wins=1 (+1), losses=0, daily_pnl=0.95 (+0.95), win_rate=100.0% ✅ 4) All consistency checks passed: wins+losses=total_trades, win_rate calculation correct, PnL change reasonable ✅ 5) Double counting prevention verified: waited additional 60s, total_trades remained 1 (no double counting) ✅. CRITICAL VALIDATION: Manual trades automatically update global metrics via WebSocket without requiring strategy activation. Backend properly listens to Deriv proposal_open_contract events and updates _global_stats when is_expired=true. No stats_recorded and no_stats_contracts mechanisms working correctly to prevent double counting."
+##   - task: "ML endpoints and scheduler scaffolding"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementados endpoints ML: GET /api/ml/status (retorna champion ou 'no champion'), POST /api/ml/train (treina modelos RF/DT com dados mongo ou CSV), GET /api/ml/model/{id}/rules (exporta regras DT para Pine Script). Inclui ml_utils.py com indicadores técnicos, feature engineering, backtest e promoção automática de campeão baseada em F1/precision/drawdown."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "ML ENDPOINTS SMOKE TESTING COMPLETED (2025-08-26): ✅ ALL TESTS PASSED - 1) GET /api/status returns 200 with 'Hello World' ✅ 2) GET /api/deriv/status returns 200 with connected=true, authenticated=true ✅ 3) GET /api/ml/status returns 200 with {'message': 'no champion'} as expected when no champion model exists ✅ 4) POST /api/ml/train?source=file&symbol=R_100&timeframe=3m&horizon=3&threshold=0.003&model_type=dt returns 400 with informative error 'Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe' when CSV file missing ✅ 5) GET /api/ml/model/nonexistent_dt/rules returns 404 with 'Modelo não encontrado' for nonexistent model ✅. All ML endpoints properly scaffolded with correct error handling. Service is up, Deriv integration healthy, ML functionality working as designed."
 ## agent_communication:
 ##   -agent: "main"
 ##   -message: "RETEST REQUEST: Corrigi o loop do WS para sempre processar proposal_open_contract (mesmo sem ouvintes) e atualizar _global_stats quando is_expired=true. Também adicionei controle de dupla contagem (stats_recorded) e filtro no_stats para StrategyRunner live. Favor repetir o teste de consolidação disparando um buy CALLPUT (R_10, 5t, stake=1) e aguardando expirar; validar incremento de total_trades e W/L/PnL."
