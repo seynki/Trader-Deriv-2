@@ -165,6 +165,7 @@ function StrategyPanel({ onMlActiveChange }) {
     try {
       const { data } = await axios.get(`${API}/strategy/status`);
       setStatus(data);
+      if (onMlActiveChange) onMlActiveChange(!!data?.running);
     } catch (e) { /* ignore */ }
   };
 
