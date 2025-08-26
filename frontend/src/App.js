@@ -12,6 +12,7 @@ import { Badge } from "./components/ui/badge";
 import { useToast } from "./hooks/use-toast";
 import { ToastProvider } from "./components/ui/toast";
 import { Rocket, ActivitySquare, Play, Square } from "lucide-react";
+import MlPanel from "./components/MlPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
