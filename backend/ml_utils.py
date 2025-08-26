@@ -128,7 +128,7 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
     X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan)
     mask = X.notna().all(axis=1) & y.notna()
     X, y = X[mask], y[mask]
-    if len(X) &lt; 400:
+    if len(X) < 400:
         raise ValueError("Dados insuficientes após limpeza (&gt;= 400 linhas)")
     # temporal holdout
     n = len(X)
