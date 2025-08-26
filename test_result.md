@@ -230,3 +230,19 @@
 ##   -message: "Por favor, testar consolidação de estatísticas: 1) Capturar baseline com GET /api/strategy/status 2) Executar POST /api/deriv/buy (type=CALLPUT, symbol=R_10, duration=5, duration_unit=t, stake=1, currency=USD) 3) Anotar contract_id retornado e aguardar ~60s; o backend escuta a Deriv e, quando o contrato expira, atualiza as métricas globais 4) Validar que GET /api/strategy/status mostra total_trades incrementado +1 e wins/losses ajustados 5) Repetir GET por 2 ciclos e verificar que o mesmo contrato não é contado 2x. IMPORTANTE: uso de conta DEMO."
 ##   -agent: "testing"
 ##   -message: "ML ENDPOINTS SMOKE TESTING COMPLETED (2025-08-26): ✅ BACKEND SMOKE TESTS FOR ML ENDPOINTS AND SCHEDULER SCAFFOLDING COMPLETED SUCCESSFULLY - All 5 requested tests passed with 100% success rate. 1) GET /api/status: 200 'Hello World' (service up) ✅ 2) GET /api/deriv/status: 200 connected=true, authenticated=true (no Deriv auth required as requested) ✅ 3) GET /api/ml/status: 200 {'message': 'no champion'} (expected when no champion exists) ✅ 4) POST /api/ml/train?source=file&symbol=R_100&timeframe=3m&horizon=3&threshold=0.003&model_type=dt: 400 'Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe' (expected informative error when /data/ml/ohlcv.csv missing) ✅ 5) GET /api/ml/model/nonexistent_dt/rules: 404 'Modelo não encontrado' (expected 404 for nonexistent model) ✅. All curl-style calls executed with responses printed. ML endpoints properly scaffolded, error handling working correctly, service healthy."
+##   - task: "Candles ingest → Mongo"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Adicionado endpoint POST /api/candles/ingest que baixa candles da Deriv (ticks_history style=candles) e faz upsert na coleção 'candles' no Mongo (usa MONGO_URL do backend/.env). Inclui helpers para timeframe label e fetch_candles reutilizável."
+##
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor testar: 1) GET /api/strategy/status (deve retornar running=false inicialmente) 2) POST /api/strategy/start com payload default {symbol:R_100, granularity:60, candle_len:200, duration:5, duration_unit:'t', stake:1, daily_loss_limit:-20, adx_trend:22, rsi_ob:70, rsi_os:30, bbands_k:2, mode:'paper'} → running=true e last_run_at deve atualizar 3) POST /api/strategy/stop → running=false 4) POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 (se MONGO_URL estiver configurado) → resposta com received/inserted/updated > 0."
+
