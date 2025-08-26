@@ -558,6 +558,7 @@ function ContractPanel({ contract }) {
 }
 
 export default function App() {
+  const [statusMl, setStatusMl] = useState(false);
   const { toast } = useToast();
   const [symbols, setSymbols] = useState(defaultSymbols);
   const { ticks, connected } = useDerivTicks(symbols);
