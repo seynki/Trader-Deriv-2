@@ -148,9 +148,9 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
     bt = backtest_simple(df.loc[Xte.index, "close"], pd.Series(p, index=Xte.index), horizon)
     # promoção automática
     champ = load_champion()
-    cond_f1 = metrics["f1"] &gt;= 1.10 * float(champ.get("metrics", {}).get("f1", 0.0))
-    cond_prec = metrics["precision"] &gt;= float(champ.get("metrics", {}).get("precision", 0.0))
-    cond_dd = bt["max_drawdown"] &gt;= float(champ.get("backtest", {}).get("max_drawdown", -1e9))  # menos negativo é melhor
+    cond_f1 = metrics["f1"] >= 1.10 * float(champ.get("metrics", {}).get("f1", 0.0))
+    cond_prec = metrics["precision"] >= float(champ.get("metrics", {}).get("precision", 0.0))
+    cond_dd = bt["max_drawdown"] >= float(champ.get("backtest", {}).get("max_drawdown", -1e9))  # menos negativo é melhor
     promoted = bool(cond_f1 and cond_prec and cond_dd)
     model_id = f"{save_prefix}_{model_type}"
     model_path = ML_DIR / f"{model_id}.joblib"
