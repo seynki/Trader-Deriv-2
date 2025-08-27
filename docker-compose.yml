@@ -8,10 +8,7 @@ services:
     container_name: app-backend
     env_file:
       - ./backend/.env
-    environment:
-      # Permite sobrescrever via variável local sem tocar no arquivo protegido
-      - MONGO_URL=${MONGO_URL}
-      - DB_NAME=${DB_NAME}
+    # Usa exclusivamente variáveis do arquivo backend/.env para evitar sobrescrever com vazio
     ports:
       - "8001:8001"
     volumes:
