@@ -1,78 +1,76 @@
 version: "3.9"
 
 services:
-  mongo:
-    image: mongo:7
-    container_name: app-mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: app-backend
-    working_dir: /app/backend
-    env_file:
-      - ./backend/.env  # carrega DERIV_* sem alterar arquivos
-    environment:
-      - MONGO_URL=mongodb://mongo:27017/appdb
-      - DB_NAME=appdb
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./backend:/app/backend
-      - ./data/ml:/data/ml
-    ports:
-      - "8001:8001"
-    depends_on:
-      - mongo
-    command: uvicorn server:app --host 0.0.0.0 --port 8001 --reload
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    container_name: app-frontend
-    working_dir: /app/frontend
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8001
-      - WDS_SOCKET_PORT=3000
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-      - HOST=0.0.0.0
-    volumes:
-      - ./frontend:/app/frontend
-      - frontend_node_modules:/app/frontend/node_modules
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-
-  trainer:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: app-trainer
-    working_dir: /app/backend
     env_file:
       - ./backend/.env
     environment:
-      - MONGO_URL=mongodb://mongo:27017/appdb
-      - DB_NAME=appdb
-      - TRAIN_SYMBOL=R_100
-      - TRAIN_TIMEFRAME=3m
-      - TRAIN_HORIZON=3
-      - TRAIN_THRESHOLD=0.003
-      - PYTHONUNBUFFERED=1
+      # Permite sobrescrever via variável local sem tocar no arquivo protegido
+      - MONGO_URL=${MONGO_URL}
+      - DB_NAME=${DB_NAME}
+    ports:
+      - "8001:8001"
     volumes:
-      - ./backend:/app/backend
+      - ./:/app
+      - ./data/ml:/data/ml
+    restart: unless-stopped
+
+  # Treinador semanal (loop) - roda continuamente e treina 1x por semana
+  ml_trainer:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-ml-trainer
+    command: ["python", "ml_trainer.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - TRAIN_SYMBOL=${TRAIN_SYMBOL:-R_100}
+      - TRAIN_TIMEFRAME=${TRAIN_TIMEFRAME:-3m}
+      - TRAIN_HORIZON=${TRAIN_HORIZON:-3}
+      - TRAIN_THRESHOLD=${TRAIN_THRESHOLD:-0.003}
+      - TRAIN_MODEL_TYPE=${TRAIN_MODEL_TYPE:-rf}
+    volumes:
+      - ./:/app
       - ./data/ml:/data/ml
     depends_on:
-      - mongo
-    command: python ml_trainer.py
+      - backend
+    restart: unless-stopped
 
-volumes:
-  mongo_data:
-  frontend_node_modules:
+  # Disparo manual de treino único (encerra após concluir)
+  ml_train_once:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-ml-train-once
+    command: ["python", "ml_trainer.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - TRAIN_RUN_ONCE=1
+      - TRAIN_SYMBOL=${TRAIN_SYMBOL:-R_100}
+      - TRAIN_TIMEFRAME=${TRAIN_TIMEFRAME:-3m}
+      - TRAIN_HORIZON=${TRAIN_HORIZON:-3}
+      - TRAIN_THRESHOLD=${TRAIN_THRESHOLD:-0.003}
+      - TRAIN_MODEL_TYPE=${TRAIN_MODEL_TYPE:-rf}
+    volumes:
+      - ./:/app
+      - ./data/ml:/data/ml
+    profiles: ["manual"]
+
+  # Seed inicial de candles (uma vez) chamando o endpoint do backend
+  seed_candles:
+    image: curlimages/curl:8.10.1
+    container_name: app-seed-candles
+    depends_on:
+      - backend
+    command: ["sh", "-c", "sleep 10 && curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-60}&count=${SEED_COUNT:-2000}' && echo 'Seed done'"]
+    profiles: ["manual"]
+
+networks:
+  default:
+    name: app-net
