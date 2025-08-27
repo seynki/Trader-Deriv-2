@@ -248,4 +248,6 @@
 ## agent_communication:
 ##   -agent: "main"
 ##   -message: "Favor testar: 1) GET /api/strategy/status (deve retornar running=false inicialmente) 2) POST /api/strategy/start com payload default {symbol:R_100, granularity:60, candle_len:200, duration:5, duration_unit:'t', stake:1, daily_loss_limit:-20, adx_trend:22, rsi_ob:70, rsi_os:30, bbands_k:2, mode:'paper'} → running=true e last_run_at deve atualizar 3) POST /api/strategy/stop → running=false 4) POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 (se MONGO_URL estiver configurado) → resposta com received/inserted/updated > 0."
+##   -agent: "testing"
+##   -message: "CANDLES INGEST TESTING COMPLETED (2025-08-27): ✅ GET /api/deriv/status returns connected=true, authenticated=true ✅ ❌ POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 FAILED due to MongoDB SSL handshake errors. Backend successfully fetches candles from Deriv API but cannot store them in MongoDB Atlas due to SSL/TLS configuration issues. Error: 'SSL handshake failed: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error'. Endpoint times out after 30+ seconds. RECOMMENDATION: Fix MongoDB Atlas SSL configuration or update connection string with proper SSL parameters."
 
