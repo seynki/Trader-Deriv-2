@@ -1371,74 +1371,131 @@ class DerivAPITester:
         return not bug_detected, diagnosis_data
 
     def test_candles_ingest(self):
-        """Test POST /api/candles/ingest - Candles ingest to MongoDB"""
+        """Test POST /api/candles/ingest - Candles ingest to MongoDB as per review request"""
         self.log("\n" + "="*60)
-        self.log("TEST CANDLES: Candles Ingest to MongoDB")
+        self.log("TEST CANDLES: Candles Ingest to MongoDB (Review Request)")
         self.log("="*60)
+        self.log("📋 Review Request: Test POST /api/candles/ingest?symbol=R_100&granularity=60&count=300")
+        self.log("   Expected: 200 with JSON containing {symbol, timeframe, received, inserted, updated}")
+        self.log("   If Mongo fails: report the error")
         
-        # Test with exact parameters from review request
+        # First verify Deriv status as requested
+        self.log("\n🔍 Step 1: Verify GET /api/deriv/status returns connected=true")
+        success, deriv_data, status_code = self.run_test(
+            "Deriv Status Check for Candles Test",
+            "GET",
+            "deriv/status",
+            200
+        )
+        
+        if not success:
+            self.log("❌ FAILED: Cannot verify Deriv status before candles test")
+            return False, {"error": "deriv_status_check_failed"}
+        
+        connected = deriv_data.get('connected', False)
+        authenticated = deriv_data.get('authenticated', False)
+        
+        self.log(f"   Connected: {connected}")
+        self.log(f"   Authenticated: {authenticated}")
+        
+        if not connected:
+            self.log("❌ FAILED: Deriv connected=false - candles ingest will fail")
+            return False, {"error": "deriv_not_connected", "deriv_status": deriv_data}
+        
+        self.log("✅ Deriv status check passed - connected=true")
+        
+        # Now test candles ingest with exact parameters from review request
+        self.log("\n🔍 Step 2: POST /api/candles/ingest?symbol=R_100&granularity=60&count=300")
         success, data, status_code = self.run_test(
-            "Candles Ingest R_100 60s 120 count",
+            "Candles Ingest R_100 60s 300 count",
             "POST",
-            "candles/ingest?symbol=R_100&granularity=60&count=120",
-            None,  # Accept both 200 and 503
-            timeout=20
+            "candles/ingest?symbol=R_100&granularity=60&count=300",
+            None,  # Accept both 200 and error codes
+            timeout=25
         )
         
         if status_code == 503:
-            # MongoDB not configured - expected behavior
+            # MongoDB not configured - report as requested
             error_detail = data.get('detail', '')
             self.log(f"   Error Detail: {error_detail}")
             
-            if 'mongo' in error_detail.lower() and 'indisponível' in error_detail.lower():
-                self.log("✅ Expected 503: MongoDB indisponível (not configured)")
-                return True, data
+            if 'mongo' in error_detail.lower():
+                self.log("❌ MONGO ERROR: MongoDB indisponível (MONGO_URL not configured)")
+                self.log("   This is the Mongo error as requested to be reported")
+                return False, {"mongo_error": error_detail, "status_code": 503}
             else:
-                self.log("⚠️  Unexpected 503 error message")
-                return True, data  # Still acceptable
+                self.log("❌ SERVICE ERROR: Unexpected 503 error")
+                return False, {"service_error": error_detail, "status_code": 503}
                 
         elif status_code == 200:
-            # MongoDB configured and working
+            # MongoDB configured and working - validate response
             symbol = data.get('symbol', '')
             timeframe = data.get('timeframe', '')
             received = data.get('received', 0)
             inserted = data.get('inserted', 0)
             updated = data.get('updated', 0)
             
+            self.log(f"   ✅ SUCCESS: 200 response received")
             self.log(f"   Symbol: {symbol}")
             self.log(f"   Timeframe: {timeframe}")
             self.log(f"   Received: {received}")
             self.log(f"   Inserted: {inserted}")
             self.log(f"   Updated: {updated}")
             
-            # Validate response structure
+            # Validate response structure as per review request
             valid = True
+            validation_errors = []
+            
             if symbol != 'R_100':
-                self.log("❌ Symbol should be R_100")
+                validation_errors.append(f"Symbol should be R_100, got {symbol}")
                 valid = False
             if not timeframe:
-                self.log("❌ Timeframe should not be empty")
+                validation_errors.append("Timeframe should not be empty")
                 valid = False
             if received <= 0:
-                self.log("❌ Received should be > 0")
+                validation_errors.append(f"Received should be > 0, got {received}")
                 valid = False
             if inserted < 0:
-                self.log("❌ Inserted should be >= 0")
+                validation_errors.append(f"Inserted should be >= 0, got {inserted}")
                 valid = False
             if updated < 0:
-                self.log("❌ Updated should be >= 0")
+                validation_errors.append(f"Updated should be >= 0, got {updated}")
                 valid = False
             
+            # Check if inserted/updated > 0 as per review request criteria
+            total_changes = inserted + updated
+            if total_changes > 0:
+                self.log(f"   ✅ CRITERIA MET: inserted({inserted}) + updated({updated}) = {total_changes} > 0")
+                self.log("   This meets the review request criteria for marking working=true")
+            else:
+                self.log(f"   ⚠️  CRITERIA NOT MET: inserted({inserted}) + updated({updated}) = {total_changes} = 0")
+                self.log("   This would not meet the review request criteria for working=true")
+            
             if valid:
-                self.log("✅ Candles ingest successful with valid response")
+                self.log("✅ CANDLES INGEST SUCCESSFUL: All validation checks passed")
                 return True, data
             else:
-                self.log("❌ Candles ingest response validation failed")
-                return False, data
+                self.log("❌ VALIDATION FAILED: Response structure issues")
+                for error in validation_errors:
+                    self.log(f"   - {error}")
+                return False, {"validation_errors": validation_errors, "response": data}
+                
+        elif status_code == 400:
+            # Bad request - could be Deriv API error
+            error_detail = data.get('detail', '')
+            self.log(f"❌ BAD REQUEST: {error_detail}")
+            return False, {"deriv_api_error": error_detail, "status_code": 400}
+            
+        elif status_code == 504:
+            # Timeout - could be Deriv connection issue
+            error_detail = data.get('detail', '')
+            self.log(f"❌ TIMEOUT: {error_detail}")
+            return False, {"timeout_error": error_detail, "status_code": 504}
+            
         else:
             # Unexpected status code
-            self.log(f"❌ Unexpected status code: {status_code}")
-            return False, data
+            self.log(f"❌ UNEXPECTED STATUS: {status_code}")
+            return False, {"unexpected_status": status_code, "response": data}
 
     def run_review_request_tests(self):
         """Run the specific tests requested in the review"""
