@@ -95,8 +95,8 @@ def loop_weekly():
                 pass
         except Exception as e:
             print(f"[trainer] error: {e}")
-        # Sleep 1 hour between checks
-        time.sleep(3600)
+        # Sleep 60s between checks to pick up data soon after seeding and then train weekly
+        time.sleep(60)
 
 
 if __name__ == "__main__":
