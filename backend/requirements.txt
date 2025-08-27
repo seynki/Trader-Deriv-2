@@ -32,3 +32,4 @@ joblib>=1.4.2
 tenacity>=8.2.0
 setuptools>=70.0.0
 wheel>=0.43.0
+threadpoolctl>=3.5.0
