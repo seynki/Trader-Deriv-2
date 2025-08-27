@@ -6,6 +6,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
+import certifi
 from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime, date
