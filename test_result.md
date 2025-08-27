@@ -232,15 +232,18 @@
 ##   -message: "ML ENDPOINTS SMOKE TESTING COMPLETED (2025-08-26): ✅ BACKEND SMOKE TESTS FOR ML ENDPOINTS AND SCHEDULER SCAFFOLDING COMPLETED SUCCESSFULLY - All 5 requested tests passed with 100% success rate. 1) GET /api/status: 200 'Hello World' (service up) ✅ 2) GET /api/deriv/status: 200 connected=true, authenticated=true (no Deriv auth required as requested) ✅ 3) GET /api/ml/status: 200 {'message': 'no champion'} (expected when no champion exists) ✅ 4) POST /api/ml/train?source=file&symbol=R_100&timeframe=3m&horizon=3&threshold=0.003&model_type=dt: 400 'Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe' (expected informative error when /data/ml/ohlcv.csv missing) ✅ 5) GET /api/ml/model/nonexistent_dt/rules: 404 'Modelo não encontrado' (expected 404 for nonexistent model) ✅. All curl-style calls executed with responses printed. ML endpoints properly scaffolded, error handling working correctly, service healthy."
 ##   - task: "Candles ingest → Mongo"
 ##     implemented: true
-##     working: "NA"
+##     working: false
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: true
+##     needs_retesting: false
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Adicionado endpoint POST /api/candles/ingest que baixa candles da Deriv (ticks_history style=candles) e faz upsert na coleção 'candles' no Mongo (usa MONGO_URL do backend/.env). Inclui helpers para timeframe label e fetch_candles reutilizável."
+##       -working: false
+##       -agent: "testing"
+##       -comment: "TESTED: GET /api/deriv/status ✅ (connected=true, authenticated=true), POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 ❌ FAILED due to MongoDB SSL handshake errors. Backend logs show: 'SSL handshake failed: ac-7hilnfd-shard-00-*.k2r0pdw.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error'. Endpoint times out after 30s trying to connect to MongoDB Atlas cluster. Deriv integration working correctly, but MongoDB connection has SSL/TLS configuration issues preventing candles from being stored."
 ##
 ## agent_communication:
 ##   -agent: "main"
