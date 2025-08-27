@@ -24,7 +24,7 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection (MUST use env)
 mongo_url = os.environ.get('MONGO_URL')
 if mongo_url:
-    client = AsyncIOMotorClient(mongo_url)
+    client = AsyncIOMotorClient(mongo_url, tls=True, tlsCAFile=certifi.where())
     db = client[os.environ.get('DB_NAME', 'test_database')]
 else:
     client = None
