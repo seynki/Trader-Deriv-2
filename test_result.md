@@ -244,6 +244,9 @@
 ##       -working: false
 ##       -agent: "testing"
 ##       -comment: "TESTED: GET /api/deriv/status ✅ (connected=true, authenticated=true), POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 ❌ FAILED due to MongoDB SSL handshake errors. Backend logs show: 'SSL handshake failed: ac-7hilnfd-shard-00-*.k2r0pdw.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error'. Endpoint times out after 30s trying to connect to MongoDB Atlas cluster. Deriv integration working correctly, but MongoDB connection has SSL/TLS configuration issues preventing candles from being stored."
+##       -working: false
+##       -agent: "testing"
+##       -comment: "RETESTED AFTER CLAIMED TLS FIX (2025-08-27): ❌ STILL FAILING - Same MongoDB SSL handshake errors persist. GET /api/deriv/status ✅ (connected=true, authenticated=true), but POST /api/candles/ingest?symbol=R_100&granularity=60&count=300 times out after 30s. Backend logs continue showing: 'SSL handshake failed: ac-7hilnfd-shard-00-*.k2r0pdw.mongodb.net:27017: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error'. TLS Mongo correction was NOT successful - MongoDB Atlas connection still broken. Deriv API integration working perfectly, issue is purely MongoDB SSL/TLS configuration."
 ##
 ## agent_communication:
 ##   -agent: "main"
