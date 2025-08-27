@@ -68,8 +68,7 @@ services:
     container_name: app-seed-candles
     depends_on:
       - backend
-    command: ["sh", "-c", "sleep 10 && curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-60}&count=${SEED_COUNT:-2000}' && echo 'Seed done'"]
-    profiles: ["manual"]
+    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Seeding candles'; curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-180}&count=${SEED_COUNT:-2000}'; echo 'Seed done'"]
 
 networks:
   default:
