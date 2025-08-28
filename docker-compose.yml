@@ -18,7 +18,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # Força uso do Mongo local por padrão para um-comando funcionar
+      # Padrão: Mongo local para rodar com um comando
       MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
       DB_NAME: ${DB_NAME:-market_ticks}
     ports:
@@ -30,27 +30,21 @@ services:
       - mongo
     restart: unless-stopped
 
-  ml_trainer:
+  frontend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    container_name: app-ml-trainer
-    command: ["python", "ml_trainer.py"]
+      dockerfile: frontend/Dockerfile
+    container_name: app-frontend
     env_file:
-      - ./backend/.env
+      - ./frontend/.env
     environment:
-      # Mesma base Mongo: usa o local por padrão
-      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
-      DB_NAME: ${DB_NAME:-market_ticks}
-      TRAIN_SYMBOL: ${TRAIN_SYMBOL:-R_100}
-      TRAIN_TIMEFRAME: ${TRAIN_TIMEFRAME:-3m}
-      TRAIN_HORIZON: ${TRAIN_HORIZON:-3}
-      TRAIN_THRESHOLD: ${TRAIN_THRESHOLD:-0.003}
-      TRAIN_MODEL_TYPE: ${TRAIN_MODEL_TYPE:-rf}
-      TRAIN_RUN_ONCE: ${TRAIN_RUN_ONCE:-0}
+      # Para chamadas do navegador ao backend local
+      REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001/api}
+    ports:
+      - "3000:3000"
     volumes:
-      - ./:/app
-      - ./data/ml:/data/ml
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
     depends_on:
       - backend
     restart: unless-stopped
@@ -86,6 +80,30 @@ services:
     depends_on:
       - seed_candles
     restart: "no"
+
+  ml_trainer:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-ml-trainer
+    command: ["python", "ml_trainer.py"]
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-market_ticks}
+      TRAIN_SYMBOL: ${TRAIN_SYMBOL:-R_100}
+      TRAIN_TIMEFRAME: ${TRAIN_TIMEFRAME:-3m}
+      TRAIN_HORIZON: ${TRAIN_HORIZON:-3}
+      TRAIN_THRESHOLD: ${TRAIN_THRESHOLD:-0.003}
+      TRAIN_MODEL_TYPE: ${TRAIN_MODEL_TYPE:-rf}
+      TRAIN_RUN_ONCE: ${TRAIN_RUN_ONCE:-0}
+    volumes:
+      - ./:/app
+      - ./data/ml:/data/ml
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 networks:
   default:
