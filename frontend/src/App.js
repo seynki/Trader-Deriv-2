@@ -14,8 +14,8 @@ import { ToastProvider } from "./components/ui/toast";
 import { Rocket, ActivitySquare, Play, Square } from "lucide-react";
 import MlPanel from "./components/MlPanel";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const BACKEND_BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+const API = BACKEND_BASE.endsWith("/api") ? BACKEND_BASE : `${BACKEND_BASE}/api`;
 
 const defaultSymbols = ["CRYETHUSD", "FRXUSDJPY", "US30"];
 const derivedSymbols = [
