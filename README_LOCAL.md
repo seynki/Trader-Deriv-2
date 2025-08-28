@@ -1,68 +1,45 @@
-# Execução local com Docker Compose
+# Execução local com Docker Compose (um comando)
 
-Este guia permite rodar o backend + treinador de ML com um único comando, usando seu MongoDB Atlas (ou CSV local como fallback) e preparar dados de candles para não começar do zero.
+Agora com Mongo local e seed automático opcional, você consegue subir tudo com um comando e já treinar.
 
-## Pré-requisitos
-- Docker e Docker Compose instalados
-- Credenciais da Deriv no arquivo backend/.env (já preenchido no projeto)
-- MONGO_URL e DB_NAME válidos (backend/.env já configurado). Se preferir, exporte variáveis no shell para sobrescrever sem editar o arquivo:
-  ```bash
-  export MONGO_URL="mongodb+srv://..."
-  export DB_NAME="market_ticks"
-  ```
-
-## Subir tudo (backend + treinador semanal)
+## Subir serviços
 ```bash
 docker compose up -d --build
 ```
-- Backend: http://localhost:8001/api
-- Verifique status:
-  ```bash
-  curl -s http://localhost:8001/api/deriv/status | jq
-  ```
+- Serviços: mongo, backend, ml_trainer e seed_candles (roda uma vez e encerra)
+- Back-end: http://localhost:8001/api
 
-## Popular candles inicialmente (opcional, recomendado)
-Para não começar do zero, rode o seed de candles uma vez:
+## Verificar status
 ```bash
-SEED_SYMBOL=R_100 SEED_GRANULARITY=60 SEED_COUNT=2000 \
-  docker compose --profile manual up seed_candles
-```
-- O endpoint faz upsert, então rodar novamente não duplica.
-
-## Treino semanal automático (já habilitado)
-O serviço ml_trainer roda continuamente e treina 1x/semana. Você pode ajustar variáveis:
-```bash
-export TRAIN_SYMBOL=R_100
-export TRAIN_TIMEFRAME=3m
-export TRAIN_HORIZON=3
-export TRAIN_THRESHOLD=0.003
-export TRAIN_MODEL_TYPE=rf
-```
-Recrie o serviço se alterar variáveis:
-```bash
-docker compose up -d --build ml_trainer
+curl -s http://localhost:8001/api/deriv/status | jq
 ```
 
-## Treino manual sob demanda (uma única execução)
+## Treinador semanal
+- Roda em loop (verifica a cada 60s; treina quando detectar nova semana e dados)
+- Variáveis default: TRAIN_SYMBOL=R_100, TRAIN_TIMEFRAME=3m
+
+## Ajustes
+- Para usar Atlas ao invés do Mongo local, exporte as variáveis antes do up:
 ```bash
-TRAIN_SYMBOL=R_100 TRAIN_TIMEFRAME=3m TRAIN_HORIZON=3 TRAIN_THRESHOLD=0.003 TRAIN_MODEL_TYPE=rf \
-  docker compose --profile manual run --rm ml_train_once
+export MONGO_URL="mongodb+srv://..."
+export DB_NAME="market_ticks"
+docker compose up -d --build
 ```
-A saída exibirá o resultado e eventual promoção de modelo (champion).
-
-## Fallback para CSV local
-Se o Mongo Atlas estiver indisponível ou vazio, o treinador busca `/data/ml/ohlcv.csv` dentro do container. Monte um CSV local assim:
+- Para treinar manualmente 1x, rode:
 ```bash
-mkdir -p data/ml
-cp seu_ohlcv.csv data/ml/ohlcv.csv
+docker compose run --rm -e TRAIN_RUN_ONCE=1 ml_trainer
 ```
-O compose já monta `./data/ml` em `/data/ml` para todos os serviços relevantes.
 
-## Dicas de conectividade com Mongo Atlas
-- Garanta que seu IP está liberado em Network Access do Atlas (temporariamente 0.0.0.0/0 ajuda a validar)
-- O código usa TLS automaticamente. Se houver erro de handshake TLS, ajuste a whitelist no Atlas.
+## Dados iniciais (seed)
+- O serviço seed_candles executa automaticamente após o backend ficar pronto (R_100, 3m=180s, 2000 candles). Você pode mudar com variáveis de ambiente:
+```bash
+export SEED_SYMBOL=R_100
+export SEED_GRANULARITY=180
+export SEED_COUNT=2000
+```
+- Se preferir CSV, coloque em ./data/ml/ohlcv.csv
 
-## Parar os serviços
+## Parar
 ```bash
 docker compose down
 ```

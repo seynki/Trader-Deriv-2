@@ -1,6 +1,15 @@
 version: "3.9"
 
 services:
+  mongo:
+    image: mongo:6.0
+    container_name: app-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./data/mongo:/data/db
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -9,17 +18,18 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      MONGO_URL: ${MONGO_URL:-}
-      DB_NAME: ${DB_NAME:-}
-    # Usa exclusivamente variáveis do arquivo backend/.env para evitar sobrescrever com vazio
+      # Força uso do Mongo local por padrão para um-comando funcionar
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-market_ticks}
     ports:
       - "8001:8001"
     volumes:
       - ./:/app
       - ./data/ml:/data/ml
+    depends_on:
+      - mongo
     restart: unless-stopped
 
-  # Treinador semanal (loop) - roda continuamente e treina 1x por semana
   ml_trainer:
     build:
       context: .
@@ -29,11 +39,15 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - TRAIN_SYMBOL=${TRAIN_SYMBOL:-R_100}
-      - TRAIN_TIMEFRAME=${TRAIN_TIMEFRAME:-3m}
-      - TRAIN_HORIZON=${TRAIN_HORIZON:-3}
-      - TRAIN_THRESHOLD=${TRAIN_THRESHOLD:-0.003}
-      - TRAIN_MODEL_TYPE=${TRAIN_MODEL_TYPE:-rf}
+      # Mesma base Mongo: usa o local por padrão
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-market_ticks}
+      TRAIN_SYMBOL: ${TRAIN_SYMBOL:-R_100}
+      TRAIN_TIMEFRAME: ${TRAIN_TIMEFRAME:-3m}
+      TRAIN_HORIZON: ${TRAIN_HORIZON:-3}
+      TRAIN_THRESHOLD: ${TRAIN_THRESHOLD:-0.003}
+      TRAIN_MODEL_TYPE: ${TRAIN_MODEL_TYPE:-rf}
+      TRAIN_RUN_ONCE: ${TRAIN_RUN_ONCE:-0}
     volumes:
       - ./:/app
       - ./data/ml:/data/ml
@@ -41,34 +55,13 @@ services:
       - backend
     restart: unless-stopped
 
-  # Disparo manual de treino único (encerra após concluir)
-  ml_train_once:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: app-ml-train-once
-    command: ["python", "ml_trainer.py"]
-    env_file:
-      - ./backend/.env
-    environment:
-      - TRAIN_RUN_ONCE=1
-      - TRAIN_SYMBOL=${TRAIN_SYMBOL:-R_100}
-      - TRAIN_TIMEFRAME=${TRAIN_TIMEFRAME:-3m}
-      - TRAIN_HORIZON=${TRAIN_HORIZON:-3}
-      - TRAIN_THRESHOLD=${TRAIN_THRESHOLD:-0.003}
-      - TRAIN_MODEL_TYPE=${TRAIN_MODEL_TYPE:-rf}
-    volumes:
-      - ./:/app
-      - ./data/ml:/data/ml
-    profiles: ["manual"]
-
-  # Seed inicial de candles (uma vez) chamando o endpoint do backend
   seed_candles:
     image: curlimages/curl:8.10.1
     container_name: app-seed-candles
     depends_on:
       - backend
-    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Seeding candles'; curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-180}&count=${SEED_COUNT:-2000}'; echo 'Seed done'"]
+    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Seeding candles (R_100, 3m, 2000)' && curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-180}&count=${SEED_COUNT:-2000}' && echo 'Seed done'"]
+    restart: "no"
 
 networks:
   default:
