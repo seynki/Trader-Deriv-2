@@ -35,7 +35,7 @@ const derivedSymbols = [
 
 function wsHostFromEnv() {
   try {
-    const u = new URL(BACKEND_URL);
+    const u = new URL(BACKEND_BASE);
     const isSecure = u.protocol === "https:";
     return { base: `${isSecure ? "wss" : "ws"}://${u.host}` };
   } catch {
