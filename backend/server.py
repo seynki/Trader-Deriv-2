@@ -1138,6 +1138,11 @@ class StrategyRunner:
             last_signal=self.last_signal,
             last_reason=self.last_reason,
             last_run_at=self.last_run_at,
+            # Include global stats from all trades
+            total_trades=_global_stats.total_trades,
+            wins=_global_stats.wins,
+            losses=_global_stats.losses,
+            win_rate=_global_stats.win_rate,
         )
 
 
