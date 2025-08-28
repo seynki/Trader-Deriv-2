@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
 import pandas as pd
 from joblib import dump
@@ -121,7 +121,83 @@ def save_champion(meta: Dict[str, Any]):
     CHAMP_PATH.write_text(json.dumps(meta, indent=2))
 
 
-def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, model_type: str = "rf", save_prefix: str = "weekly") -> Dict[str, Any]:
+def _get_estimator(model_type: str = "rf", class_weight: Optional[str] = None):
+    if model_type == "dt":
+        return DecisionTreeClassifier(max_depth=4, random_state=42, min_samples_leaf=20, class_weight=class_weight)
+    # rf default
+    return RandomForestClassifier(
+        n_estimators=300,
+        max_depth=None,
+        min_samples_leaf=20,
+        random_state=42,
+        n_jobs=-1,
+        class_weight=class_weight,
+    )
+
+
+def _fit_with_calibration(base_model, Xtr: pd.DataFrame, ytr: pd.Series, calibrate: Optional[str] = None):
+    if calibrate not in {"sigmoid", "isotonic"}:
+        base_model.fit(Xtr, ytr)
+        return base_model
+    # split last 10% of training for calibration to avoid leakage
+    n = len(Xtr)
+    cut = max(int(n * 0.9), 1)
+    X_fit, y_fit = Xtr.iloc[:cut], ytr.iloc[:cut]
+    X_cal, y_cal = Xtr.iloc[cut:], ytr.iloc[cut:]
+    base_model.fit(X_fit, y_fit)
+    try:
+        calibrated = CalibratedClassifierCV(base_model, method=calibrate, cv="prefit")
+        calibrated.fit(X_cal, y_cal)
+        return calibrated
+    except Exception:
+        # fallback to uncalibrated if calibration fails
+        return base_model
+
+
+def _eval_with_ev(y_true: pd.Series, y_pred: pd.Series, y_proba: Optional[np.ndarray], close_series: pd.Series, horizon: int, payout_ratio: float, candles_per_day: float) -> Dict[str, Any]:
+    # trades are only where model predicts 1 (we enter positions only on 1)
+    trades_mask = (y_pred == 1)
+    trades = int(trades_mask.sum())
+    tp = int(((y_true == 1) & trades_mask).sum())
+    fp = int(((y_true == 0) & trades_mask).sum())
+    wins = tp
+    losses = fp
+    ev_total = wins * payout_ratio - losses * 1.0
+    ev_per_trade = float(ev_total / trades) if trades > 0 else 0.0
+
+    # approximate trades/day using candle frequency
+    n = len(y_true)
+    days = float(n / max(candles_per_day, 1.0))
+    trades_per_day = float(trades / days) if days > 0 else float(trades)
+
+    base_metrics = compute_metrics(y_true, y_pred, y_proba)
+    base_metrics.update({
+        "wins": wins,
+        "losses": losses,
+        "trades": trades,
+        "ev_per_trade": ev_per_trade,
+        "trades_per_day": trades_per_day,
+    })
+    # backtest proxy using predicted entries
+    bt = backtest_simple(close_series, pd.Series(y_pred, index=close_series.index), horizon)
+    base_metrics.update({"equity_final": bt.get("equity_final", 0.0), "max_drawdown": bt.get("max_drawdown", 0.0)})
+    return base_metrics
+
+
+def train_walkforward_and_maybe_promote(
+    df: pd.DataFrame,
+    horizon: int,
+    threshold: float,
+    model_type: str = "rf",
+    save_prefix: str = "weekly",
+    class_weight: Optional[str] = None,
+    calibrate: Optional[str] = None,
+    train_size: float = 0.7,
+    n_splits: int = 3,
+    payout_ratio: float = 0.95,
+    candles_per_day: float = 480.0,
+    objective: str = "f1",
+) -> Dict[str, Any]:
     # Build dataset
     feats_df = build_features(df)
     y = make_target(df, horizon=horizon, threshold=threshold)
@@ -129,45 +205,145 @@ def train_and_maybe_promote(df: pd.DataFrame, horizon: int, threshold: float, mo
     X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan)
     mask = X.notna().all(axis=1) & y.notna()
     X, y = X[mask], y[mask]
-    if len(X) < 400:
-        raise ValueError("Dados insuficientes após limpeza (>= 400 linhas)")
-    # temporal holdout
+    close_series = df.loc[X.index, "close"]
+    if len(X) < 800:
+        raise ValueError("Dados insuficientes após limpeza (>= 800 linhas)")
+
     n = len(X)
-    cut = int(n * 0.8)
-    Xtr, Xte = X.iloc[:cut], X.iloc[cut:]
-    ytr, yte = y.iloc[:cut], y.iloc[cut:]
-    # model
-    if model_type == "dt":
-        model = DecisionTreeClassifier(max_depth=4, random_state=42, min_samples_leaf=20)
-    else:
-        model = RandomForestClassifier(n_estimators=300, max_depth=None, min_samples_leaf=20, random_state=42, n_jobs=-1)
-    model.fit(Xtr, ytr)
-    p = model.predict(Xte)
-    proba = model.predict_proba(Xte)[:,1] if hasattr(model, "predict_proba") else None
-    metrics = compute_metrics(yte, p, proba)
-    # backtest simples na parte de teste
-    bt = backtest_simple(df.loc[Xte.index, "close"], pd.Series(p, index=Xte.index), horizon)
-    # promoção automática
-    champ = load_champion()
-    cond_f1 = metrics["f1"] >= 1.10 * float(champ.get("metrics", {}).get("f1", 0.0))
-    cond_prec = metrics["precision"] >= float(champ.get("metrics", {}).get("precision", 0.0))
-    cond_dd = bt["max_drawdown"] >= float(champ.get("backtest", {}).get("max_drawdown", -1e9))  # menos negativo é melhor
-    promoted = bool(cond_f1 and cond_prec and cond_dd)
+    first_cut = int(n * train_size)
+    step = max(int((n - first_cut) / max(n_splits, 1)), 1)
+
+    agg = {
+        "tp": 0,
+        "fp": 0,
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "ev_total": 0.0,
+        "days": 0.0,
+        "metrics": [],
+    }
+
+    last_model = None
+    for i in range(n_splits):
+        train_end = first_cut + i * step
+        if train_end >= n - 1:
+            break
+        test_end = min(train_end + step, n)
+        Xtr, ytr = X.iloc[:train_end], y.iloc[:train_end]
+        Xte, yte = X.iloc[train_end:test_end], y.iloc[train_end:test_end]
+        closete = close_series.iloc[train_end:test_end]
+        if len(Xte) == 0 or len(Xtr) < 100:
+            continue
+        est = _get_estimator(model_type, class_weight=class_weight)
+        model = _fit_with_calibration(est, Xtr, ytr, calibrate)
+        last_model = model
+        y_pred = model.predict(Xte)
+        y_proba = None
+        try:
+            if hasattr(model, "predict_proba"):
+                y_proba = model.predict_proba(Xte)[:, 1]
+        except Exception:
+            y_proba = None
+        # candles/day approx
+        candles_per_day_local = candles_per_day
+        fold_metrics = _eval_with_ev(yte, pd.Series(y_pred, index=yte.index), y_proba, closete, horizon, payout_ratio, candles_per_day_local)
+        agg["tp"] += int(fold_metrics.get("wins", 0))
+        agg["fp"] += int(fold_metrics.get("losses", 0))
+        agg["trades"] += int(fold_metrics.get("trades", 0))
+        agg["wins"] += int(fold_metrics.get("wins", 0))
+        agg["losses"] += int(fold_metrics.get("losses", 0))
+        agg["ev_total"] += float(fold_metrics.get("ev_per_trade", 0.0)) * max(int(fold_metrics.get("trades", 0)), 0)
+        agg["days"] += float(len(Xte) / max(candles_per_day_local, 1.0))
+        agg["metrics"].append(fold_metrics)
+
+    # aggregate
+    trades = agg["trades"]
+    wins = agg["wins"]
+    losses = agg["losses"]
+    precision = float(wins / trades) if trades > 0 else 0.0
+    recall = None  # not exact here without fn; compute from last fold metrics if available
+    ev_per_trade = float(agg["ev_total"] / trades) if trades > 0 else 0.0
+    trades_per_day = float(trades / agg["days"]) if agg["days"] > 0 else float(trades)
+
+    metrics = {
+        "accuracy": None,
+        "precision": precision,
+        "recall": recall,
+        "f1": (2 * precision * (recall or 0.0) / (precision + (recall or 1e-9))) if recall is not None else 0.0,
+        "roc_auc": None,
+        "ev_per_trade": ev_per_trade,
+        "trades": trades,
+        "trades_per_day": trades_per_day,
+    }
+
+    # Fit final model on full data using the same configuration
+    final_est = _get_estimator(model_type, class_weight=class_weight)
+    final_model = _fit_with_calibration(final_est, X, y, calibrate)
+
     model_id = f"{save_prefix}_{model_type}"
     model_path = ML_DIR / f"{model_id}.joblib"
-    dump({"model": model, "features": X_cols}, model_path)
+    dump({"model": final_model, "features": X_cols}, model_path)
+
+    # backtest proxy using full data predictions
+    try:
+        full_pred = final_model.predict(X)
+        bt = backtest_simple(close_series, pd.Series(full_pred, index=close_series.index), horizon)
+    except Exception:
+        bt = {"equity_final": 0.0, "max_drawdown": 0.0}
+
+    champ = load_champion()
+    cur_prec = float(champ.get("metrics", {}).get("precision", 0.0) or 0.0)
+    cur_ev = float(champ.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0)
+
+    # Promotion policy: prioritize precision, then EV, then drawdown
+    promoted = bool((metrics["precision"] >= max(0.5, 1.05 * cur_prec)) and (metrics["ev_per_trade"] >= cur_ev))
     if promoted:
         meta = {
             "model_id": model_id,
             "path": str(model_path),
             "metrics": metrics,
-            "backtest": bt,
+            "backtest": {**bt, "ev_per_trade": ev_per_trade},
             "horizon": horizon,
             "threshold": threshold,
-            "ts_rows": int(len(Xtr)),
-            "vs_rows": int(len(Xte)),
+            "ts_rows": int(len(X)),
+            "vs_rows": int(max(1, int((1 - train_size) * n))),
         }
-        # stamp time on champion metadata
         meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
         save_champion(meta)
-    return {"model_id": model_id, "metrics": metrics, "backtest": bt, "promoted": promoted}
+
+    return {
+        "model_id": model_id,
+        "metrics": metrics,
+        "backtest": {**bt, "ev_per_trade": ev_per_trade},
+        "promoted": promoted,
+    }
+
+
+# Backward compatible function name used by server.py
+# Note: Kept to avoid large code changes elsewhere
+
+def train_and_maybe_promote(
+    df: pd.DataFrame,
+    horizon: int,
+    threshold: float,
+    model_type: str = "rf",
+    save_prefix: str = "weekly",
+    class_weight: Optional[str] = None,
+    calibrate: Optional[str] = None,
+    payout_ratio: float = 0.95,
+    candles_per_day: float = 480.0,
+    objective: str = "f1",
+) -> Dict[str, Any]:
+    return train_walkforward_and_maybe_promote(
+        df,
+        horizon=horizon,
+        threshold=threshold,
+        model_type=model_type,
+        save_prefix=save_prefix,
+        class_weight=class_weight,
+        calibrate=calibrate,
+        payout_ratio=payout_ratio,
+        candles_per_day=candles_per_day,
+        objective=objective,
+    )
