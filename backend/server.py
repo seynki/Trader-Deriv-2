@@ -24,8 +24,16 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection (MUST use env)
 mongo_url = os.environ.get('MONGO_URL')
 if mongo_url:
-    client = AsyncIOMotorClient(mongo_url, tls=True, tlsCAFile=certifi.where())
-    db = client[os.environ.get('DB_NAME', 'test_database')]
+    try:
+        if mongo_url.startswith("mongodb+srv://"):
+            client = AsyncIOMotorClient(mongo_url, tls=True, tlsCAFile=certifi.where())
+        else:
+            client = AsyncIOMotorClient(mongo_url)
+        db = client[os.environ.get('DB_NAME', 'test_database')]
+    except Exception as e:
+        client = None
+        db = None
+        logging.warning(f"Mongo connection init failed: {e}")
 else:
     client = None
     db = None
