@@ -82,6 +82,7 @@ export default function MlPanel() {
               <SelectContent>
                 <SelectItem value="mongo">Mongo</SelectItem>
                 <SelectItem value="file">CSV (/data/ml/ohlcv.csv)</SelectItem>
+                <SelectItem value="deriv">Deriv (baixar candles online)</SelectItem>
               </SelectContent>
             </Select>
           </div>
