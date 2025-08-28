@@ -704,6 +704,42 @@ class StrategyParams(BaseModel):
     macd_sig: int = 9
     mode: str = "paper"  # paper | live
 
+class GlobalStats:
+    """Global statistics tracker for all trades (manual + automated + strategy)"""
+    def __init__(self):
+        self.total_trades: int = 0
+        self.wins: int = 0
+        self.losses: int = 0
+        self.daily_pnl: float = 0.0
+        self.processed_contracts: set = set()  # To avoid double counting
+        
+    def add_trade_result(self, contract_id: int, profit: float):
+        """Add a completed trade result to global stats"""
+        if contract_id in self.processed_contracts:
+            return  # Already processed
+            
+        self.processed_contracts.add(contract_id)
+        self.total_trades += 1
+        self.daily_pnl += profit
+        
+        if profit > 0:
+            self.wins += 1
+        else:
+            self.losses += 1
+    
+    @property
+    def win_rate(self) -> float:
+        """Calculate win rate percentage"""
+        if self.total_trades == 0:
+            return 0.0
+        return (self.wins / self.total_trades) * 100.0
+    
+    def reset_daily(self):
+        """Reset daily stats (keeps trade counts but resets PnL)"""
+        self.daily_pnl = 0.0
+        # Note: We keep total_trades, wins, losses for historical tracking
+        # In production, you might want to reset these daily too
+
 class StrategyStatus(BaseModel):
     running: bool
     mode: str
