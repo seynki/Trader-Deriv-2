@@ -9,6 +9,7 @@ from joblib import dump
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier, export_text
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.calibration import CalibratedClassifierCV
 from datetime import datetime
 
 ROOT = Path(__file__).parent
