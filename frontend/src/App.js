@@ -412,8 +412,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
     return () => {
       try { ws.close(); } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit, growthRate]);
+  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit, growthRate, buyAdvanced, isTypeSupported]);
 
   return (
     <Card>
