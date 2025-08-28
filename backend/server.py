@@ -210,7 +210,7 @@ class DerivWS:
                             cid_int = int(cid) if cid is not None else None
                         except Exception:
                             cid_int = None
-                        if cid_int is not None and cid_int in self.contract_queues:
+                        if cid_int is not None:
                             message = {
                                 "type": "contract",
                                 "contract_id": cid_int,
@@ -227,9 +227,21 @@ class DerivWS:
                                 "date_start": poc.get("date_start"),
                                 "date_expiry": poc.get("date_expiry"),
                             }
-                            for q in list(self.contract_queues.get(cid_int, [])):
-                                if not q.full():
-                                    q.put_nowait(message)
+                            
+                            # Update global stats when contract expires
+                            if poc.get("is_expired"):
+                                try:
+                                    profit = float(poc.get("profit") or 0.0)
+                                    _global_stats.add_trade_result(cid_int, profit)
+                                    logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to update global stats: {e}")
+                            
+                            # Send to contract listeners
+                            if cid_int in self.contract_queues:
+                                for q in list(self.contract_queues.get(cid_int, [])):
+                                    if not q.full():
+                                        q.put_nowait(message)
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
