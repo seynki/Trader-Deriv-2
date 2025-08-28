@@ -60,7 +60,31 @@ services:
     container_name: app-seed-candles
     depends_on:
       - backend
-    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Seeding candles (R_100, 3m, 2000)' && curl -s -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-180}&count=${SEED_COUNT:-2000}' && echo 'Seed done'"]
+    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Seeding candles (R_100, 3m, 2000)' && for i in $(seq 1 20); do curl -sf -X POST 'http://backend:8001/api/candles/ingest?symbol=${SEED_SYMBOL:-R_100}&granularity=${SEED_GRANULARITY:-180}&count=${SEED_COUNT:-2000}' && echo 'Seed done' && exit 0; echo 'Seed attempt '$i' failed, retrying in 10s...'; sleep 10; done; echo 'Seed failed after retries' && exit 1" ]
+    restart: "no"
+
+  bootstrap_train:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: app-ml-bootstrap
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
+      DB_NAME: ${DB_NAME:-market_ticks}
+      TRAIN_SYMBOL: ${TRAIN_SYMBOL:-R_100}
+      TRAIN_TIMEFRAME: ${TRAIN_TIMEFRAME:-3m}
+      TRAIN_HORIZON: ${TRAIN_HORIZON:-3}
+      TRAIN_THRESHOLD: ${TRAIN_THRESHOLD:-0.003}
+      TRAIN_MODEL_TYPE: ${TRAIN_MODEL_TYPE:-rf}
+      TRAIN_RUN_ONCE: 1
+    command: ["sh", "-c", "echo 'Waiting backend...' && until curl -sf http://backend:8001/api/status >/dev/null; do sleep 2; done; echo 'Bootstrapping ML train once'; for i in $(seq 1 20); do python ml_trainer.py && echo 'Bootstrap train done' && exit 0; echo 'Bootstrap attempt '$i' failed, retrying in 10s...'; sleep 10; done; echo 'Bootstrap train failed after retries' && exit 1" ]
+    volumes:
+      - ./:/app
+      - ./data/ml:/data/ml
+    depends_on:
+      - seed_candles
     restart: "no"
 
 networks:
