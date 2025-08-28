@@ -904,6 +904,10 @@ def _adx(high: List[float], low: List[float], close: List[float], period: int = 
     return [None] * pad_len + adxR
 
 
+# Global statistics instance
+_global_stats = GlobalStats()
+
+
 class StrategyRunner:
     def __init__(self):
         self.task: Optional[asyncio.Task] = None
