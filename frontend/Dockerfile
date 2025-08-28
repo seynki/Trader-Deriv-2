@@ -3,8 +3,8 @@ FROM node:20-alpine
 WORKDIR /app/frontend
 
 # Instalar dependências primeiro (aproveitar cache)
-COPY frontend/package.json frontend/yarn.lock ./
-RUN corepack enable && yarn install
+COPY frontend/package.json ./
+RUN corepack enable && yarn install --prefer-offline
 
 # Copiar código (será sobrescrito por volume em dev)
 COPY frontend/ .
