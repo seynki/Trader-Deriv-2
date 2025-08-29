@@ -45,7 +45,7 @@ export default function MlPanel() {
   const runTrain = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.post(`${API}/ml/train`, null, { params: { source, symbol, timeframe, horizon, threshold, model_type: modelType } });
+      const { data } = await axios.post(`${API}/ml/train`, null, { params: { source, symbol, timeframe, horizon, threshold, model_type: modelType, count: 20000, thresholds: "0.002,0.003,0.004,0.005", horizons: "1,3,5", class_weight: "balanced", calibrate: "sigmoid", objective: "precision" } });
       setLastResult(data);
       await refresh();
     } catch (e) {
