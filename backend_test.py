@@ -1865,6 +1865,242 @@ class DerivAPITester:
         
         return all_passed
 
+    def test_async_ml_training_jobs(self):
+        """Test async ML training jobs as per review request - Execute 3 async heavy training jobs (20k candles, grid 4x3)"""
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ASYNC ML TRAINING JOBS - REVIEW REQUEST")
+        self.log("🧠" + "="*58)
+        self.log("📋 Execute 3 async heavy training jobs (20k candles, grid 4x3) and register job_ids and initial status:")
+        self.log("   1) Wait 5s after start to ensure WS connection with Deriv")
+        self.log("   2) GET /api/deriv/status → validate connected=true, authenticated=true")
+        self.log("   3) POST /api/ml/train_async for R_100 → capture job_id_100")
+        self.log("   4) POST /api/ml/train_async for R_50 → capture job_id_50")
+        self.log("   5) POST /api/ml/train_async for R_75 → capture job_id_75")
+        self.log("   6) For each job_id, GET /api/ml/job/{job_id} and register initial status and progress")
+        self.log("   7) Don't wait for completion - just report job_ids and initial states")
+        self.log("   ⚠️  NOT executing /api/deriv/buy as requested")
+        
+        # Step 1: Wait 5s after start to ensure WS connection with Deriv
+        self.log("\n🔍 STEP 1: Wait 5s after start to ensure WS connection with Deriv")
+        self.log("   ⏳ Waiting 5 seconds...")
+        time.sleep(5)
+        self.log("   ✅ 5-second wait completed")
+        
+        # Step 2: GET /api/deriv/status → validate connected=true, authenticated=true
+        self.log("\n🔍 STEP 2: GET /api/deriv/status → validate connected=true, authenticated=true")
+        success, deriv_data, status_code = self.run_test(
+            "Deriv Status Check for Async ML",
+            "GET",
+            "deriv/status",
+            200
+        )
+        
+        if not success:
+            self.log("❌ FAILED: Cannot verify Deriv status - aborting async ML test")
+            return False, {"error": "deriv_status_check_failed"}
+        
+        connected = deriv_data.get('connected', False)
+        authenticated = deriv_data.get('authenticated', False)
+        
+        self.log(f"   Connected: {connected}")
+        self.log(f"   Authenticated: {authenticated}")
+        
+        if not connected:
+            self.log("❌ FAILED: Deriv connected=false - async ML training will fail")
+            return False, {"error": "deriv_not_connected", "deriv_status": deriv_data}
+        
+        if not authenticated:
+            self.log("❌ FAILED: Deriv authenticated=false - async ML training will fail")
+            return False, {"error": "deriv_not_authenticated", "deriv_status": deriv_data}
+        
+        self.log("✅ Deriv status validation passed - connected=true, authenticated=true")
+        
+        # Common payload for all async training jobs
+        base_payload = {
+            "source": "deriv",
+            "timeframe": "3m",
+            "count": 20000,
+            "thresholds": "0.002,0.003,0.004,0.005",
+            "horizons": "1,3,5",
+            "model_type": "rf",
+            "class_weight": "balanced",
+            "calibrate": "sigmoid",
+            "objective": "precision"
+        }
+        
+        job_results = {}
+        
+        # Step 3: POST /api/ml/train_async for R_100 → capture job_id_100
+        self.log("\n🔍 STEP 3: POST /api/ml/train_async for R_100 → capture job_id_100")
+        
+        r100_payload = {**base_payload, "symbol": "R_100"}
+        self.log(f"   Payload: {json.dumps(r100_payload, indent=2)}")
+        
+        success, r100_data, status_code = self.run_test(
+            "Async ML Train R_100",
+            "POST",
+            "ml/train_async",
+            200,
+            data=r100_payload,
+            timeout=30
+        )
+        
+        if success:
+            job_id_100 = r100_data.get('job_id')
+            job_status_100 = r100_data.get('status')
+            self.log(f"   ✅ R_100 job created successfully")
+            self.log(f"   Job ID: {job_id_100}")
+            self.log(f"   Initial Status: {job_status_100}")
+            job_results['R_100'] = {'job_id': job_id_100, 'status': job_status_100, 'success': True}
+        else:
+            self.log(f"   ❌ R_100 job creation failed - Status: {status_code}")
+            self.log(f"   Error: {r100_data.get('detail', 'Unknown error')}")
+            job_results['R_100'] = {'success': False, 'error': r100_data.get('detail', 'Unknown error')}
+        
+        # Step 4: POST /api/ml/train_async for R_50 → capture job_id_50
+        self.log("\n🔍 STEP 4: POST /api/ml/train_async for R_50 → capture job_id_50")
+        
+        r50_payload = {**base_payload, "symbol": "R_50"}
+        self.log(f"   Payload: {json.dumps(r50_payload, indent=2)}")
+        
+        success, r50_data, status_code = self.run_test(
+            "Async ML Train R_50",
+            "POST",
+            "ml/train_async",
+            200,
+            data=r50_payload,
+            timeout=30
+        )
+        
+        if success:
+            job_id_50 = r50_data.get('job_id')
+            job_status_50 = r50_data.get('status')
+            self.log(f"   ✅ R_50 job created successfully")
+            self.log(f"   Job ID: {job_id_50}")
+            self.log(f"   Initial Status: {job_status_50}")
+            job_results['R_50'] = {'job_id': job_id_50, 'status': job_status_50, 'success': True}
+        else:
+            self.log(f"   ❌ R_50 job creation failed - Status: {status_code}")
+            self.log(f"   Error: {r50_data.get('detail', 'Unknown error')}")
+            job_results['R_50'] = {'success': False, 'error': r50_data.get('detail', 'Unknown error')}
+        
+        # Step 5: POST /api/ml/train_async for R_75 → capture job_id_75
+        self.log("\n🔍 STEP 5: POST /api/ml/train_async for R_75 → capture job_id_75")
+        
+        r75_payload = {**base_payload, "symbol": "R_75"}
+        self.log(f"   Payload: {json.dumps(r75_payload, indent=2)}")
+        
+        success, r75_data, status_code = self.run_test(
+            "Async ML Train R_75",
+            "POST",
+            "ml/train_async",
+            200,
+            data=r75_payload,
+            timeout=30
+        )
+        
+        if success:
+            job_id_75 = r75_data.get('job_id')
+            job_status_75 = r75_data.get('status')
+            self.log(f"   ✅ R_75 job created successfully")
+            self.log(f"   Job ID: {job_id_75}")
+            self.log(f"   Initial Status: {job_status_75}")
+            job_results['R_75'] = {'job_id': job_id_75, 'status': job_status_75, 'success': True}
+        else:
+            self.log(f"   ❌ R_75 job creation failed - Status: {status_code}")
+            self.log(f"   Error: {r75_data.get('detail', 'Unknown error')}")
+            job_results['R_75'] = {'success': False, 'error': r75_data.get('detail', 'Unknown error')}
+        
+        # Step 6: For each job_id, GET /api/ml/job/{job_id} and register initial status and progress
+        self.log("\n🔍 STEP 6: For each job_id, GET /api/ml/job/{job_id} and register initial status and progress")
+        
+        for symbol, result in job_results.items():
+            if result.get('success') and result.get('job_id'):
+                job_id = result['job_id']
+                self.log(f"\n   📊 Checking job status for {symbol} (job_id: {job_id})")
+                
+                success, job_data, status_code = self.run_test(
+                    f"Job Status Check {symbol}",
+                    "GET",
+                    f"ml/job/{job_id}",
+                    200,
+                    timeout=15
+                )
+                
+                if success:
+                    job_status = job_data.get('status')
+                    progress = job_data.get('progress', {})
+                    created_at = job_data.get('created_at')
+                    params = job_data.get('params', {})
+                    
+                    self.log(f"      Status: {job_status}")
+                    self.log(f"      Progress: {progress}")
+                    self.log(f"      Created At: {created_at}")
+                    self.log(f"      Params: {json.dumps(params, indent=6)}")
+                    
+                    # Update job results with detailed status
+                    job_results[symbol].update({
+                        'detailed_status': job_status,
+                        'progress': progress,
+                        'created_at': created_at,
+                        'params': params
+                    })
+                else:
+                    self.log(f"      ❌ Failed to get job status for {symbol}")
+                    job_results[symbol]['status_check_failed'] = True
+            else:
+                self.log(f"\n   ⚠️  Skipping status check for {symbol} - job creation failed")
+        
+        # Step 7: Summary - Don't wait for completion, just report job_ids and initial states
+        self.log("\n🔍 STEP 7: Summary - Job IDs and Initial States")
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ASYNC ML TRAINING JOBS SUMMARY")
+        self.log("🧠" + "="*58)
+        
+        successful_jobs = 0
+        failed_jobs = 0
+        
+        for symbol, result in job_results.items():
+            if result.get('success'):
+                successful_jobs += 1
+                job_id = result.get('job_id')
+                status = result.get('detailed_status', result.get('status'))
+                progress = result.get('progress', {})
+                
+                self.log(f"✅ {symbol}:")
+                self.log(f"   Job ID: {job_id}")
+                self.log(f"   Status: {status}")
+                if progress:
+                    done = progress.get('done', 0)
+                    total = progress.get('total', 0)
+                    self.log(f"   Progress: {done}/{total}")
+                else:
+                    self.log(f"   Progress: Not available yet")
+            else:
+                failed_jobs += 1
+                error = result.get('error', 'Unknown error')
+                self.log(f"❌ {symbol}:")
+                self.log(f"   Error: {error}")
+        
+        self.log(f"\n📊 FINAL RESULTS:")
+        self.log(f"   Successful Jobs: {successful_jobs}/3")
+        self.log(f"   Failed Jobs: {failed_jobs}/3")
+        self.log(f"   Success Rate: {(successful_jobs/3)*100:.1f}%")
+        
+        # Determine overall success
+        overall_success = successful_jobs >= 2  # At least 2 out of 3 jobs should succeed
+        
+        if overall_success:
+            self.log("\n🎉 ASYNC ML TRAINING JOBS TEST PASSED!")
+            self.log("📋 Successfully created async training jobs and captured initial states")
+            self.log("   Jobs are now running in the background")
+            self.log("   Use GET /api/ml/job/{job_id} to monitor progress")
+        else:
+            self.log("\n⚠️  ASYNC ML TRAINING JOBS TEST PARTIALLY FAILED")
+            self.log("📋 Some jobs failed to start - check individual errors above")
+        
+        return overall_success, job_results
+
     def run_all_tests(self):
         """Run the specific tests requested in the review"""
         return self.run_review_request_tests()
