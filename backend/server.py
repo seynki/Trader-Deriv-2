@@ -1103,6 +1103,54 @@ class StrategyRunner:
                     continue
                 if self.in_position:
                     await asyncio.sleep(cooldown_seconds)
+                # ML gate (probability calibrated > threshold)
+                if self.params.ml_gate:
+                    try:
+                        import ml_utils
+                        import numpy as np
+                        champ = ml_utils.load_champion()
+                        # If no champion, skip trading
+                        if not champ or not champ.get("model_id"):
+                            await asyncio.sleep(cooldown_seconds)
+                            continue
+                        # Build last window features from candles
+                        import pandas as pd
+                        df = pd.DataFrame(candles)
+                        df = df[["open","high","low","close","volume"]].astype(float)
+                        feats_df = ml_utils.build_features(df)
+                        X_cols = ml_utils.select_features(feats_df)
+                        X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan).dropna()
+                        if len(X) == 0:
+                            await asyncio.sleep(cooldown_seconds)
+                            continue
+                        # load model
+                        from joblib import load as joblib_load
+                        model_path = Path(__file__).parent / "ml_models" / f"{champ.get('model_id')}.joblib"
+                        if not model_path.exists():
+                            await asyncio.sleep(cooldown_seconds)
+                            continue
+                        payload = joblib_load(model_path)
+                        model = payload.get("model")
+                        # predict proba on last row
+                        x_last = X.iloc[[-1]]
+                        proba = None
+                        if hasattr(model, "predict_proba"):
+                            try:
+                                proba = float(model.predict_proba(x_last)[:,1][0])
+                            except Exception:
+                                proba = None
+                        # gate check
+                        if (proba is None) or (proba < self.params.ml_prob_threshold):
+                            # Do not trade; keep info visible
+                            self.last_reason = f"Gate ML: proba={proba:.2f if proba is not None else 'NA'} < th={self.params.ml_prob_threshold:.2f}"
+                            await asyncio.sleep(cooldown_seconds)
+                            continue
+                    except Exception as _e:
+                        logger.warning(f"ML gate failed: {_e}")
+                        # Fail-open or fail-close? We'll fail-close to be safer (skip trade)
+                        await asyncio.sleep(cooldown_seconds)
+                        continue
+
                     continue
                 self.last_signal = signal.get("side")
                 self.last_reason = signal.get("reason")
