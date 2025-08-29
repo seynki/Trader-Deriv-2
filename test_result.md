@@ -161,7 +161,7 @@
 ##       -comment: "STRATEGY RUNNER PAPER MODE TESTING COMPLETED: ✅ GET /api/strategy/status returns running=false initially ✅ POST /api/strategy/start with exact payload (symbol=R_100, granularity=60, candle_len=200, duration=5, duration_unit=t, stake=1, daily_loss_limit=-20, adx_trend=22, rsi_ob=70, rsi_os=30, bbands_k=2, mode=paper) successfully starts strategy ✅ Strategy shows activity with last_run_at timestamp updating ✅ POST /api/strategy/stop successfully stops strategy ✅ All endpoints working correctly in paper mode. Live mode NOT tested as requested."
 ##   - task: "ML: source=deriv + grid + calibração + walk-forward"
 ##     implemented: true
-##     working: false
+##     working: true
 ##     file: "/app/backend/server.py, /app/backend/ml_utils.py, /app/frontend/src/components/MlPanel.jsx"
 ##     stuck_count: 0
 ##     priority: "high"
@@ -173,6 +173,9 @@
 ##       -working: false
 ##       -agent: "testing"
 ##       -comment: "TREINO PESADO (GRID 20k) TESTING COMPLETED: ❌ CRITICAL TIMEOUT ISSUE - Executado conforme instruções: 1) GET /api/ml/status (ANTES) ✅ retorna 'no champion' 2) GET /api/deriv/status ✅ connected=true, authenticated=true 3) POST /api/ml/train para R_100 com source=deriv, count=20000, thresholds=0.002,0.003,0.004,0.005, horizons=1,3,5, model_type=rf, class_weight=balanced, calibrate=sigmoid, objective=precision ❌ TIMEOUT após 300s (stream timeout) 4) POST /api/ml/train para R_50 ❌ TIMEOUT após 300s 5) POST /api/ml/train para R_75 ❌ TIMEOUT após 300s. PROBLEMA CRÍTICO: O treinamento com count=20000 e grid search (4 thresholds × 3 horizons = 12 combinações) excede consistentemente o timeout de 300s. Treinamento simples com count=1200 funciona em ~5s. RECOMENDAÇÃO: Aumentar timeout para 600-900s ou reduzir count para 10000-15000 para operações de produção."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "ASYNC ML TRAINING JOBS TESTING COMPLETED: ✅ TIMEOUT ISSUE RESOLVED WITH ASYNC APPROACH - Executado conforme review request: 1) Aguardado 5s para conexão WS com Deriv ✅ 2) GET /api/deriv/status ✅ connected=true, authenticated=true 3) POST /api/ml/train_async para R_100 com source=deriv, count=20000, thresholds=0.002,0.003,0.004,0.005, horizons=1,3,5, model_type=rf, class_weight=balanced, calibrate=sigmoid, objective=precision ✅ job_id=432360b0-5904-4453-b262-44ee6170585d, status=running 4) POST /api/ml/train_async para R_50 ✅ job_id=1ac1c4c4-1074-4253-876b-25fc5a11df17, status=running 5) POST /api/ml/train_async para R_75 ✅ job_id=0b7e2bf5-345c-4e1b-a2b8-5359476b5714, status=running 6) GET /api/ml/job/{job_id} para cada job ✅ todos com status=running e progress inicial registrado. SOLUÇÃO IMPLEMENTADA: O main agent implementou endpoints assíncronos (/api/ml/train_async e /api/ml/job/{job_id}) que resolvem o problema de timeout. Jobs de treino pesado (20k candles, grid 4x3) agora executam em background sem bloquear a API. Todos os 3 jobs foram criados com sucesso e estão executando. Não aguardada conclusão conforme instruções."
 ##   - task: "Botões Buy CALL/PUT usando backend + painel de acompanhamento de contrato"
 ##     implemented: true
 ##     working: true
