@@ -715,6 +715,9 @@ class StrategyParams(BaseModel):
     macd_slow: int = 26
     macd_sig: int = 9
     mode: str = "paper"  # paper | live
+    # ML gating (Passo 4)
+    ml_gate: bool = False
+    ml_prob_threshold: float = 0.5
 
 class GlobalStats:
     """Global statistics tracker for all trades (manual + automated + strategy)"""
