@@ -261,7 +261,7 @@ export default function MlPanel() {
                   <div className="mt-1 opacity-90">Melhora vs campeão: {improvement.toFixed(1)}%</div>
                 )}
                 {/* Grid detalhado */}
-                {Array.isArray(lastResult.grid) && lastResult.grid.length &gt; 0 && (
+                {Array.isArray(lastResult.grid) && lastResult.grid.length > 0 && (
                   <div className="mt-3">
                     <div className="font-medium mb-1">Grid completo</div>
                     <div className="rounded-md overflow-hidden border border-emerald-500/20">
