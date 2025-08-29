@@ -12,7 +12,7 @@ const API = `${BACKEND_URL}/api`;
 export default function MlPanel() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [source, setSource] = useState("mongo");
+  const [source, setSource] = useState("deriv");
   const [symbol, setSymbol] = useState("R_100");
   const [timeframe, setTimeframe] = useState("3m");
   const [horizon, setHorizon] = useState(3);
