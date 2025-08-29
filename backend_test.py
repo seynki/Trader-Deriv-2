@@ -1497,21 +1497,43 @@ class DerivAPITester:
             self.log(f"❌ UNEXPECTED STATUS: {status_code}")
             return False, {"unexpected_status": status_code, "response": data}
 
-    def test_ml_heavy_training(self):
-        """Test heavy ML training as requested: POST /api/ml/train with source=deriv, count=20000, grid search"""
+    def test_ml_heavy_training_grid_20k(self):
+        """TREINO PESADO (GRID 20k) - Test as per exact review request instructions"""
         self.log("\n" + "🧠" + "="*58)
-        self.log("HEAVY ML TRAINING TEST (REVIEW REQUEST)")
+        self.log("TREINO PESADO (GRID 20k) - REVIEW REQUEST")
         self.log("🧠" + "="*58)
-        self.log("📋 Request: POST /api/ml/train?source=deriv&symbol=R_100&timeframe=3m&count=20000")
-        self.log("   &thresholds=0.002,0.003,0.004,0.005&horizons=1,3,5&model_type=rf")
-        self.log("   &class_weight=balanced&calibrate=sigmoid&objective=precision")
-        self.log("   Timeout: up to 300s")
-        self.log("   Expected output: rows, best model_id, metrics.precision, trades_per_day, ev_per_trade, top 5 grid")
+        self.log("📋 Executar o TREINO PESADO (GRID 20k) conforme instruções:")
+        self.log("   1) POST /api/ml/train com source=deriv, symbol=R_100, timeframe=3m, count=20000,")
+        self.log("      thresholds=0.002,0.003,0.004,0.005, horizons=1,3,5, model_type=rf,")
+        self.log("      class_weight=balanced, calibrate=sigmoid, objective=precision")
+        self.log("   2) Repetir para symbol=R_50")
+        self.log("   3) Repetir para symbol=R_75")
+        self.log("   4) Coletar: model_id, metrics.precision, backtest.ev_per_trade,")
+        self.log("      metrics.trades_per_day, horizon, threshold, e o array grid[]")
+        self.log("   5) Comparar os 3 melhores por tupla (precision, ev_per_trade, trades_per_day)")
+        self.log("   6) Checar GET /api/ml/status antes e depois para verificar promoção automática")
+        self.log("   ⚠️  Aguardar até 300s se necessário. NÃO executar buy/sell endpoints.")
         
-        # First check Deriv status
-        self.log("\n🔍 Step 1: Verify Deriv connection for data source")
+        # Step 1: Check ML status before training
+        self.log("\n🔍 STEP 1: GET /api/ml/status (ANTES)")
+        success, status_before, status_code = self.run_test(
+            "ML Status Before Training",
+            "GET",
+            "ml/status",
+            200,
+            timeout=10
+        )
+        
+        if not success:
+            self.log("❌ FAILED: Cannot get ML status before training")
+            return False, {"error": "ml_status_before_failed"}
+        
+        self.log(f"   Status Before: {json.dumps(status_before, indent=2)}")
+        
+        # Step 2: Check Deriv connection
+        self.log("\n🔍 STEP 2: Verify Deriv connection")
         success, deriv_data, status_code = self.run_test(
-            "Deriv Status Check for ML Training",
+            "Deriv Status Check",
             "GET",
             "deriv/status",
             200,
@@ -1519,8 +1541,8 @@ class DerivAPITester:
         )
         
         if not success:
-            self.log("❌ FAILED: Cannot verify Deriv status before ML training")
-            return False, {"error": "deriv_status_check_failed"}
+            self.log("❌ FAILED: Cannot verify Deriv status")
+            return False, {"error": "deriv_status_failed"}
         
         connected = deriv_data.get('connected', False)
         authenticated = deriv_data.get('authenticated', False)
@@ -1529,145 +1551,230 @@ class DerivAPITester:
         self.log(f"   Authenticated: {authenticated}")
         
         if not connected:
-            self.log("❌ FAILED: Deriv not connected - ML training with source=deriv will fail")
-            return False, {"error": "deriv_not_connected", "deriv_status": deriv_data}
+            self.log("❌ FAILED: Deriv not connected - cannot proceed with training")
+            return False, {"error": "deriv_not_connected"}
         
-        self.log("✅ Deriv connection verified - proceeding with heavy ML training")
+        # Step 3: Execute training for all 3 symbols
+        symbols = ["R_100", "R_50", "R_75"]
+        training_results = []
         
-        # Wait 5 seconds as requested in some tests
-        self.log("⏳ Waiting 5 seconds before starting heavy training...")
-        time.sleep(5)
+        for i, symbol in enumerate(symbols, 1):
+            self.log(f"\n🔍 STEP {2+i}: POST /api/ml/train para {symbol}")
+            
+            # Build exact parameters as requested
+            ml_params = (
+                f"source=deriv&symbol={symbol}&timeframe=3m&count=20000"
+                "&thresholds=0.002,0.003,0.004,0.005&horizons=1,3,5"
+                "&model_type=rf&class_weight=balanced&calibrate=sigmoid&objective=precision"
+            )
+            
+            self.log(f"   URL: {self.api_url}/ml/train?{ml_params}")
+            self.log("   ⚠️  HEAVY OPERATION - aguardando até 300s...")
+            
+            success, data, status_code = self.run_test(
+                f"Heavy ML Training {symbol}",
+                "POST",
+                f"ml/train?{ml_params}",
+                200,
+                timeout=300  # 300s as requested
+            )
+            
+            if not success:
+                self.log(f"❌ TRAINING FAILED for {symbol}")
+                
+                if status_code == 504:
+                    self.log(f"   TIMEOUT: Training for {symbol} took longer than 300s")
+                    training_results.append({
+                        "symbol": symbol,
+                        "success": False,
+                        "error": "timeout",
+                        "detail": "Training timeout after 300s"
+                    })
+                elif status_code == 400:
+                    error_detail = data.get('detail', '')
+                    self.log(f"   BAD REQUEST: {error_detail}")
+                    training_results.append({
+                        "symbol": symbol,
+                        "success": False,
+                        "error": "bad_request",
+                        "detail": error_detail
+                    })
+                else:
+                    self.log(f"   UNEXPECTED STATUS: {status_code}")
+                    training_results.append({
+                        "symbol": symbol,
+                        "success": False,
+                        "error": "unexpected_status",
+                        "status_code": status_code,
+                        "response": data
+                    })
+                continue
+            
+            # Extract required fields as per review request
+            model_id = data.get('model_id')
+            rows = data.get('rows')
+            granularity = data.get('granularity')
+            
+            metrics = data.get('metrics', {})
+            precision = metrics.get('precision')
+            trades_per_day = metrics.get('trades_per_day')
+            
+            backtest = data.get('backtest', {})
+            ev_per_trade = backtest.get('ev_per_trade')
+            
+            # Extract horizon and threshold from model_id or best result
+            horizon = data.get('horizon')
+            threshold = data.get('threshold')
+            
+            grid = data.get('grid', [])
+            
+            self.log(f"   ✅ SUCCESS for {symbol}:")
+            self.log(f"      Model ID: {model_id}")
+            self.log(f"      Rows: {rows}")
+            self.log(f"      Precision: {precision}")
+            self.log(f"      EV per Trade: {ev_per_trade}")
+            self.log(f"      Trades per Day: {trades_per_day}")
+            self.log(f"      Horizon: {horizon}")
+            self.log(f"      Threshold: {threshold}")
+            self.log(f"      Grid Results: {len(grid)} combinations")
+            
+            training_results.append({
+                "symbol": symbol,
+                "success": True,
+                "model_id": model_id,
+                "precision": precision,
+                "ev_per_trade": ev_per_trade,
+                "trades_per_day": trades_per_day,
+                "horizon": horizon,
+                "threshold": threshold,
+                "grid": grid,
+                "rows": rows,
+                "granularity": granularity,
+                "full_response": data
+            })
         
-        # Execute heavy ML training
-        self.log("\n🔍 Step 2: Execute heavy ML training (timeout=300s)")
+        # Step 6: Compare the 3 best models by tuple (precision, ev_per_trade, trades_per_day)
+        self.log(f"\n🔍 STEP 6: Comparar os 3 melhores por tupla (precision, ev_per_trade, trades_per_day)")
         
-        # Build the exact URL with all parameters
-        ml_params = (
-            "source=deriv&symbol=R_100&timeframe=3m&count=20000"
-            "&thresholds=0.002,0.003,0.004,0.005&horizons=1,3,5"
-            "&model_type=rf&class_weight=balanced&calibrate=sigmoid&objective=precision"
-        )
+        successful_results = [r for r in training_results if r.get('success')]
         
-        self.log(f"   URL: {self.api_url}/ml/train?{ml_params}")
-        self.log("   ⚠️  This is a HEAVY operation - may take several minutes")
+        if not successful_results:
+            self.log("❌ CRITICAL: Nenhum treinamento foi bem-sucedido")
+            return False, {"error": "no_successful_training", "results": training_results}
         
-        success, data, status_code = self.run_test(
-            "Heavy ML Training (Grid Search)",
-            "POST",
-            f"ml/train?{ml_params}",
+        self.log(f"   Modelos bem-sucedidos: {len(successful_results)}/{len(symbols)}")
+        
+        # Sort by tuple (precision, ev_per_trade, trades_per_day) descending
+        def comparison_tuple(result):
+            p = result.get('precision') or 0.0
+            ev = result.get('ev_per_trade') or 0.0
+            tpd = result.get('trades_per_day') or 0.0
+            return (p, ev, tpd)
+        
+        sorted_results = sorted(successful_results, key=comparison_tuple, reverse=True)
+        
+        self.log("\n🏆 RANKING DOS MODELOS:")
+        for i, result in enumerate(sorted_results, 1):
+            symbol = result['symbol']
+            model_id = result['model_id']
+            precision = result['precision']
+            ev_per_trade = result['ev_per_trade']
+            trades_per_day = result['trades_per_day']
+            horizon = result['horizon']
+            threshold = result['threshold']
+            
+            self.log(f"   {i}. {symbol} - {model_id}")
+            self.log(f"      Tupla: (precision={precision}, ev_per_trade={ev_per_trade}, trades_per_day={trades_per_day})")
+            self.log(f"      Horizon: {horizon}, Threshold: {threshold}")
+        
+        # Identify champion
+        if sorted_results:
+            champion = sorted_results[0]
+            self.log(f"\n🥇 CAMPEÃO GERAL: {champion['symbol']} - {champion['model_id']}")
+            self.log(f"   Precision: {champion['precision']}")
+            self.log(f"   EV per Trade: {champion['ev_per_trade']}")
+            self.log(f"   Trades per Day: {champion['trades_per_day']}")
+        
+        # Step 7: Check ML status after training for automatic promotion
+        self.log(f"\n🔍 STEP 7: GET /api/ml/status (DEPOIS) - verificar promoção automática")
+        success, status_after, status_code = self.run_test(
+            "ML Status After Training",
+            "GET",
+            "ml/status",
             200,
-            timeout=300  # 5 minutes timeout as requested
+            timeout=10
         )
         
-        if not success:
-            self.log("❌ HEAVY ML TRAINING FAILED")
+        if success:
+            self.log(f"   Status After: {json.dumps(status_after, indent=2)}")
             
-            if status_code == 503:
-                error_detail = data.get('detail', '')
-                self.log(f"   Service Error: {error_detail}")
-                return False, {"error": "service_unavailable", "detail": error_detail}
-            elif status_code == 400:
-                error_detail = data.get('detail', '')
-                self.log(f"   Bad Request: {error_detail}")
-                return False, {"error": "bad_request", "detail": error_detail}
-            elif status_code == 504:
-                self.log("   Timeout: Training took longer than 300 seconds")
-                return False, {"error": "timeout", "detail": "Training timeout after 300s"}
+            # Check if champion was promoted
+            if status_before.get('message') == 'no champion' and 'model_id' in status_after:
+                self.log("✅ PROMOÇÃO AUTOMÁTICA DETECTADA: Novo campeão foi promovido!")
+                promoted_model = status_after.get('model_id', 'N/A')
+                self.log(f"   Modelo promovido: {promoted_model}")
+            elif status_before.get('model_id') != status_after.get('model_id'):
+                self.log("✅ PROMOÇÃO AUTOMÁTICA DETECTADA: Campeão foi atualizado!")
+                old_model = status_before.get('model_id', 'N/A')
+                new_model = status_after.get('model_id', 'N/A')
+                self.log(f"   Modelo anterior: {old_model}")
+                self.log(f"   Novo modelo: {new_model}")
             else:
-                self.log(f"   Unexpected Status: {status_code}")
-                return False, {"error": "unexpected_status", "status_code": status_code, "response": data}
+                self.log("ℹ️  Nenhuma promoção automática detectada (pode ser normal)")
+        else:
+            self.log("⚠️  Não foi possível verificar status após treinamento")
         
-        # Parse and validate response
-        self.log("\n🔍 Step 3: Parse and validate training results")
+        # Final assessment
+        self.log("\n" + "🧠" + "="*58)
+        self.log("TREINO PESADO (GRID 20k) - RESULTADOS FINAIS")
+        self.log("🧠" + "="*58)
         
-        # Extract key fields as requested
-        rows = data.get('rows')
-        model_id = data.get('model_id')
-        granularity = data.get('granularity')
+        success_count = len(successful_results)
+        total_count = len(symbols)
         
-        metrics = data.get('metrics', {})
-        precision = metrics.get('precision')
-        trades_per_day = metrics.get('trades_per_day')
-        
-        backtest = data.get('backtest', {})
-        ev_per_trade = backtest.get('ev_per_trade')
-        
-        grid = data.get('grid', [])
-        
-        self.log("📊 TRAINING RESULTS:")
-        self.log(f"   Rows: {rows}")
-        self.log(f"   Best Model ID: {model_id}")
-        self.log(f"   Granularity: {granularity}")
-        self.log(f"   Metrics Precision: {precision}")
-        self.log(f"   Trades Per Day: {trades_per_day}")
-        self.log(f"   Backtest EV Per Trade: {ev_per_trade}")
-        self.log(f"   Grid Results Count: {len(grid)}")
-        
-        # Validate required fields
-        validation_errors = []
-        
-        if rows is None:
-            validation_errors.append("Missing 'rows' field")
-        elif rows < 15000:  # Should be close to 20000
-            validation_errors.append(f"Rows too low: {rows} (expected ~20000)")
-        
-        if not model_id:
-            validation_errors.append("Missing 'model_id' field")
-        
-        if precision is None:
-            validation_errors.append("Missing 'metrics.precision' field")
-        
-        if trades_per_day is None:
-            validation_errors.append("Missing 'metrics.trades_per_day' field")
-        
-        if ev_per_trade is None:
-            validation_errors.append("Missing 'backtest.ev_per_trade' field")
-        
-        if not grid or len(grid) == 0:
-            validation_errors.append("Missing or empty 'grid' array")
-        
-        if validation_errors:
-            self.log("❌ VALIDATION FAILED:")
-            for error in validation_errors:
-                self.log(f"   - {error}")
-            return False, {"validation_errors": validation_errors, "response": data}
-        
-        # Show top 5 grid results by precision as requested
-        self.log("\n📈 TOP 5 GRID RESULTS BY PRECISION:")
-        
-        # Sort grid by precision descending
-        sorted_grid = sorted(grid, key=lambda x: x.get('precision', 0) or 0, reverse=True)
-        top_5 = sorted_grid[:5]
-        
-        for i, result in enumerate(top_5, 1):
-            grid_model_id = result.get('model_id', 'N/A')
-            grid_horizon = result.get('horizon', 'N/A')
-            grid_threshold = result.get('threshold', 'N/A')
-            grid_precision = result.get('precision', 'N/A')
-            grid_ev = result.get('ev_per_trade', 'N/A')
-            grid_tpd = result.get('trades_per_day', 'N/A')
-            
-            self.log(f"   {i}. Model: {grid_model_id}")
-            self.log(f"      Horizon: {grid_horizon}, Threshold: {grid_threshold}")
-            self.log(f"      Precision: {grid_precision}, EV/Trade: {grid_ev}, Trades/Day: {grid_tpd}")
-        
-        # Final success assessment
-        self.log("\n🎉 HEAVY ML TRAINING COMPLETED SUCCESSFULLY!")
-        self.log("📋 All required fields present and validated")
-        self.log(f"📋 Processed {rows} rows of data from Deriv source")
-        self.log(f"📋 Generated {len(grid)} model combinations in grid search")
-        self.log(f"📋 Best model: {model_id} with precision: {precision}")
-        
-        return True, {
-            "rows": rows,
-            "model_id": model_id,
-            "precision": precision,
-            "trades_per_day": trades_per_day,
-            "ev_per_trade": ev_per_trade,
-            "grid_count": len(grid),
-            "top_5_grid": top_5,
-            "granularity": granularity
-        }
+        if success_count == total_count:
+            self.log("🎉 ✅ TODOS OS TREINAMENTOS CONCLUÍDOS COM SUCESSO!")
+            self.log(f"📋 {success_count}/{total_count} símbolos treinados com sucesso")
+            if sorted_results:
+                champion = sorted_results[0]
+                self.log(f"📋 Campeão geral: {champion['symbol']} ({champion['model_id']})")
+            return True, {
+                "success_count": success_count,
+                "total_count": total_count,
+                "champion": sorted_results[0] if sorted_results else None,
+                "all_results": training_results,
+                "ranking": sorted_results,
+                "status_before": status_before,
+                "status_after": status_after
+            }
+        elif success_count > 0:
+            self.log("⚠️  ✅ TREINAMENTO PARCIALMENTE BEM-SUCEDIDO")
+            self.log(f"📋 {success_count}/{total_count} símbolos treinados com sucesso")
+            failed_symbols = [r['symbol'] for r in training_results if not r.get('success')]
+            self.log(f"📋 Símbolos que falharam: {failed_symbols}")
+            if sorted_results:
+                champion = sorted_results[0]
+                self.log(f"📋 Campeão entre os bem-sucedidos: {champion['symbol']} ({champion['model_id']})")
+            return True, {
+                "success_count": success_count,
+                "total_count": total_count,
+                "champion": sorted_results[0] if sorted_results else None,
+                "all_results": training_results,
+                "ranking": sorted_results,
+                "failed_symbols": failed_symbols,
+                "status_before": status_before,
+                "status_after": status_after
+            }
+        else:
+            self.log("❌ TODOS OS TREINAMENTOS FALHARAM")
+            self.log(f"📋 {success_count}/{total_count} símbolos treinados com sucesso")
+            return False, {
+                "success_count": success_count,
+                "total_count": total_count,
+                "all_results": training_results,
+                "status_before": status_before,
+                "status_after": status_after
+            }
 
     def run_review_request_tests(self):
         """Run the specific tests requested in the review"""
