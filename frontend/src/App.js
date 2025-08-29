@@ -160,6 +160,8 @@ function StrategyPanel({ onMlActiveChange }) {
     rsi_os: 30,
     bbands_k: 2,
     mode: "paper",
+    ml_gate: true,
+    ml_prob_threshold: Number(localStorage.getItem("ml_prob_threshold") || 0.5),
   }), []);
 
   const fetchStatus = async () => {
