@@ -25,6 +25,7 @@ export default function MlPanel() {
   const [jobStatus, setJobStatus] = useState(null); // queued | running | done | error
   const [jobProgress, setJobProgress] = useState({ done: 0, total: 0 });
   const pollRef = useRef(null);
+  const transientErrRef = useRef(0);
 
   // Post-calibration probability threshold (for Step 4 usage)
   const [probThreshold, setProbThreshold] = useState(() => {
@@ -54,6 +55,12 @@ export default function MlPanel() {
 
   useEffect(() => { refresh(); }, []);
 
+  const isTransientError = (e) => {
+    const sc = e?.response?.status;
+    // Treat network/timeout and 5xx/408/504 as transient
+    return !sc || [502,503,504,408].includes(sc);
+  };
+
   // ---- Async training flow (uses /api/ml/train_async + /api/ml/job/{id}) ----
   const startAsyncTrain = async () => {
     setLoading(true);
@@ -61,6 +68,7 @@ export default function MlPanel() {
     setJobId(null);
     setJobStatus(null);
     setJobProgress({ done: 0, total: 0 });
+    transientErrRef.current = 0;
     try {
       const { data } = await axios.post(`${API}/ml/train_async`, null, {
         params: {
@@ -92,6 +100,7 @@ export default function MlPanel() {
       pollRef.current = setInterval(async () => {
         try {
           const { data: j } = await axios.get(`${API}/ml/job/${jid}`);
+          transientErrRef.current = 0; // reset on success
           setJobStatus(j?.status || null);
           if (j?.progress) {
             setJobProgress({ done: j.progress.done || 0, total: j.progress.total || 0 });
@@ -110,8 +119,14 @@ export default function MlPanel() {
             setLoading(false);
           }
         } catch (e) {
-          // Stop on fetch errors
-          clearInterval(pollRef.current);
+          // Handle transient errors without stopping the polling immediately
+          if (isTransientError(e) && transientErrRef.current < 5) {
+            transientErrRef.current += 1;
+            // keep polling; show no terminal error
+            return;
+          }
+          // Non-transient or too many consecutive errors: stop and show error
+          try { clearInterval(pollRef.current); } catch {}
           pollRef.current = null;
           setLastResult({ error: e?.response?.data?.detail || e.message || String(e) });
           setLoading(false);
@@ -238,6 +253,9 @@ export default function MlPanel() {
             {jobProgress?.total ? (
               <div className="mt-1">progresso: {jobProgress.done}/{jobProgress.total} combos</div>
             ) : null}
+            {loading && transientErrRef.current > 0 && (
+              <div className="mt-1 text-xs opacity-80">Algumas leituras falharam ({transientErrRef.current}). Tentando novamente…</div>
+            )}
           </div>
         )}
 
