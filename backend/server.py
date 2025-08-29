@@ -1142,7 +1142,9 @@ class StrategyRunner:
                         # gate check
                         if (proba is None) or (proba < self.params.ml_prob_threshold):
                             # Do not trade; keep info visible
-                            self.last_reason = f"Gate ML: proba={proba:.2f if proba is not None else 'NA'} < th={self.params.ml_prob_threshold:.2f}"
+                            proba_str = (f"{proba:.2f}" if proba is not None else "NA")
+                            th_str = f"{self.params.ml_prob_threshold:.2f}"
+                            self.last_reason = f"Gate ML: proba={proba_str} < th={th_str}"
                             await asyncio.sleep(cooldown_seconds)
                             continue
                     except Exception as _e:
