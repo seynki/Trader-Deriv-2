@@ -2722,27 +2722,34 @@ class DerivAPITester:
         return all_ml_deriv_tests_passed
 
 def main():
-    """Main test runner for TREINO PESADO (GRID 20k) as per review request"""
+    """Main test runner for ASYNC ML TRAINING JOBS as per review request"""
     tester = DerivAPITester()
     
-    # Run the heavy ML training test as requested
-    tester.log("🚀 EXECUTANDO TREINO PESADO (GRID 20k)")
-    tester.log("📋 Conforme instruções registradas em /app/test_result.md")
+    # Run the async ML training jobs test as requested
+    tester.log("🚀 EXECUTANDO 3 JOBS ASSÍNCRONOS DE TREINO PESADO (20k candles, grid 4x3)")
+    tester.log("📋 Conforme instruções da review request")
     
-    success, results = tester.test_ml_heavy_training_grid_20k()
+    success, results = tester.test_async_ml_training_jobs()
     
     # Print final summary
     tester.print_summary()
     
     if success:
-        tester.log("\n🎉 TREINO PESADO CONCLUÍDO COM SUCESSO!")
-        if results and results.get('champion'):
-            champion = results['champion']
-            tester.log(f"🏆 CAMPEÃO: {champion['symbol']} - {champion['model_id']}")
+        tester.log("\n🎉 ASYNC ML TRAINING JOBS CONCLUÍDO COM SUCESSO!")
+        successful_jobs = sum(1 for result in results.values() if result.get('success'))
+        tester.log(f"📊 {successful_jobs}/3 jobs criados com sucesso")
+        
+        # Show job IDs
+        for symbol, result in results.items():
+            if result.get('success'):
+                job_id = result.get('job_id')
+                status = result.get('detailed_status', result.get('status'))
+                tester.log(f"   {symbol}: job_id={job_id}, status={status}")
     else:
-        tester.log("\n❌ TREINO PESADO FALHOU")
-        if results and 'error' in results:
-            tester.log(f"💥 Erro: {results['error']}")
+        tester.log("\n❌ ASYNC ML TRAINING JOBS FALHOU")
+        if results:
+            failed_jobs = sum(1 for result in results.values() if not result.get('success'))
+            tester.log(f"💥 {failed_jobs}/3 jobs falharam")
     
     return 0 if success else 1
 
