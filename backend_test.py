@@ -2486,10 +2486,28 @@ class DerivAPITester:
         return all_ml_deriv_tests_passed
 
 def main():
-    """Main test runner for ML Deriv tests as per review request"""
+    """Main test runner for TREINO PESADO (GRID 20k) as per review request"""
     tester = DerivAPITester()
-    success = tester.run_ml_deriv_tests()
+    
+    # Run the heavy ML training test as requested
+    tester.log("🚀 EXECUTANDO TREINO PESADO (GRID 20k)")
+    tester.log("📋 Conforme instruções registradas em /app/test_result.md")
+    
+    success, results = tester.test_ml_heavy_training_grid_20k()
+    
+    # Print final summary
     tester.print_summary()
+    
+    if success:
+        tester.log("\n🎉 TREINO PESADO CONCLUÍDO COM SUCESSO!")
+        if results and results.get('champion'):
+            champion = results['champion']
+            tester.log(f"🏆 CAMPEÃO: {champion['symbol']} - {champion['model_id']}")
+    else:
+        tester.log("\n❌ TREINO PESADO FALHOU")
+        if results and 'error' in results:
+            tester.log(f"💥 Erro: {results['error']}")
+    
     return 0 if success else 1
 
 if __name__ == "__main__":
