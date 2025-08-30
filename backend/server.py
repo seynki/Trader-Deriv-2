@@ -750,12 +750,15 @@ class GlobalStats:
         self.daily_pnl: float = 0.0
         self.processed_contracts: set = set()  # To avoid double counting for live/manual
         
-    def add_trade_result(self, contract_id: int, profit: float):
-        """Add a completed LIVE/MANUAL trade result to global stats (uses contract_id dedup)."""
+    def add_trade_result(self, contract_id: int, profit: float) -> bool:
+        """Add a completed LIVE/MANUAL trade result to global stats (uses contract_id dedup).
+        Returns True when this contract_id was accounted for (first time), False otherwise.
+        """
         if contract_id in self.processed_contracts:
-            return  # Already processed
+            return False  # Already processed
         self.processed_contracts.add(contract_id)
         self._apply_profit(profit)
+        return True
 
     def add_paper_trade_result(self, profit: float):
         """Add a simulated (paper) trade to global stats (no contract_id)."""
