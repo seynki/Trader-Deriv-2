@@ -229,7 +229,7 @@ function StrategyPanel({ onMlActiveChange }) {
       </CardHeader>
       <CardContent className="flex flex-wrap items-center gap-4 text-sm">
         <div className="font-medium">Win rate: {winRate.toFixed(0)}% • Acertos: {wins} • Erros: {losses} • Total: {total}</div>
-        <div className="opacity-80">PnL dia: {dpnl.toFixed(2)}</div>
+        <div className="opacity-80">PnL dia: {dpnl.toFixed(2)} (estratégia: {dpnlLocal.toFixed(2)} • global: {dpnlGlobal.toFixed(2)})</div>
         <div className="opacity-80">Último sinal: {status?.last_signal || "-"}</div>
         <div className="opacity-80">Motivo: {status?.last_reason || "-"}</div>
         <div className="ml-auto flex gap-2">
