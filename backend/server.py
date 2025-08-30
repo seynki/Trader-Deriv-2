@@ -717,6 +717,25 @@ class StrategyParams(BaseModel):
     mode: str = "paper"  # paper | live
     # ML gating (Passo 4)
     ml_gate: bool = False
+
+# Track PnL per trade action type
+class _PnLTracker:
+    def __init__(self):
+        self.total_pnl: float = 0.0
+        self.daily_pnl: float = 0.0
+        self.last_day: date = date.today()
+
+    def add(self, profit: float):
+        # reset if new day
+        today = date.today()
+        if today != self.last_day:
+            self.last_day = today
+            self.daily_pnl = 0.0
+        self.total_pnl += profit
+        self.daily_pnl += profit
+
+_global_pnl = _PnLTracker()
+
     ml_prob_threshold: float = 0.5
 
 class GlobalStats:
