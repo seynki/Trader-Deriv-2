@@ -721,6 +721,7 @@ class StrategyParams(BaseModel):
     mode: str = "paper"  # paper | live
     # ML gating (Passo 4)
     ml_gate: bool = False
+    ml_prob_threshold: float = 0.5
 
 # Track PnL per trade action type
 class _PnLTracker:
