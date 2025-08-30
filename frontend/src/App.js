@@ -210,7 +210,7 @@ function StrategyPanel({ onMlActiveChange }) {
   const wins = status?.wins ?? 0;
   const losses = status?.losses ?? 0;
   const total = status?.total_trades ?? 0;
-  const dpnl = status?.daily_pnl ?? 0;
+  const dpnl = (status?.global_daily_pnl ?? status?.daily_pnl ?? 0);
 
   return (
     <Card className="mb-4">
