@@ -1222,6 +1222,7 @@ class StrategyRunner:
             symbol=self.params.symbol,
             in_position=self.in_position,
             daily_pnl=self.daily_pnl,
+            global_daily_pnl=_global_pnl.daily_pnl,
             day=self.day.isoformat(),
             last_signal=self.last_signal,
             last_reason=self.last_reason,
