@@ -151,7 +151,7 @@
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
@@ -159,6 +159,12 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "STRATEGY RUNNER PAPER MODE TESTING COMPLETED: ✅ GET /api/strategy/status returns running=false initially ✅ POST /api/strategy/start with exact payload (symbol=R_100, granularity=60, candle_len=200, duration=5, duration_unit=t, stake=1, daily_loss_limit=-20, adx_trend=22, rsi_ob=70, rsi_os=30, bbands_k=2, mode=paper) successfully starts strategy ✅ Strategy shows activity with last_run_at timestamp updating ✅ POST /api/strategy/stop successfully stops strategy ✅ All endpoints working correctly in paper mode. Live mode NOT tested as requested."
+##       -working: "NA"
+##       -agent: "user"
+##       -comment: "Feedback: PnL exibido estava negativo incorretamente com stake fixo 100 e payout 94,2%. Desejo que paper alimente Win/Erros/Total também. Tela: Estratégia (PnL dia)."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "FIX: Paper agora atualiza estatísticas globais (wins/losses/total_trades) e PnL global via _global_stats.add_paper_trade_result e _global_pnl.add(). Não alterei o payout default (permanece 0.95) nem stake default. Necessário retestar start/stop (paper) e consistência dos contadores e PnL no card da Estratégia."
 ##   - task: "ML: source=deriv + grid + calibração + walk-forward"
 ##     implemented: true
 ##     working: true
