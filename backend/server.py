@@ -751,11 +751,24 @@ class GlobalStats:
         self.losses: int = 0
         self.daily_pnl: float = 0.0
         self.processed_contracts: set = set()  # To avoid double counting for live/manual
+        self.last_day: date = date.today()
+        
+    def _ensure_today(self):
+        today = date.today()
+        if today != self.last_day:
+            # Reset ALL day stats and processed set for a clean new day
+            self.last_day = today
+            self.total_trades = 0
+            self.wins = 0
+            self.losses = 0
+            self.daily_pnl = 0.0
+            self.processed_contracts = set()
         
     def add_trade_result(self, contract_id: int, profit: float) -> bool:
         """Add a completed LIVE/MANUAL trade result to global stats (uses contract_id dedup).
         Returns True when this contract_id was accounted for (first time), False otherwise.
         """
+        self._ensure_today()
         if contract_id in self.processed_contracts:
             return False  # Already processed
         self.processed_contracts.add(contract_id)
@@ -764,6 +777,7 @@ class GlobalStats:
 
     def add_paper_trade_result(self, profit: float):
         """Add a simulated (paper) trade to global stats (no contract_id)."""
+        self._ensure_today()
         self._apply_profit(profit)
 
     def _apply_profit(self, profit: float):
@@ -777,15 +791,19 @@ class GlobalStats:
     @property
     def win_rate(self) -> float:
         """Calculate win rate percentage"""
+        self._ensure_today()
         if self.total_trades == 0:
             return 0.0
         return (self.wins / self.total_trades) * 100.0
     
     def reset_daily(self):
-        """Reset daily stats (keeps trade counts but resets PnL)"""
+        """Reset daily stats (forcibly resets all day counters and contracts)"""
+        self.last_day = date.today()
+        self.total_trades = 0
+        self.wins = 0
+        self.losses = 0
         self.daily_pnl = 0.0
-        # Note: We keep total_trades, wins, losses for historical tracking
-        # In production, you might want to reset these daily too
+        self.processed_contracts = set()
 
 class StrategyStatus(BaseModel):
     running: bool
