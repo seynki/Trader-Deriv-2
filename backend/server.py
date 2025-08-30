@@ -1189,6 +1189,15 @@ class StrategyRunner:
                 self.in_position = True
                 if self.params.mode == "paper":
                     pnl = await self._paper_trade(self.params.symbol, side, self.params.duration, self.params.stake)
+                    # Update global stats and global pnl for paper trades as requested
+                    try:
+                        _global_stats.add_paper_trade_result(pnl)
+                    except Exception:
+                        pass
+                    try:
+                        _global_pnl.add(pnl)
+                    except Exception:
+                        pass
                 else:
                     pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
                 self.daily_pnl += pnl
