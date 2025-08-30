@@ -741,8 +741,6 @@ class _PnLTracker:
 
 _global_pnl = _PnLTracker()
 
-    ml_prob_threshold: float = 0.5
-
 class GlobalStats:
     """Global statistics tracker for all trades (manual + automated + strategy)"""
     def __init__(self):
