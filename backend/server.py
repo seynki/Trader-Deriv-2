@@ -233,6 +233,10 @@ class DerivWS:
                                 try:
                                     profit = float(poc.get("profit") or 0.0)
                                     _global_stats.add_trade_result(cid_int, profit)
+                                    try:
+                                        _global_pnl.add(profit)
+                                    except Exception:
+                                        pass
                                     logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
                                 except Exception as e:
                                     logger.warning(f"Failed to update global stats: {e}")
