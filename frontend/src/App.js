@@ -210,11 +210,10 @@ function StrategyPanel({ onMlActiveChange }) {
   const wins = status?.wins ?? 0;
   const losses = status?.losses ?? 0;
   const total = status?.total_trades ?? 0;
-  let dpnl = Number(status?.daily_pnl ?? 0);
-  const globalDpnl = Number(status?.global_daily_pnl ?? 0);
-  if (dpnl === 0 && globalDpnl !== 0) {
-    dpnl = globalDpnl; // fallback para PnL global se a estratégia não operou
-  }
+  // Para manter consistência com os contadores (globais), exibir sempre o PnL global
+  // Assim, Win rate/Acertos/Erros/Total e PnL dia são do mesmo escopo
+  const dpnl = Number(status?.global_daily_pnl ?? 0);
+  const globalDpnl = dpnl;
 
   return (
     <Card className="mb-4">
