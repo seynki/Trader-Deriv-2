@@ -3012,34 +3012,32 @@ class DerivAPITester:
         return all_ml_deriv_tests_passed
 
 def main():
-    """Main test runner for ASYNC ML TRAINING JOBS as per review request"""
+    """Main test runner for Strategy PnL/Counters Paper Mode as per review request"""
     tester = DerivAPITester()
     
-    # Run the async ML training jobs test as requested
-    tester.log("🚀 EXECUTANDO 3 JOBS ASSÍNCRONOS DE TREINO PESADO (20k candles, grid 4x3)")
-    tester.log("📋 Conforme instruções da review request")
+    # Run the specific Strategy PnL/Counters test as requested
+    tester.log("🚀 EXECUTANDO TESTE DE PnL/CONTADORES DA ESTRATÉGIA (MODO PAPER)")
+    tester.log("📋 Conforme instruções da review request em português")
     
-    success, results = tester.test_async_ml_training_jobs()
+    success, results = tester.test_strategy_pnl_counters_paper_mode()
     
     # Print final summary
     tester.print_summary()
     
     if success:
-        tester.log("\n🎉 ASYNC ML TRAINING JOBS CONCLUÍDO COM SUCESSO!")
-        successful_jobs = sum(1 for result in results.values() if result.get('success'))
-        tester.log(f"📊 {successful_jobs}/3 jobs criados com sucesso")
-        
-        # Show job IDs
-        for symbol, result in results.items():
-            if result.get('success'):
-                job_id = result.get('job_id')
-                status = result.get('detailed_status', result.get('status'))
-                tester.log(f"   {symbol}: job_id={job_id}, status={status}")
+        tester.log("\n🎉 TESTE DE PnL/CONTADORES CONCLUÍDO COM SUCESSO!")
+        tester.log("📊 Todas as validações passaram:")
+        tester.log("   - Paper trades alimentam métricas globais ✅")
+        tester.log("   - total_trades aumenta com o tempo ✅")
+        tester.log("   - wins + losses == total_trades ✅")
+        tester.log("   - daily_pnl muda coerentemente (~±1.0 por trade) ✅")
+        tester.log("   - global_daily_pnl reflete a soma ✅")
     else:
-        tester.log("\n❌ ASYNC ML TRAINING JOBS FALHOU")
-        if results:
-            failed_jobs = sum(1 for result in results.values() if not result.get('success'))
-            tester.log(f"💥 {failed_jobs}/3 jobs falharam")
+        tester.log("\n❌ TESTE DE PnL/CONTADORES FALHOU")
+        if results and 'validation_results' in results:
+            failed_count = sum(1 for result in results['validation_results'] if not result)
+            total_count = len(results['validation_results'])
+            tester.log(f"💥 {failed_count}/{total_count} validações falharam")
     
     return 0 if success else 1
 
