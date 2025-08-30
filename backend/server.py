@@ -761,6 +761,7 @@ class StrategyStatus(BaseModel):
     symbol: str
     in_position: bool
     daily_pnl: float
+    global_daily_pnl: float = 0.0
     day: str
     last_signal: Optional[str] = None
     last_reason: Optional[str] = None
