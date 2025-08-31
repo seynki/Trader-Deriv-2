@@ -678,6 +678,16 @@ async def deriv_proposal(req: BuyRequest):
     req_id = int(time.time() * 1000)
     payload = build_proposal_payload(req)
     if "proposal" not in payload:
+        # training log for malformed payload
+        try:
+            _append_jsonl("live_errors.jsonl", {
+                "ts": int(time.time()),
+                "event": "proposal_error",
+                "error": "invalid_payload",
+                "req": req.model_dump(),
+            })
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail="Invalid proposal payload")
     payload["req_id"] = req_id
 
@@ -688,8 +698,26 @@ async def deriv_proposal(req: BuyRequest):
         data = await asyncio.wait_for(fut, timeout=12)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
+        try:
+            _append_jsonl("live_errors.jsonl", {
+                "ts": int(time.time()),
+                "event": "proposal_error",
+                "error": "timeout",
+                "req": req.model_dump(),
+            })
+        except Exception:
+            pass
         raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
     if data.get("error"):
+        try:
+            _append_jsonl("live_errors.jsonl", {
+                "ts": int(time.time()),
+                "event": "proposal_error",
+                "error": data["error"].get("message", "Proposal error"),
+                "req": req.model_dump(),
+            })
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=data["error"].get("message", "Proposal error"))
     p = data.get("proposal", {})
     return {
