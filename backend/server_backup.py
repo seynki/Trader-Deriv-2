@@ -753,8 +753,28 @@ async def deriv_buy(req: BuyRequest):
             data = await asyncio.wait_for(fut, timeout=12)
         except asyncio.TimeoutError:
             _deriv.pending.pop(req_id, None)
+            # training log: timeout
+            try:
+                _append_jsonl("live_errors.jsonl", {
+                    "ts": int(time.time()),
+                    "event": "buy_error",
+                    "error": "timeout",
+                    "req": req.model_dump(),
+                })
+            except Exception:
+                pass
             raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
         if data.get("error"):
+            # training log: error
+            try:
+                _append_jsonl("live_errors.jsonl", {
+                    "ts": int(time.time()),
+                    "event": "buy_error",
+                    "error": data["error"].get("message", "Buy error"),
+                    "req": req.model_dump(),
+                })
+            except Exception:
+                pass
             raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
         b = data.get("buy", {})
     else:
@@ -769,10 +789,52 @@ async def deriv_buy(req: BuyRequest):
             data = await asyncio.wait_for(fut, timeout=12)
         except asyncio.TimeoutError:
             _deriv.pending.pop(req_id, None)
+            try:
+                _append_jsonl("live_errors.jsonl", {
+                    "ts": int(time.time()),
+                    "event": "buy_error",
+                    "error": "timeout",
+                    "req": req.model_dump(),
+                })
+            except Exception:
+                pass
             raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
         if data.get("error"):
+            try:
+                _append_jsonl("live_errors.jsonl", {
+                    "ts": int(time.time()),
+                    "event": "buy_error",
+                    "error": data["error"].get("message", "Buy error"),
+                    "req": req.model_dump(),
+                })
+            except Exception:
+                pass
             raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
         b = data.get("buy", {})
+
+    # annotate meta for training (input params)
+    try:
+        cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
+        if cid:
+            _deriv.trade_meta[cid] = {
+                "ts": int(time.time()),
+                "event": "buy",
+                "type": (req.type or "CALLPUT").upper(),
+                "symbol": req.symbol,
+                "contract_type": (req.contract_type or ("CALL" if (req.type or "CALLPUT").upper()=="CALLPUT" else None)),
+                "duration": req.duration,
+                "duration_unit": req.duration_unit,
+                "stake": req.stake,
+                "currency": req.currency,
+                "max_price": req.max_price,
+                "multiplier": req.multiplier,
+                "strike": req.strike,
+                "limit_order": req.limit_order,
+                "product_type": req.product_type,
+                "growth_rate": req.growth_rate,
+            }
+    except Exception:
+        pass
 
     # Try to prime contract subscription as soon as we know the id
     try:
