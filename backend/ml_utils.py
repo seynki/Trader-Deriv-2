@@ -197,6 +197,7 @@ def train_walkforward_and_maybe_promote(
     payout_ratio: float = 0.95,
     candles_per_day: float = 480.0,
     objective: str = "f1",
+    decision_threshold_prob: Optional[float] = 0.5,
 ) -> Dict[str, Any]:
     # Build dataset
     feats_df = build_features(df)
@@ -208,6 +209,9 @@ def train_walkforward_and_maybe_promote(
     close_series = df.loc[X.index, "close"]
     if len(X) < 800:
         raise ValueError("Dados insuficientes após limpeza (>= 800 linhas)")
+
+    # label rate (classe positiva) no dataset limpo
+    label_rate = float(y.mean()) if len(y) else 0.0
 
     n = len(X)
     first_cut = int(n * train_size)
@@ -238,13 +242,18 @@ def train_walkforward_and_maybe_promote(
         est = _get_estimator(model_type, class_weight=class_weight)
         model = _fit_with_calibration(est, Xtr, ytr, calibrate)
         last_model = model
-        y_pred = model.predict(Xte)
+        # Probabilidade calibrada (se disponível)
         y_proba = None
         try:
             if hasattr(model, "predict_proba"):
                 y_proba = model.predict_proba(Xte)[:, 1]
         except Exception:
             y_proba = None
+        # Decisão por min_prob quando possível; senão, predict padrão
+        if y_proba is not None and decision_threshold_prob is not None:
+            y_pred = (y_proba >= float(decision_threshold_prob)).astype(int)
+        else:
+            y_pred = model.predict(Xte)
         # candles/day approx
         candles_per_day_local = candles_per_day
         fold_metrics = _eval_with_ev(yte, pd.Series(y_pred, index=yte.index), y_proba, closete, horizon, payout_ratio, candles_per_day_local)
@@ -275,6 +284,8 @@ def train_walkforward_and_maybe_promote(
         "ev_per_trade": ev_per_trade,
         "trades": trades,
         "trades_per_day": trades_per_day,
+        "label_rate": label_rate,
+        "min_prob": float(decision_threshold_prob) if decision_threshold_prob is not None else None,
     }
 
     # Fit final model on full data using the same configuration
@@ -287,7 +298,16 @@ def train_walkforward_and_maybe_promote(
 
     # backtest proxy using full data predictions
     try:
-        full_pred = final_model.predict(X)
+        full_proba = None
+        try:
+            if hasattr(final_model, "predict_proba"):
+                full_proba = final_model.predict_proba(X)[:, 1]
+        except Exception:
+            full_proba = None
+        if full_proba is not None and decision_threshold_prob is not None:
+            full_pred = (full_proba >= float(decision_threshold_prob)).astype(int)
+        else:
+            full_pred = final_model.predict(X)
         bt = backtest_simple(close_series, pd.Series(full_pred, index=close_series.index), horizon)
     except Exception:
         bt = {"equity_final": 0.0, "max_drawdown": 0.0}
@@ -306,6 +326,8 @@ def train_walkforward_and_maybe_promote(
             "backtest": {**bt, "ev_per_trade": ev_per_trade},
             "horizon": horizon,
             "threshold": threshold,
+            "min_prob": float(decision_threshold_prob) if decision_threshold_prob is not None else None,
+            "label_rate": label_rate,
             "ts_rows": int(len(X)),
             "vs_rows": int(max(1, int((1 - train_size) * n))),
         }
@@ -317,6 +339,8 @@ def train_walkforward_and_maybe_promote(
         "metrics": metrics,
         "backtest": {**bt, "ev_per_trade": ev_per_trade},
         "promoted": promoted,
+        "label_rate": label_rate,
+        "min_prob": float(decision_threshold_prob) if decision_threshold_prob is not None else None,
     }
 
 
@@ -334,6 +358,7 @@ def train_and_maybe_promote(
     payout_ratio: float = 0.95,
     candles_per_day: float = 480.0,
     objective: str = "f1",
+    decision_threshold_prob: Optional[float] = 0.5,
 ) -> Dict[str, Any]:
     return train_walkforward_and_maybe_promote(
         df,
@@ -346,4 +371,5 @@ def train_and_maybe_promote(
         payout_ratio=payout_ratio,
         candles_per_day=candles_per_day,
         objective=objective,
+        decision_threshold_prob=decision_threshold_prob,
     )

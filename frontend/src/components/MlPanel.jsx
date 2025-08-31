@@ -84,6 +84,7 @@ export default function MlPanel() {
           class_weight: "balanced",
           calibrate: "sigmoid",
           objective: "precision",
+          min_prob: probThreshold,
         },
       });
       const jid = data?.job_id;
@@ -214,11 +215,11 @@ export default function MlPanel() {
           </div>
         </div>
 
-        {/* Prob Threshold Control (post-calibration) */}
+        {/* Prob Threshold Control (post-calib & training metrics) */}
         <div className="mt-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-100">
           <div className="font-medium mb-1">Ajuste de prob_threshold (pós-calibração)</div>
           <div className="text-xs opacity-90 mb-2">
-            Use este controle para travar uma precisão mínima exigindo probabilidade calibrada &gt;= threshold na decisão. O valor é salvo localmente e será usado na Passo 4 (quando o modelo for plugado na estratégia).
+            Este valor agora também é usado na avaliação do treino (min_prob). Valores mais altos (0.6–0.8) tornam o modelo mais seletivo e normalmente aumentam a precisão em classes raras.
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -233,7 +234,7 @@ export default function MlPanel() {
             <Input
               className="w-24"
               type="number"
-              step="0.01"
+              step={0.01}
               min={0.01}
               max={0.99}
               value={probThreshold}
@@ -245,7 +246,7 @@ export default function MlPanel() {
         </div>
 
         {/* Async job status */}
-        {jobId && (
+        {jobId and (
           <div className="rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-100 p-3 text-sm">
             <div className="font-medium mb-1">Job ML em execução</div>
             <div>job_id: {jobId}</div>
@@ -253,14 +254,14 @@ export default function MlPanel() {
             {jobProgress?.total ? (
               <div className="mt-1">progresso: {jobProgress.done}/{jobProgress.total} combos</div>
             ) : null}
-            {loading && transientErrRef.current > 0 && (
+            {loading and transientErrRef.current > 0 and (
               <div className="mt-1 text-xs opacity-80">Algumas leituras falharam ({transientErrRef.current}). Tentando novamente…</div>
             )}
           </div>
         )}
 
         {/* Resultado do treino */}
-        {lastResult && (
+        {lastResult and (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 p-3 text-sm">
             <div className="font-medium mb-1">Resultado do treino (melhor combinação)</div>
             {lastResult.error ? (
@@ -274,34 +275,40 @@ export default function MlPanel() {
                 <div>
                   Backtest: EQ={lastResult.backtest?.equity_final?.toFixed?.(3)} • DD={lastResult.backtest?.max_drawdown?.toFixed?.(3)} • EV/trade={lastResult.backtest?.ev_per_trade?.toFixed?.(3)}
                 </div>
+                <div>
+                  min_prob usado: {lastResult.used_min_prob ?? lastResult.metrics?.min_prob} • label_rate: {lastResult.metrics?.label_rate != null ? Number(lastResult.metrics?.label_rate).toFixed(4) : "-"}
+                </div>
                 <div>Promoção: {String(lastResult.promoted)}</div>
-                {improvement !== null && (
+                {improvement !== null and (
                   <div className="mt-1 opacity-90">Melhora vs campeão: {improvement.toFixed(1)}%</div>
                 )}
                 {/* Grid detalhado */}
-                {Array.isArray(lastResult.grid) && lastResult.grid.length > 0 && (
+                {Array.isArray(lastResult.grid) and lastResult.grid.length > 0 and (
                   <div className="mt-3">
                     <div className="font-medium mb-1">Grid completo</div>
                     <div className="rounded-md overflow-hidden border border-emerald-500/20">
-                      <div className="grid grid-cols-6 text-xs bg-emerald-900/30">
+                      <div className="grid grid-cols-8 text-xs bg-emerald-900/30">
                         <div className="px-2 py-1">horizon</div>
                         <div className="px-2 py-1">threshold</div>
                         <div className="px-2 py-1">precision</div>
                         <div className="px-2 py-1">ev/trade</div>
                         <div className="px-2 py-1">trades/dia</div>
+                        <div className="px-2 py-1">label_rate</div>
+                        <div className="px-2 py-1">min_prob</div>
                         <div className="px-2 py-1">model_id</div>
                       </div>
                       <div className="max-h-72 overflow-auto">
                         {lastResult.grid.map((row, idx) => (
-                          <div key={idx} className="grid grid-cols-6 text-xs border-t border-emerald-500/10">
+                          <div key={idx} className="grid grid-cols-8 text-xs border-t border-emerald-500/10">
                             <div className="px-2 py-1">{row.horizon}</div>
                             <div className="px-2 py-1">{Number(row.threshold).toFixed(3)}</div>
                             <div className="px-2 py-1">{row.precision != null ? Number(row.precision).toFixed(3) : "-"}</div>
                             <div className="px-2 py-1">{row.ev_per_trade != null ? Number(row.ev_per_trade).toFixed(3) : "-"}</div>
                             <div className="px-2 py-1">{row.trades_per_day != null ? Number(row.trades_per_day).toFixed(2) : "-"}</div>
+                            <div className="px-2 py-1">{row.label_rate != null ? Number(row.label_rate).toFixed(4) : "-"}</div>
+                            <div className="px-2 py-1">{row.min_prob != null ? Number(row.min_prob).toFixed(2) : "-"}</div>
                             <div className="px-2 py-1 truncate" title={row.model_id}>{row.model_id}</div>
-                          </div>
-                        ))}
+                          </div>) )}
                       </div>
                     </div>
                   </div>
