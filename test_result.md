@@ -57,8 +57,10 @@
 ##   test_priority: "high_first"  # or "sequential" or "stuck_first"
 ##
 ## agent_communication:
-##     -agent: "main"  # or "testing" or "user"
-##     -message: "Communication message between agents"
+##   -agent: "user"
+##   -message: "Ambiente local com Docker: backend desejado na porta 8001. REACT_APP_BACKEND_URL=http://localhost:8001. Problema: desconexão no preview e local; erro de WS em localhost:443 (HMR) e 8081; curl para 8001 falhando. Solicita também salvar cada erro/acerto para treinar posteriormente."
+##   -agent: "main"
+##   -message: "Implementado data logging para treinamento no backend: registra buy inputs (trade_meta), salva resultados ao expirar contrato (live_results.jsonl), e erros de proposal/buy (live_errors.jsonl). Dedup por contract_id. Não altera URLs/ports. Frontend já monta WS/HTTP a partir de REACT_APP_BACKEND_URL. Instruções ao usuário para mapear porta 8001:8001 no Docker e remover WDS_SOCKET_PORT=443 em dev local para evitar erro HMR."
 
 # Protocol Guidelines for Main agent
 #
