@@ -830,7 +830,7 @@ def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
         return []
     k = 2 / (period + 1)
     out: List[Optional[float]] = [None] * len(arr)
-    if len(arr) &lt; period:
+    if len(arr) < period:
         return out
     ema = sum(arr[:period]) / period
     out[period - 1] = ema
@@ -842,7 +842,7 @@ def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
 def _rsi(close: List[float], period: int = 14) -> List[Optional[float]]:
     n = len(close)
     out: List[Optional[float]] = [None] * n
-    if n &lt;= period:
+    if n <= period:
         return out
     gains = 0.0
     losses = 0.0
@@ -869,15 +869,15 @@ def _macd(close: List[float], f: int, s: int, sig: int):
     emaS = _ema_series(close, s)
     line: List[Optional[float]] = []
     for i in range(len(close)):
-        a = emaF[i] if i &lt; len(emaF) else None
-        b = emaS[i] if i &lt; len(emaS) else None
+        a = emaF[i] if i < len(emaF) else None
+        b = emaS[i] if i < len(emaS) else None
         line.append((a - b) if (a is not None and b is not None) else None)
     # replace None with 0 for signal EMA input
     line_for_sig = [x if x is not None else 0.0 for x in line]
     sigSeries = _ema_series(line_for_sig, sig)
     hist: List[Optional[float]] = []
     for i in range(len(line)):
-        s_v = sigSeries[i] if i &lt; len(sigSeries) else None
+        s_v = sigSeries[i] if i < len(sigSeries) else None
         hist.append((line[i] - s_v) if (line[i] is not None and s_v is not None) else None)
     return {"line": line, "signal": sigSeries, "hist": hist}
 
@@ -903,7 +903,7 @@ def _rma(arr: List[float], p: int) -> List[Optional[float]]:
     if len(arr) == 0:
         return []
     out: List[Optional[float]] = [None] * len(arr)
-    if len(arr) &lt; p:
+    if len(arr) < p:
         return out
     a = sum(arr[:p])
     prev = a
@@ -914,7 +914,7 @@ def _rma(arr: List[float], p: int) -> List[Optional[float]]:
     return out
 
 def _adx(high: List[float], low: List[float], close: List[float], period: int = 14) -> List[Optional[float]]:
-    if len(high) &lt;= period:
+    if len(high) <= period:
         return [None] * len(high)
     tr: List[float] = []
     plusDM: List[float] = []
@@ -923,8 +923,8 @@ def _adx(high: List[float], low: List[float], close: List[float], period: int = 
         tr.append(_true_range(high[i], low[i], close[i - 1]))
         up = high[i] - high[i - 1]
         dn = low[i - 1] - low[i]
-        plusDM.append(up if (up &gt; dn and up &gt; 0) else 0.0)
-        minusDM.append(dn if (dn &gt; up and dn &gt; 0) else 0.0)
+        plusDM.append(up if (up > dn and up > 0) else 0.0)
+        minusDM.append(dn if (dn > up and dn > 0) else 0.0)
     trR = _rma(tr, period)
     plusR = _rma(plusDM, period)
     minusR = _rma(minusDM, period)
@@ -952,7 +952,7 @@ def _adx(high: List[float], low: List[float], close: List[float], period: int = 
     adxR = _rma(dx_clean, period)
     # pad to align with close length
     pad_len = len(close) - len(adxR)
-    if pad_len &lt; 0:
+    if pad_len < 0:
         pad_len = 0
     return [None] * pad_len + adxR
 
@@ -996,18 +996,18 @@ class StrategyRunner:
         trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
 
         if trending:
-            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast &lt; prev_slow and ma_fast &gt; ma_slow and last_macd &gt; last_sig)
-            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast &gt; prev_slow and ma_fast &lt; ma_slow and last_macd &lt; last_sig)
+            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
+            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
             if bull_cross:
                 return {"side": "RISE", "reason": f"Trend↑ ADX {last_adx:.1f} + MA/MACD"}
             if bear_cross:
                 return {"side": "FALL", "reason": f"Trend↓ ADX {last_adx:.1f} + MA/MACD"}
         else:
             touch_upper = (last_upper is not None and last_price >= last_upper)
-            touch_lower = (last_lower is not None and last_price &lt;= last_lower)
+            touch_lower = (last_lower is not None and last_price <= last_lower)
             if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
                 return {"side": "FALL", "reason": f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"}
-            if touch_lower and (last_rsi is not None) and last_rsi &lt;= self.params.rsi_os:
+            if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
                 return {"side": "RISE", "reason": f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"}
         return None
 
@@ -1053,7 +1053,7 @@ class StrategyRunner:
             last_price = entry_price
             collected = 0
             t0 = time.time()
-            while collected &lt; duration_ticks and (time.time() - t0) &lt; (duration_ticks * 5):
+            while collected < duration_ticks and (time.time() - t0) < (duration_ticks * 5):
                 try:
                     m = await asyncio.wait_for(q.get(), timeout=5)
                     if m and m.get("type") == "tick":
@@ -1062,7 +1062,7 @@ class StrategyRunner:
                 except asyncio.TimeoutError:
                     pass
             # settle
-            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price &gt; entry_price) or (side == "FALL" and last_price &lt; entry_price)))
+            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price)))
             # assume payout ratio 0.95 for paper
             profit = (stake * 0.95) if win else (-stake)
             return profit
@@ -1097,7 +1097,7 @@ class StrategyRunner:
                 try:
                     mtxt = await asyncio.wait_for(q.get(), timeout=30)
                 except asyncio.TimeoutError:
-                    if time.time() - t0 &gt; 120:
+                    if time.time() - t0 > 120:
                         break
                     continue
                 if isinstance(mtxt, dict) and mtxt.get("type") == "contract":
@@ -1125,7 +1125,7 @@ class StrategyRunner:
                 if date.today() != self.day:
                     self.day = date.today()
                     self.daily_pnl = 0.0
-                if self.daily_pnl &lt;= self.params.daily_loss_limit:
+                if self.daily_pnl <= self.params.daily_loss_limit:
                     logger.info("Daily loss limit reached. Stopping strategy.")
                     self.running = False
                     break
