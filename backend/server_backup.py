@@ -99,6 +99,51 @@ class StatusCheckCreate(BaseModel):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("deriv")
 
+# ---------- Training Logs (wins/losses/errors) helpers ----------
+DATA_BASE_DIR = Path(os.environ.get("DATA_DIR", "/data"))
+TRADES_DIR = DATA_BASE_DIR / "trades"
+TRADES_DIR_FALLBACK = (Path(__file__).parent / ".." / "data" / "trades").resolve()
+
+def _ensure_trades_dir() -> Path:
+    try:
+        TRADES_DIR.mkdir(parents=True, exist_ok=True)
+        # test write access
+        test = TRADES_DIR / ".wtest"
+        test.write_text("ok", encoding="utf-8")
+        test.unlink(missing_ok=True)
+        return TRADES_DIR
+    except Exception:
+        TRADES_DIR_FALLBACK.mkdir(parents=True, exist_ok=True)
+        return TRADES_DIR_FALLBACK
+
+def _append_jsonl(filename: str, record: Dict[str, Any]):
+    d = _ensure_trades_dir()
+    p = d / filename
+    try:
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logger.warning(f"Failed to append training log {filename}: {e}")
+
+def _read_last_lines(filename: str, limit: int = 100) -> List[Dict[str, Any]]:
+    d = _ensure_trades_dir()
+    p = d / filename
+    if not p.exists():
+        return []
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            lines = f.readlines()[-max(1, int(limit)) :]
+        out: List[Dict[str, Any]] = []
+        for ln in lines:
+            try:
+                out.append(json.loads(ln.strip()))
+            except Exception:
+                pass
+        return out
+    except Exception as e:
+        logger.warning(f"Failed to read training log {filename}: {e}")
+        return []
+
 class DerivWS:
     """Minimal Deriv WS manager with auto reconnect, dispatcher, tick and contract broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
