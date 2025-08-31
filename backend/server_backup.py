@@ -266,6 +266,41 @@ class DerivWS:
                                 "date_start": poc.get("date_start"),
                                 "date_expiry": poc.get("date_expiry"),
                             }
+                            # training log when contract expires (win/loss)
+                            try:
+                                if bool(poc.get("is_expired")) and cid_int not in self.recorded_contracts:
+                                    meta = self.trade_meta.get(cid_int) or {}
+                                    try:
+                                        profit_val = float(poc.get("profit") or 0.0)
+                                    except Exception:
+                                        profit_val = 0.0
+                                    rec = {
+                                        "ts": int(time.time()),
+                                        "event": "contract_result",
+                                        "contract_id": cid_int,
+                                        "profit": profit_val,
+                                        "win": profit_val > 0,
+                                        "status": poc.get("status"),
+                                        "underlying": poc.get("underlying"),
+                                        "buy_price": poc.get("buy_price"),
+                                        "bid_price": poc.get("bid_price"),
+                                        "payout": poc.get("payout"),
+                                        "entry_spot": poc.get("entry_spot"),
+                                        "current_spot": poc.get("current_spot"),
+                                        "date_start": poc.get("date_start"),
+                                        "date_expiry": poc.get("date_expiry"),
+                                        "meta": meta,
+                                    }
+                                    _append_jsonl("live_results.jsonl", rec)
+                                    self.recorded_contracts.add(cid_int)
+                                    # cleanup meta to save memory
+                                    if cid_int in self.trade_meta:
+                                        try:
+                                            del self.trade_meta[cid_int]
+                                        except Exception:
+                                            pass
+                            except Exception as e:
+                                logger.warning(f"training log (contract_result) failed: {e}")
                             for q in list(self.contract_queues.get(cid_int, [])):
                                 if not q.full():
                                     q.put_nowait(message)
