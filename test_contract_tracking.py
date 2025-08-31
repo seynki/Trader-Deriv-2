@@ -9,7 +9,7 @@ import time
 import sys
 
 def test_contract_tracking():
-    base_url = "https://ml-preview-fix.preview.emergentagent.com/api"
+    base_url = "https://websocket-error-fix-1.preview.emergentagent.com/api"
     
     print("🔍 Testing Contract Tracking WebSocket Functionality")
     print(f"   Base URL: {base_url}")

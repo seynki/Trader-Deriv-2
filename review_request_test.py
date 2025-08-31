@@ -14,7 +14,7 @@ import json
 import time
 from datetime import datetime
 
-BASE_URL = "https://ml-preview-fix.preview.emergentagent.com"
+BASE_URL = "https://websocket-error-fix-1.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def log(message):
