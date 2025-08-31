@@ -3011,33 +3011,315 @@ class DerivAPITester:
         
         return all_ml_deriv_tests_passed
 
+    def test_websocket_ticks_connectivity(self):
+        """Test WebSocket /api/ws/ticks connectivity and message handling"""
+        self.log("\n" + "="*60)
+        self.log("TEST WS: WebSocket Ticks Connectivity")
+        self.log("="*60)
+        self.log("📋 Testing WebSocket /api/ws/ticks as per review request:")
+        self.log("   1. Connect to /api/ws/ticks")
+        self.log("   2. Send exactly: {\"symbols\":[\"R_10\",\"R_25\"]}")
+        self.log("   3. Expect initial message type \"subscribed\" with symbols")
+        self.log("   4. Within 15s expect message type \"tick\" OR \"ping\" (heartbeat)")
+        self.log("   5. Close cleanly")
+        
+        try:
+            import websocket
+            import threading
+            import json
+        except ImportError:
+            self.log("❌ FAILED: websocket-client library not available")
+            return False, {"error": "websocket_library_missing"}
+        
+        # WebSocket URL
+        ws_url = f"{self.base_url.replace('https://', 'wss://').replace('http://', 'ws://')}/api/ws/ticks"
+        self.log(f"   WebSocket URL: {ws_url}")
+        
+        # Test state
+        test_state = {
+            "connected": False,
+            "subscribed_received": False,
+            "tick_or_ping_received": False,
+            "messages": [],
+            "errors": [],
+            "closed_cleanly": False
+        }
+        
+        def on_message(ws, message):
+            try:
+                self.log(f"   📨 WS Message: {message}")
+                data = json.loads(message)
+                test_state["messages"].append(data)
+                
+                msg_type = data.get("type", "")
+                
+                if msg_type == "subscribed":
+                    symbols = data.get("symbols", [])
+                    self.log(f"   ✅ Received 'subscribed' message with symbols: {symbols}")
+                    test_state["subscribed_received"] = True
+                    
+                    # Validate symbols match what we sent
+                    expected_symbols = ["R_10", "R_25"]
+                    if set(symbols) == set(expected_symbols):
+                        self.log("   ✅ Symbols match expected: R_10, R_25")
+                    else:
+                        self.log(f"   ⚠️  Symbols mismatch. Expected: {expected_symbols}, Got: {symbols}")
+                
+                elif msg_type == "tick":
+                    symbol = data.get("symbol", "")
+                    quote = data.get("quote", "")
+                    self.log(f"   ✅ Received 'tick' message for {symbol}: {quote}")
+                    test_state["tick_or_ping_received"] = True
+                
+                elif msg_type == "ping":
+                    self.log("   ✅ Received 'ping' heartbeat message")
+                    test_state["tick_or_ping_received"] = True
+                
+                else:
+                    self.log(f"   📋 Received other message type: {msg_type}")
+                    
+            except json.JSONDecodeError as e:
+                self.log(f"   ❌ JSON decode error: {e}")
+                test_state["errors"].append(f"JSON decode error: {e}")
+            except Exception as e:
+                self.log(f"   ❌ Message handling error: {e}")
+                test_state["errors"].append(f"Message handling error: {e}")
+        
+        def on_error(ws, error):
+            self.log(f"   ❌ WS Error: {error}")
+            test_state["errors"].append(str(error))
+        
+        def on_close(ws, close_status_code, close_msg):
+            self.log(f"   🔌 WS Closed: status={close_status_code}, msg={close_msg}")
+            test_state["closed_cleanly"] = True
+        
+        def on_open(ws):
+            self.log("   🔌 WS Connected")
+            test_state["connected"] = True
+            
+            # Send subscription message as per review request
+            subscription_msg = {"symbols": ["R_10", "R_25"]}
+            self.log(f"   📤 Sending: {json.dumps(subscription_msg)}")
+            ws.send(json.dumps(subscription_msg))
+        
+        try:
+            # Create WebSocket connection
+            self.log("   🔌 Connecting to WebSocket...")
+            ws = websocket.WebSocketApp(
+                ws_url,
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+            
+            # Run WebSocket in a thread with timeout
+            ws_thread = threading.Thread(target=ws.run_forever)
+            ws_thread.daemon = True
+            ws_thread.start()
+            
+            # Wait for connection
+            connection_timeout = 5
+            elapsed = 0
+            while not test_state["connected"] and elapsed < connection_timeout:
+                time.sleep(0.1)
+                elapsed += 0.1
+            
+            if not test_state["connected"]:
+                self.log("❌ FAILED: WebSocket connection timeout")
+                return False, {"error": "connection_timeout", "state": test_state}
+            
+            # Wait for subscribed message
+            subscription_timeout = 5
+            elapsed = 0
+            while not test_state["subscribed_received"] and elapsed < subscription_timeout:
+                time.sleep(0.1)
+                elapsed += 0.1
+            
+            if not test_state["subscribed_received"]:
+                self.log("❌ FAILED: No 'subscribed' message received within 5s")
+                ws.close()
+                return False, {"error": "no_subscribed_message", "state": test_state}
+            
+            # Wait for tick or ping message (15s as per review request)
+            self.log("   ⏳ Waiting up to 15s for tick or ping message...")
+            tick_timeout = 15
+            elapsed = 0
+            while not test_state["tick_or_ping_received"] and elapsed < tick_timeout:
+                time.sleep(0.5)
+                elapsed += 0.5
+                if elapsed % 5 == 0:  # Log every 5 seconds
+                    self.log(f"   ⏱️  Still waiting... ({elapsed}s/{tick_timeout}s)")
+            
+            # Close WebSocket cleanly
+            self.log("   🔌 Closing WebSocket connection...")
+            ws.close()
+            
+            # Wait for clean close
+            close_timeout = 2
+            elapsed = 0
+            while not test_state["closed_cleanly"] and elapsed < close_timeout:
+                time.sleep(0.1)
+                elapsed += 0.1
+            
+            # Evaluate results
+            success = True
+            issues = []
+            
+            if not test_state["subscribed_received"]:
+                success = False
+                issues.append("No 'subscribed' message received")
+            
+            if not test_state["tick_or_ping_received"]:
+                success = False
+                issues.append("No 'tick' or 'ping' message received within 15s")
+            
+            if test_state["errors"]:
+                success = False
+                issues.append(f"WebSocket errors: {test_state['errors']}")
+            
+            if success:
+                self.log("✅ WEBSOCKET TEST PASSED!")
+                self.log("   - Connected successfully")
+                self.log("   - Received 'subscribed' message")
+                self.log("   - Received tick/ping within 15s")
+                self.log("   - Closed cleanly")
+                return True, test_state
+            else:
+                self.log("❌ WEBSOCKET TEST FAILED!")
+                for issue in issues:
+                    self.log(f"   - {issue}")
+                return False, {"issues": issues, "state": test_state}
+                
+        except Exception as e:
+            self.log(f"❌ WEBSOCKET TEST EXCEPTION: {e}")
+            return False, {"error": "exception", "exception": str(e)}
+
+    def test_deriv_proposal_negative_accumulator(self):
+        """Test POST /api/deriv/proposal with ACCUMULATOR type - expect 400 error"""
+        self.log("\n" + "="*60)
+        self.log("TEST NEGATIVE: Deriv Proposal ACCUMULATOR (Expect 400)")
+        self.log("="*60)
+        self.log("📋 Testing negative case as per review request:")
+        self.log("   POST /api/deriv/proposal with non-CALLPUT type (ACCUMULATOR)")
+        self.log("   Payload: {\"type\":\"ACCUMULATOR\",\"symbol\":\"R_10\",\"stake\":1,\"currency\":\"USD\"}")
+        self.log("   Expected: 400 with detail containing 'proposal only applies to CALL/PUT'")
+        
+        # Exact payload from review request
+        test_payload = {
+            "type": "ACCUMULATOR",
+            "symbol": "R_10", 
+            "stake": 1,
+            "currency": "USD"
+        }
+        
+        success, data, status_code = self.run_test(
+            "Deriv Proposal ACCUMULATOR (Negative Test)",
+            "POST",
+            "deriv/proposal",
+            400,  # Expecting 400 error
+            data=test_payload,
+            timeout=15
+        )
+        
+        if success:
+            error_detail = data.get('detail', '')
+            self.log(f"   Error Detail: {error_detail}")
+            
+            # Check if error contains the expected phrase
+            expected_phrase = "proposal only applies to CALL/PUT"
+            if expected_phrase.lower() in error_detail.lower():
+                self.log(f"✅ NEGATIVE TEST PASSED: Error contains expected phrase '{expected_phrase}'")
+                return True, data
+            else:
+                self.log(f"❌ NEGATIVE TEST FAILED: Error does not contain expected phrase '{expected_phrase}'")
+                self.log(f"   Expected phrase: {expected_phrase}")
+                self.log(f"   Actual error: {error_detail}")
+                return False, data
+        else:
+            self.log("❌ NEGATIVE TEST FAILED: Did not receive expected 400 status code")
+            return False, data
+
+    def run_connectivity_and_websocket_tests(self):
+        """Run the specific connectivity and WebSocket tests from review request"""
+        self.log("\n" + "🌐" + "="*58)
+        self.log("CONNECTIVITY AND WEBSOCKET TESTS (REVIEW REQUEST)")
+        self.log("🌐" + "="*58)
+        self.log("📋 Testing back-end connectivity and WebSocket after training-log changes:")
+        self.log("   1) GET /api/deriv/status → expect 200 JSON with connected, authenticated fields")
+        self.log("   2) WebSocket test: /api/ws/ticks with {\"symbols\":[\"R_10\",\"R_25\"]}")
+        self.log("   3) Negative test: POST /api/deriv/proposal ACCUMULATOR → expect 400")
+        self.log("   ⚠️  DO NOT execute /api/deriv/buy as requested")
+        
+        # Test 1: GET /api/deriv/status
+        self.log("\n🔍 TEST 1: GET /api/deriv/status")
+        deriv_status_ok = self.test_deriv_status()
+        
+        if not deriv_status_ok:
+            self.log("❌ CRITICAL: Deriv status test failed - aborting remaining tests")
+            return False
+        
+        # Test 2: WebSocket /api/ws/ticks
+        self.log("\n🔍 TEST 2: WebSocket /api/ws/ticks")
+        websocket_ok, ws_data = self.test_websocket_ticks_connectivity()
+        
+        # Test 3: Negative test - POST /api/deriv/proposal ACCUMULATOR
+        self.log("\n🔍 TEST 3: POST /api/deriv/proposal ACCUMULATOR (Negative)")
+        negative_test_ok, neg_data = self.test_deriv_proposal_negative_accumulator()
+        
+        # Summary
+        self.log("\n" + "🌐" + "="*58)
+        self.log("CONNECTIVITY AND WEBSOCKET TEST RESULTS")
+        self.log("🌐" + "="*58)
+        
+        if deriv_status_ok:
+            self.log("✅ Test 1: GET /api/deriv/status - PASSED")
+        else:
+            self.log("❌ Test 1: GET /api/deriv/status - FAILED")
+        
+        if websocket_ok:
+            self.log("✅ Test 2: WebSocket /api/ws/ticks - PASSED")
+        else:
+            self.log("❌ Test 2: WebSocket /api/ws/ticks - FAILED")
+        
+        if negative_test_ok:
+            self.log("✅ Test 3: Negative ACCUMULATOR proposal - PASSED")
+        else:
+            self.log("❌ Test 3: Negative ACCUMULATOR proposal - FAILED")
+        
+        all_tests_passed = deriv_status_ok and websocket_ok and negative_test_ok
+        
+        if all_tests_passed:
+            self.log("\n🎉 ALL CONNECTIVITY AND WEBSOCKET TESTS PASSED!")
+            self.log("📋 Backend connectivity and WebSocket functionality working correctly")
+        else:
+            self.log("\n⚠️  SOME CONNECTIVITY AND WEBSOCKET TESTS FAILED")
+            self.log("📋 Check individual test results above")
+        
+        return all_tests_passed
+
 def main():
-    """Main test runner for Strategy PnL/Counters Paper Mode as per review request"""
+    """Main test runner for Connectivity and WebSocket tests as per review request"""
     tester = DerivAPITester()
     
-    # Run the specific Strategy PnL/Counters test as requested
-    tester.log("🚀 EXECUTANDO TESTE DE PnL/CONTADORES DA ESTRATÉGIA (MODO PAPER)")
-    tester.log("📋 Conforme instruções da review request em português")
+    # Run the specific connectivity and WebSocket tests as requested
+    tester.log("🚀 EXECUTANDO TESTES DE CONECTIVIDADE E WEBSOCKET")
+    tester.log("📋 Conforme review request: back-end connectivity and WebSocket test after training-log changes")
     
-    success, results = tester.test_strategy_pnl_counters_paper_mode()
+    success = tester.run_connectivity_and_websocket_tests()
     
     # Print final summary
     tester.print_summary()
     
     if success:
-        tester.log("\n🎉 TESTE DE PnL/CONTADORES CONCLUÍDO COM SUCESSO!")
-        tester.log("📊 Todas as validações passaram:")
-        tester.log("   - Paper trades alimentam métricas globais ✅")
-        tester.log("   - total_trades aumenta com o tempo ✅")
-        tester.log("   - wins + losses == total_trades ✅")
-        tester.log("   - daily_pnl muda coerentemente (~±1.0 por trade) ✅")
-        tester.log("   - global_daily_pnl reflete a soma ✅")
+        tester.log("\n🎉 TESTES DE CONECTIVIDADE E WEBSOCKET CONCLUÍDOS COM SUCESSO!")
+        tester.log("📊 Todos os testes passaram:")
+        tester.log("   - GET /api/deriv/status retorna connected=true, authenticated=true ✅")
+        tester.log("   - WebSocket /api/ws/ticks funciona corretamente ✅")
+        tester.log("   - Teste negativo ACCUMULATOR retorna 400 como esperado ✅")
     else:
-        tester.log("\n❌ TESTE DE PnL/CONTADORES FALHOU")
-        if results and 'validation_results' in results:
-            failed_count = sum(1 for result in results['validation_results'] if not result)
-            total_count = len(results['validation_results'])
-            tester.log(f"💥 {failed_count}/{total_count} validações falharam")
+        tester.log("\n❌ ALGUNS TESTES DE CONECTIVIDADE E WEBSOCKET FALHARAM")
+        tester.log("💥 Verifique os resultados individuais acima")
     
     return 0 if success else 1
 
