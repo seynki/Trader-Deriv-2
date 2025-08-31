@@ -246,7 +246,7 @@ export default function MlPanel() {
         </div>
 
         {/* Async job status */}
-        {jobId and (
+        {jobId && (
           <div className="rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-100 p-3 text-sm">
             <div className="font-medium mb-1">Job ML em execução</div>
             <div>job_id: {jobId}</div>
@@ -254,14 +254,14 @@ export default function MlPanel() {
             {jobProgress?.total ? (
               <div className="mt-1">progresso: {jobProgress.done}/{jobProgress.total} combos</div>
             ) : null}
-            {loading and transientErrRef.current > 0 and (
+            {loading && transientErrRef.current > 0 && (
               <div className="mt-1 text-xs opacity-80">Algumas leituras falharam ({transientErrRef.current}). Tentando novamente…</div>
             )}
           </div>
         )}
 
         {/* Resultado do treino */}
-        {lastResult and (
+        {lastResult && (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 p-3 text-sm">
             <div className="font-medium mb-1">Resultado do treino (melhor combinação)</div>
             {lastResult.error ? (
@@ -279,11 +279,11 @@ export default function MlPanel() {
                   min_prob usado: {lastResult.used_min_prob ?? lastResult.metrics?.min_prob} • label_rate: {lastResult.metrics?.label_rate != null ? Number(lastResult.metrics?.label_rate).toFixed(4) : "-"}
                 </div>
                 <div>Promoção: {String(lastResult.promoted)}</div>
-                {improvement !== null and (
+                {improvement !== null && (
                   <div className="mt-1 opacity-90">Melhora vs campeão: {improvement.toFixed(1)}%</div>
                 )}
                 {/* Grid detalhado */}
-                {Array.isArray(lastResult.grid) and lastResult.grid.length > 0 and (
+                {Array.isArray(lastResult.grid) && lastResult.grid.length > 0 && (
                   <div className="mt-3">
                     <div className="font-medium mb-1">Grid completo</div>
                     <div className="rounded-md overflow-hidden border border-emerald-500/20">
@@ -308,7 +308,8 @@ export default function MlPanel() {
                             <div className="px-2 py-1">{row.label_rate != null ? Number(row.label_rate).toFixed(4) : "-"}</div>
                             <div className="px-2 py-1">{row.min_prob != null ? Number(row.min_prob).toFixed(2) : "-"}</div>
                             <div className="px-2 py-1 truncate" title={row.model_id}>{row.model_id}</div>
-                          </div>) )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
