@@ -123,6 +123,9 @@ class DerivWS:
         self.last_authorize: Dict[str, Any] = {}
         self.landing_company_name: Optional[str] = None
         self.currency: Optional[str] = None
+        # trade tracking for training: meta per contract and dedup on record
+        self.trade_meta: Dict[int, Dict[str, Any]] = {}
+        self.recorded_contracts: set[int] = set()
 
     def _build_uri(self) -> str:
         if not self.app_id:
