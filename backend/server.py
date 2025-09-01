@@ -312,6 +312,22 @@ class DerivWS:
 # Single global instance
 _deriv = DerivWS(DERIV_APP_ID, DERIV_API_TOKEN, DERIV_WS_URL)
 
+async def _wait_deriv_ready(max_wait: float = 10.0, require_auth: bool = True) -> bool:
+    """Wait briefly for the shared Deriv WS to be connected (and authorized if requested).
+    Returns True if ready within max_wait seconds, False otherwise.
+    """
+    start = time.time()
+    # Ensure loop started
+    try:
+        await _deriv.start()
+    except Exception:
+        pass
+    while time.time() - start < max_wait:
+        if _deriv.connected and (not require_auth or _deriv.authenticated):
+            return True
+        await asyncio.sleep(0.25)
+    return False
+
 @app.on_event("startup")
 async def _startup():
     await _deriv.start()
