@@ -23,6 +23,7 @@ export default function MlPanel() {
   // Async training job controls
   const [jobId, setJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState(null); // queued | running | done | error
+  const [jobStage, setJobStage] = useState(null); // e.g., downloading_deriv_candles, training_grid
   const [jobProgress, setJobProgress] = useState({ done: 0, total: 0 });
   const pollRef = useRef(null);
   const transientErrRef = useRef(0);
