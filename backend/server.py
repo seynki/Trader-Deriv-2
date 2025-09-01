@@ -1582,7 +1582,7 @@ async def _run_train_job(job_id: str,
             df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
         elif source == "deriv":
             # Reutiliza a MESMA sessão WS do app e aguarda conexão ficar pronta
-            ready = await _wait_deriv_ready(max_wait=10.0, require_auth=True)
+            ready = await _wait_deriv_ready(max_wait=10.0, require_auth=False)
             if not ready:
                 raise HTTPException(status_code=503, detail="Deriv not connected (aguarde a conexão DEMO ficar verde e tente de novo)")
             _update_job(job_id, {"stage": "downloading_deriv_candles"})
