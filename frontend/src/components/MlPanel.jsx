@@ -256,6 +256,9 @@ export default function MlPanel() {
             {loading && transientErrRef.current > 0 && (
               <div className="mt-1 text-xs opacity-80">Algumas leituras falharam ({transientErrRef.current}). Tentando novamente…</div>
             )}
+            {jobStatus === "error" && (
+              <div className="mt-1 text-red-200">Se o erro for "Deriv not connected", verifique se o status no topo do app está "Conectado à Deriv (DEMO)" antes de clicar em Reiniciar treino.</div>
+            )}
           </div>
         )}
 
