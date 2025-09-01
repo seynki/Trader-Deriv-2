@@ -251,7 +251,7 @@ export default function MlPanel() {
           <div className="rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-100 p-3 text-sm">
             <div className="font-medium mb-1">Job ML em execução</div>
             <div>job_id: {jobId}</div>
-            <div>status: {jobStatus || "-"}</div>
+            <div>status: {jobStatus || "-"} {jobStage ? `• etapa: ${jobStage}` : ""}</div>
             {jobProgress?.total ? (
               <div className="mt-1">progresso: {jobProgress.done}/{jobProgress.total} combos</div>
             ) : null}
