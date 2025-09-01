@@ -1751,8 +1751,10 @@ async def ml_train(
     elif source == "file":
         df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
     elif source == "deriv":
-        if not _deriv.connected:
-            raise HTTPException(status_code=503, detail="Deriv not connected")
+        # Wait briefly for the shared Deriv connection to be ready (reuse same session)
+        ready = await _wait_deriv_ready(max_wait=10.0, require_auth=True)
+        if not ready:
+            raise HTTPException(status_code=503, detail="Deriv not connected (aguarde a conexão DEMO ficar verde e tente de novo)")
         gran = _granularity_from_timeframe(tf)
         candles = await _fetch_candles_paginated(symbol, granularity=gran, total=count)
         if not candles or len(candles) < 1000:
