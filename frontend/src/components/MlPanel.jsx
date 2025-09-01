@@ -6,8 +6,8 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from ".
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const BACKEND_BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+const API = BACKEND_BASE.endsWith("/api") ? BACKEND_BASE : `${BACKEND_BASE}/api`;
 
 export default function MlPanel() {
   const [status, setStatus] = useState(null);
