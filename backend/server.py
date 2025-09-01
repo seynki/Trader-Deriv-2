@@ -1755,7 +1755,7 @@ async def ml_train(
         df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
     elif source == "deriv":
         # Wait briefly for the shared Deriv connection to be ready (reuse same session)
-        ready = await _wait_deriv_ready(max_wait=10.0, require_auth=True)
+        ready = await _wait_deriv_ready(max_wait=10.0, require_auth=False)
         if not ready:
             raise HTTPException(status_code=503, detail="Deriv not connected (aguarde a conexão DEMO ficar verde e tente de novo)")
         gran = _granularity_from_timeframe(tf)
