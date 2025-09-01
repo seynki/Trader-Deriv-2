@@ -103,6 +103,7 @@ export default function MlPanel() {
           const { data: j } = await axios.get(`${API}/ml/job/${jid}`);
           transientErrRef.current = 0; // reset on success
           setJobStatus(j?.status || null);
+          setJobStage(j?.stage || null);
           if (j?.progress) {
             setJobProgress({ done: j.progress.done || 0, total: j.progress.total || 0 });
           }
