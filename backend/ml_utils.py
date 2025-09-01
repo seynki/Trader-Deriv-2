@@ -1,0 +1,349 @@
+from __future__ import annotations
+import os
+import json
+from pathlib import Path
+from typing import Dict, Any, Optional, Tuple, List
+import numpy as np
+import pandas as pd
+from joblib import dump
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.calibration import CalibratedClassifierCV
+from datetime import datetime
+
+ROOT = Path(__file__).parent
+ML_DIR = ROOT / "ml_models"
+ML_DIR.mkdir(exist_ok=True)
+CHAMP_PATH = ML_DIR / "champion.json"
+
+
+def ema(series: pd.Series, span: int) -> pd.Series:
+    return series.ewm(span=span, adjust=False).mean()
+
+
+def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    up = delta.clip(lower=0)
+    down = -delta.clip(upper=0)
+    roll_up = up.ewm(alpha=1 / period, adjust=False).mean()
+    roll_down = down.ewm(alpha=1 / period, adjust=False).mean()
+    rs = roll_up / (roll_down + 1e-12)
+    return 100 - (100 / (1 + rs))
+
+
+def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ema_fast = ema(series, fast)
+    ema_slow = ema(series, slow)
+    line = ema_fast - ema_slow
+    sig = ema(line, signal)
+    hist = line - sig
+    return line, sig, hist
+
+
+def bollinger(series: pd.Series, length: int = 20, k: float = 2.0) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    mid = series.rolling(length).mean()
+    sd = series.rolling(length).std()
+    upper = mid + k * sd
+    lower = mid - k * sd
+    return mid, upper, lower
+
+
+def build_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["rsi_14"] = rsi(df["close"], 14)
+    macd_line, macd_sig, macd_hist = macd(df["close"], 12, 26, 9)
+    df["macd_line"], df["macd_signal"], df["macd_hist"] = macd_line, macd_sig, macd_hist
+    bb_mid, bb_up, bb_lo = bollinger(df["close"], 20, 2.0)
+    df["bb_basis"], df["bb_upper"], df["bb_lower"] = bb_mid, bb_up, bb_lo
+    for col in [
+        "rsi_14","macd_line","macd_signal","macd_hist","bb_basis","bb_upper","bb_lower","close"
+    ]:
+        df[f"{col}_slope3"] = df[col].diff(3)
+    df["close_z20"] = (df["close"] - df["close"].rolling(20).mean()) / (df["close"].rolling(20).std() + 1e-9)
+    return df
+
+
+def make_target(df: pd.DataFrame, horizon: int, threshold: float) -> pd.Series:
+    fut = df["close"].shift(-horizon)
+    ret = (fut - df["close"]) / df["close"]
+    return (ret > threshold).astype(int)
+
+
+def select_features(df: pd.DataFrame):
+    cands = [c for c in df.columns if any(k in c for k in ["rsi","macd","bb_","close","volume","slope","z"])]
+    blacklist = {"open","high","low"}
+    feats = [c for c in cands if c not in blacklist and pd.api.types.is_numeric_dtype(df[c])]
+    return feats
+
+
+def compute_metrics(y_true, y_pred, y_proba=None) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+    }
+    if y_proba is not None:
+        try:
+            out["roc_auc"] = float(roc_auc_score(y_true, y_proba))
+        except Exception:
+            out["roc_auc"] = None
+    else:
+        out["roc_auc"] = None
+    return out
+
+
+def backtest_simple(close: pd.Series, preds: pd.Series, horizon: int) -> Dict[str, Any]:
+    fut = close.shift(-horizon)
+    ret = (fut - close) / close
+    strat_ret = ret.where(preds == 1, 0.0)
+    eq = strat_ret.fillna(0.0).cumsum()
+    peak = eq.cummax()
+    dd = (eq - peak)
+    max_dd = float(dd.min())
+    return {"equity_final": float(eq.iloc[-1] if len(eq) else 0.0), "max_drawdown": max_dd}
+
+
+def load_champion() -> Dict[str, Any]:
+    if CHAMP_PATH.exists():
+        try:
+            return json.loads(CHAMP_PATH.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def save_champion(meta: Dict[str, Any]):
+    # ensure timestamp
+    if "updated_at" not in meta:
+        meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    CHAMP_PATH.write_text(json.dumps(meta, indent=2))
+
+
+def _get_estimator(model_type: str = "rf", class_weight: Optional[str] = None):
+    if model_type == "dt":
+        return DecisionTreeClassifier(max_depth=4, random_state=42, min_samples_leaf=20, class_weight=class_weight)
+    # rf default
+    return RandomForestClassifier(
+        n_estimators=300,
+        max_depth=None,
+        min_samples_leaf=20,
+        random_state=42,
+        n_jobs=-1,
+        class_weight=class_weight,
+    )
+
+
+def _fit_with_calibration(base_model, Xtr: pd.DataFrame, ytr: pd.Series, calibrate: Optional[str] = None):
+    if calibrate not in {"sigmoid", "isotonic"}:
+        base_model.fit(Xtr, ytr)
+        return base_model
+    # split last 10% of training for calibration to avoid leakage
+    n = len(Xtr)
+    cut = max(int(n * 0.9), 1)
+    X_fit, y_fit = Xtr.iloc[:cut], ytr.iloc[:cut]
+    X_cal, y_cal = Xtr.iloc[cut:], ytr.iloc[cut:]
+    base_model.fit(X_fit, y_fit)
+    try:
+        calibrated = CalibratedClassifierCV(base_model, method=calibrate, cv="prefit")
+        calibrated.fit(X_cal, y_cal)
+        return calibrated
+    except Exception:
+        # fallback to uncalibrated if calibration fails
+        return base_model
+
+
+def _eval_with_ev(y_true: pd.Series, y_pred: pd.Series, y_proba: Optional[np.ndarray], close_series: pd.Series, horizon: int, payout_ratio: float, candles_per_day: float) -> Dict[str, Any]:
+    # trades are only where model predicts 1 (we enter positions only on 1)
+    trades_mask = (y_pred == 1)
+    trades = int(trades_mask.sum())
+    tp = int(((y_true == 1) & trades_mask).sum())
+    fp = int(((y_true == 0) & trades_mask).sum())
+    wins = tp
+    losses = fp
+    ev_total = wins * payout_ratio - losses * 1.0
+    ev_per_trade = float(ev_total / trades) if trades > 0 else 0.0
+
+    # approximate trades/day using candle frequency
+    n = len(y_true)
+    days = float(n / max(candles_per_day, 1.0))
+    trades_per_day = float(trades / days) if days > 0 else float(trades)
+
+    base_metrics = compute_metrics(y_true, y_pred, y_proba)
+    base_metrics.update({
+        "wins": wins,
+        "losses": losses,
+        "trades": trades,
+        "ev_per_trade": ev_per_trade,
+        "trades_per_day": trades_per_day,
+    })
+    # backtest proxy using predicted entries
+    bt = backtest_simple(close_series, pd.Series(y_pred, index=close_series.index), horizon)
+    base_metrics.update({"equity_final": bt.get("equity_final", 0.0), "max_drawdown": bt.get("max_drawdown", 0.0)})
+    return base_metrics
+
+
+def train_walkforward_and_maybe_promote(
+    df: pd.DataFrame,
+    horizon: int,
+    threshold: float,
+    model_type: str = "rf",
+    save_prefix: str = "weekly",
+    class_weight: Optional[str] = None,
+    calibrate: Optional[str] = None,
+    train_size: float = 0.7,
+    n_splits: int = 3,
+    payout_ratio: float = 0.95,
+    candles_per_day: float = 480.0,
+    objective: str = "f1",
+) -> Dict[str, Any]:
+    # Build dataset
+    feats_df = build_features(df)
+    y = make_target(df, horizon=horizon, threshold=threshold)
+    X_cols = select_features(feats_df)
+    X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan)
+    mask = X.notna().all(axis=1) & y.notna()
+    X, y = X[mask], y[mask]
+    close_series = df.loc[X.index, "close"]
+    if len(X) < 800:
+        raise ValueError("Dados insuficientes após limpeza (>= 800 linhas)")
+
+    n = len(X)
+    first_cut = int(n * train_size)
+    step = max(int((n - first_cut) / max(n_splits, 1)), 1)
+
+    agg = {
+        "tp": 0,
+        "fp": 0,
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "ev_total": 0.0,
+        "days": 0.0,
+        "metrics": [],
+    }
+
+    last_model = None
+    for i in range(n_splits):
+        train_end = first_cut + i * step
+        if train_end >= n - 1:
+            break
+        test_end = min(train_end + step, n)
+        Xtr, ytr = X.iloc[:train_end], y.iloc[:train_end]
+        Xte, yte = X.iloc[train_end:test_end], y.iloc[train_end:test_end]
+        closete = close_series.iloc[train_end:test_end]
+        if len(Xte) == 0 or len(Xtr) < 100:
+            continue
+        est = _get_estimator(model_type, class_weight=class_weight)
+        model = _fit_with_calibration(est, Xtr, ytr, calibrate)
+        last_model = model
+        y_pred = model.predict(Xte)
+        y_proba = None
+        try:
+            if hasattr(model, "predict_proba"):
+                y_proba = model.predict_proba(Xte)[:, 1]
+        except Exception:
+            y_proba = None
+        # candles/day approx
+        candles_per_day_local = candles_per_day
+        fold_metrics = _eval_with_ev(yte, pd.Series(y_pred, index=yte.index), y_proba, closete, horizon, payout_ratio, candles_per_day_local)
+        agg["tp"] += int(fold_metrics.get("wins", 0))
+        agg["fp"] += int(fold_metrics.get("losses", 0))
+        agg["trades"] += int(fold_metrics.get("trades", 0))
+        agg["wins"] += int(fold_metrics.get("wins", 0))
+        agg["losses"] += int(fold_metrics.get("losses", 0))
+        agg["ev_total"] += float(fold_metrics.get("ev_per_trade", 0.0)) * max(int(fold_metrics.get("trades", 0)), 0)
+        agg["days"] += float(len(Xte) / max(candles_per_day_local, 1.0))
+        agg["metrics"].append(fold_metrics)
+
+    # aggregate
+    trades = agg["trades"]
+    wins = agg["wins"]
+    losses = agg["losses"]
+    precision = float(wins / trades) if trades > 0 else 0.0
+    recall = None  # not exact here without fn; compute from last fold metrics if available
+    ev_per_trade = float(agg["ev_total"] / trades) if trades > 0 else 0.0
+    trades_per_day = float(trades / agg["days"]) if agg["days"] > 0 else float(trades)
+
+    metrics = {
+        "accuracy": None,
+        "precision": precision,
+        "recall": recall,
+        "f1": (2 * precision * (recall or 0.0) / (precision + (recall or 1e-9))) if recall is not None else 0.0,
+        "roc_auc": None,
+        "ev_per_trade": ev_per_trade,
+        "trades": trades,
+        "trades_per_day": trades_per_day,
+    }
+
+    # Fit final model on full data using the same configuration
+    final_est = _get_estimator(model_type, class_weight=class_weight)
+    final_model = _fit_with_calibration(final_est, X, y, calibrate)
+
+    model_id = f"{save_prefix}_{model_type}"
+    model_path = ML_DIR / f"{model_id}.joblib"
+    dump({"model": final_model, "features": X_cols}, model_path)
+
+    # backtest proxy using full data predictions
+    try:
+        full_pred = final_model.predict(X)
+        bt = backtest_simple(close_series, pd.Series(full_pred, index=close_series.index), horizon)
+    except Exception:
+        bt = {"equity_final": 0.0, "max_drawdown": 0.0}
+
+    champ = load_champion()
+    cur_prec = float(champ.get("metrics", {}).get("precision", 0.0) or 0.0)
+    cur_ev = float(champ.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0)
+
+    # Promotion policy: prioritize precision, then EV, then drawdown
+    promoted = bool((metrics["precision"] >= max(0.5, 1.05 * cur_prec)) and (metrics["ev_per_trade"] >= cur_ev))
+    if promoted:
+        meta = {
+            "model_id": model_id,
+            "path": str(model_path),
+            "metrics": metrics,
+            "backtest": {**bt, "ev_per_trade": ev_per_trade},
+            "horizon": horizon,
+            "threshold": threshold,
+            "ts_rows": int(len(X)),
+            "vs_rows": int(max(1, int((1 - train_size) * n))),
+        }
+        meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        save_champion(meta)
+
+    return {
+        "model_id": model_id,
+        "metrics": metrics,
+        "backtest": {**bt, "ev_per_trade": ev_per_trade},
+        "promoted": promoted,
+    }
+
+
+# Backward compatible function name used by server.py
+# Note: Kept to avoid large code changes elsewhere
+
+def train_and_maybe_promote(
+    df: pd.DataFrame,
+    horizon: int,
+    threshold: float,
+    model_type: str = "rf",
+    save_prefix: str = "weekly",
+    class_weight: Optional[str] = None,
+    calibrate: Optional[str] = None,
+    payout_ratio: float = 0.95,
+    candles_per_day: float = 480.0,
+    objective: str = "f1",
+) -> Dict[str, Any]:
+    return train_walkforward_and_maybe_promote(
+        df,
+        horizon=horizon,
+        threshold=threshold,
+        model_type=model_type,
+        save_prefix=save_prefix,
+        class_weight=class_weight,
+        calibrate=calibrate,
+        payout_ratio=payout_ratio,
+        candles_per_day=candles_per_day,
+        objective=objective,
+    )

@@ -1,34 +1,27 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#0b0d10;
+  --panel:rgba(255,255,255,0.04);
+  --ring: rgba(16, 185, 129, .5);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
+*{ font-family: "Figtree", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
-}
+.bg-app{ background: radial-gradient(1200px 600px at 20% -10%, rgba(16,185,129,.15), transparent 60%),
+                     radial-gradient(800px 400px at 90% 10%, rgba(59,130,246,.12), transparent 60%),
+                     var(--bg); }
 
-.App-link {
-    color: #61dafb;
-}
+.tabs-root{ backdrop-filter: blur(14px); }
+.tabs-list{ background: var(--panel); border-radius: 999px; padding: 6px; gap: 6px; display: inline-flex; }
+.tabs-list button{ border-radius: 999px; padding: 8px 14px; }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
+.live-card{ background: var(--panel); border: 1px solid rgba(255,255,255,0.06); }
+.btn-buy{ background: #10b981; color: #06120e; }
+.btn-buy:hover{ background: #0ea371; }
+.btn-sell:hover{ border-color: var(--ring); color: #10b981; }
+
+.container{ max-width: 1200px; }
+
+/* Keep transitions scoped, never all */
+button, .btn-buy, .btn-sell{ transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
