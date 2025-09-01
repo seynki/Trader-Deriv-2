@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 
 class CandlesIngestTester:
-    def __init__(self, base_url="https://trade-audit-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://model-trainer-repair.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session = requests.Session()
