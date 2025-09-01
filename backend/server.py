@@ -312,7 +312,7 @@ class DerivWS:
 # Single global instance
 _deriv = DerivWS(DERIV_APP_ID, DERIV_API_TOKEN, DERIV_WS_URL)
 
-async def _wait_deriv_ready(max_wait: float = 10.0, require_auth: bool = True) -> bool:
+async def _wait_deriv_ready(max_wait: float = 20.0, require_auth: bool = True) -> bool:
     """Wait briefly for the shared Deriv WS to be connected (and authorized if requested).
     Returns True if ready within max_wait seconds, False otherwise.
     """
