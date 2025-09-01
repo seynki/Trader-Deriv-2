@@ -263,6 +263,9 @@ export default function MlPanel() {
         {lastResult && (
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 p-3 text-sm">
             <div className="font-medium mb-1">Resultado do treino (melhor combinação)</div>
+            {jobStatus && (
+              <div className="mb-2 text-xs opacity-90">Status atual: {jobStatus}</div>
+            )}
             {lastResult.error ? (
               <div className="text-red-300">Erro: {String(lastResult.error)}</div>
             ) : (
