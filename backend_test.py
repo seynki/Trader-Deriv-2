@@ -979,6 +979,180 @@ class DerivAPITester:
         
         return success
 
+    def test_contracts_endpoint(self):
+        """Test POST /api/contracts endpoint with minimal valid payload as per review request"""
+        self.log("\n" + "="*60)
+        self.log("TEST CONTRACTS: POST /api/contracts - Atlas Connectivity Test")
+        self.log("="*60)
+        self.log("📋 Review Request: Test POST /api/contracts with minimal valid payload")
+        self.log("   Expected: 200 with {id:'test-uuid-123', message:'saved'}")
+        self.log("   Payload from review request with test data")
+        
+        # Exact payload from review request with realistic test data
+        test_payload = {
+            "id": "test-uuid-123",
+            "timestamp": 1690000000,
+            "symbol": "R_100",
+            "market": "deriv",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "payout": 1.95,
+            "contract_type": "CALL",
+            "entry_price": 1.0,
+            "pnl": None,
+            "result": None,
+            "strategy_id": None,
+            "features": {"note": "test"},
+            "currency": "USD",
+            "product_type": "CALLPUT",
+            "deriv_contract_id": None,
+            "status": "open"
+        }
+        
+        success, data, status_code = self.run_test(
+            "POST /api/contracts with test payload",
+            "POST",
+            "contracts",
+            200,
+            data=test_payload,
+            timeout=15
+        )
+        
+        if success:
+            response_id = data.get('id', '')
+            message = data.get('message', '')
+            deriv_contract_id = data.get('deriv_contract_id')
+            
+            self.log(f"   Response ID: {response_id}")
+            self.log(f"   Message: {message}")
+            self.log(f"   Deriv Contract ID: {deriv_contract_id}")
+            
+            # Validate response structure as per review request
+            valid = True
+            validation_errors = []
+            
+            if response_id != 'test-uuid-123':
+                validation_errors.append(f"ID should be 'test-uuid-123', got '{response_id}'")
+                valid = False
+            if message != 'saved':
+                validation_errors.append(f"Message should be 'saved', got '{message}'")
+                valid = False
+            
+            if valid:
+                self.log("✅ CONTRACTS ENDPOINT SUCCESS: Response matches expected format")
+                self.log("   MongoDB Atlas connectivity working correctly")
+                return True, data
+            else:
+                self.log("❌ VALIDATION FAILED: Response structure issues")
+                for error in validation_errors:
+                    self.log(f"   - {error}")
+                return False, {"validation_errors": validation_errors, "response": data}
+                
+        elif status_code == 503:
+            # MongoDB not available
+            error_detail = data.get('detail', '')
+            self.log(f"❌ MONGO ERROR: {error_detail}")
+            
+            if 'mongo' in error_detail.lower() or 'indisponível' in error_detail.lower():
+                self.log("   MongoDB Atlas not configured or unavailable")
+                return False, {"mongo_error": error_detail, "status_code": 503}
+            else:
+                self.log("   Unexpected service error")
+                return False, {"service_error": error_detail, "status_code": 503}
+                
+        elif status_code == 500:
+            # Internal server error - could be MongoDB connection issue
+            error_detail = data.get('detail', '')
+            self.log(f"❌ SERVER ERROR: {error_detail}")
+            return False, {"server_error": error_detail, "status_code": 500}
+            
+        else:
+            # Other error codes
+            error_detail = data.get('detail', '')
+            self.log(f"❌ UNEXPECTED STATUS {status_code}: {error_detail}")
+            return False, {"unexpected_status": status_code, "response": data}
+
+    def run_review_request_tests(self):
+        """Run the specific tests requested in the Portuguese review request"""
+        self.log("\n" + "🎯" + "="*58)
+        self.log("REVIEW REQUEST TESTS - PORTUGUESE")
+        self.log("🎯" + "="*58)
+        self.log("📋 Testar rapidamente o novo endpoint e conectividade Atlas:")
+        self.log("   1) GET /api/status (200 'Hello World')")
+        self.log("   2) GET /api/deriv/status (200, connected pode estar false/true; só validar 200)")
+        self.log("   3) POST /api/contracts com payload minimal válido para o esquema novo")
+        self.log("   Observação: usar a base URL do frontend/.env REACT_APP_BACKEND_URL")
+        
+        # Test 1: GET /api/status
+        self.log("\n🔍 TEST 1: GET /api/status")
+        success_status, data_status = self.test_basic_endpoints()
+        
+        # Test 2: GET /api/deriv/status  
+        self.log("\n🔍 TEST 2: GET /api/deriv/status")
+        success_deriv, data_deriv = self.test_deriv_status()
+        
+        # Test 3: POST /api/contracts
+        self.log("\n🔍 TEST 3: POST /api/contracts")
+        success_contracts, data_contracts = self.test_contracts_endpoint()
+        
+        # Final GET /api/status to ensure service is still OK after contract creation
+        self.log("\n🔍 FINAL CHECK: GET /api/status (após gravação)")
+        success_final, data_final, status_code_final = self.run_test(
+            "Final Status Check After Contract Creation",
+            "GET",
+            "status",
+            200
+        )
+        
+        if success_final:
+            self.log("✅ Service still OK after contract creation")
+        else:
+            self.log("⚠️  Service status check failed after contract creation")
+        
+        # Summary of Review Request tests
+        self.log("\n" + "🎯" + "="*58)
+        self.log("REVIEW REQUEST TEST RESULTS")
+        self.log("🎯" + "="*58)
+        
+        if success_status:
+            self.log("✅ GET /api/status: 200 'Hello World' ✓")
+        else:
+            self.log("❌ GET /api/status: FAILED")
+            
+        if success_deriv:
+            self.log("✅ GET /api/deriv/status: 200 (conectividade validada) ✓")
+        else:
+            self.log("❌ GET /api/deriv/status: FAILED")
+            
+        if success_contracts:
+            self.log("✅ POST /api/contracts: 200 com {id:'test-uuid-123', message:'saved'} ✓")
+        else:
+            self.log("❌ POST /api/contracts: FAILED")
+            
+        if success_final:
+            self.log("✅ Final GET /api/status: Service OK após gravação ✓")
+        else:
+            self.log("❌ Final GET /api/status: FAILED")
+        
+        all_review_tests_passed = (success_status and success_deriv and 
+                                 success_contracts and success_final)
+        
+        if all_review_tests_passed:
+            self.log("\n🎉 TODOS OS TESTES DA REVIEW REQUEST PASSARAM!")
+            self.log("📋 Novo endpoint e conectividade Atlas funcionando corretamente")
+            self.log("📋 Retornar logs de respostas e confirmar serviço OK depois da gravação")
+        else:
+            self.log("\n⚠️  ALGUNS TESTES DA REVIEW REQUEST FALHARAM")
+            self.log("📋 Verificar resultados individuais acima")
+        
+        return all_review_tests_passed, {
+            "status_endpoint": success_status,
+            "deriv_status": success_deriv, 
+            "contracts_endpoint": success_contracts,
+            "final_status": success_final
+        }
+
     def test_ml_status(self):
         """Test ML status endpoint - should return 200 with either no champion message or champion JSON"""
         self.log("\n" + "="*60)
