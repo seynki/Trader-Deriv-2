@@ -959,7 +959,7 @@ class StrategyStatus(BaseModel):
 def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
     if i is None:
         i = len(arr)
-    if i - n &lt; 0:
+    if i - n < 0:
         return None
     seg = arr[i - n:i]
     return sum(seg) / n if seg else None
