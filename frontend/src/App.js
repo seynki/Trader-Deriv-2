@@ -14,7 +14,21 @@ import { ToastProvider } from "./components/ui/toast";
 import { Rocket, ActivitySquare, Play, Square } from "lucide-react";
 import MlPanel from "./components/MlPanel";
 
-const BACKEND_BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+function backendBase() {
+  const env = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+  try {
+    const u = new URL(env);
+    // If env points to localhost but page is not localhost, prefer same-origin (ingress) to avoid 404s
+    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && typeof window !== "undefined" && window.location && window.location.hostname !== "localhost") {
+      return window.location.origin.replace(/\/+$/, "");
+    }
+    return env;
+  } catch {
+    if (typeof window !== "undefined" && window.location) return window.location.origin.replace(/\/+$/, "");
+    return "";
+  }
+}
+const BACKEND_BASE = backendBase();
 const API = BACKEND_BASE.endsWith("/api") ? BACKEND_BASE : `${BACKEND_BASE}/api`;
 
 const defaultSymbols = ["CRYETHUSD", "FRXUSDJPY", "US30"];
