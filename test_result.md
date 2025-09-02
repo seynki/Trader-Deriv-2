@@ -298,6 +298,34 @@
 ##   -message: "TREINO PESADO (GRID 20k) EXECUTADO CONFORME SOLICITADO (2025-08-29): ❌ PROBLEMA CRÍTICO DE TIMEOUT DETECTADO - Executei todos os passos solicitados: 1) GET /api/ml/status (ANTES) ✅ retornou {'message': 'no champion'} 2) GET /api/deriv/status ✅ connected=true, authenticated=true 3) Executei sequencialmente POST /api/ml/train para R_100, R_50, R_75 com parâmetros exatos (source=deriv, count=20000, thresholds=0.002,0.003,0.004,0.005, horizons=1,3,5, model_type=rf, class_weight=balanced, calibrate=sigmoid, objective=precision) 4) RESULTADO: Todos os 3 símbolos falharam com TIMEOUT 504 'stream timeout' após exatos 300s cada um. DIAGNÓSTICO: O treinamento com count=20000 + grid search (4×3=12 combinações) é muito pesado para o timeout de 300s. Teste com count=1200 funciona em ~5s. RECOMENDAÇÃO CRÍTICA: Para produção, usar count=10000-15000 OU aumentar timeout para 600-900s. Backend está funcional, problema é apenas performance com datasets grandes."
 
 
+## backend:
+##   - task: "Contracts: persistir contratos no Mongo (Atlas) + endpoint POST /api/contracts"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Adicionado modelo ContractCreate e endpoint POST /api/contracts. Integração no fluxo /api/deriv/buy: insere documento inicial (open) e, no WS proposal_open_contract is_expired, atualiza exit_price/pnl/result/status=closed. Usa Mongo Atlas via motor com tlsCAFile certifi."
+## frontend:
+##   - task: "ML Panel: esconder fonte 'Deriv (baixar candles)' e usar Mongo por padrão"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/frontend/src/components/MlPanel.jsx"
+##     stuck_count: 0
+##     priority: "medium"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Removida opção 'Deriv (baixar candles online)' do select de Fonte. Valor default agora 'mongo'."
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor testar BACKEND: 1) GET /api/status 2) GET /api/deriv/status (apenas conectividade) 3) POST /api/contracts com payload de exemplo conforme esquema sugerido para validar escrita no Atlas. NÃO executar /api/deriv/buy neste teste. Payload sugerido: {id: uuid, timestamp: agora, symbol:'R_100', market:'deriv', duration:5, duration_unit:'t', stake:1, payout:1.95, contract_type:'CALL', entry_price:1.0, pnl:null, result:null, strategy_id:null, features:{note:'test'}, currency:'USD', product_type:'CALLPUT', deriv_contract_id: null, status:'open'}. Esperado: 200 e retorno {id, message:'saved'}."
+
 ##   -agent: "main"
 ##   -message: "INÍCIO AGENDAMENTO: Disparando TREINO PESADO ASSÍNCRONO (20k candles, grid 4x3) via POST /api/ml/train_async para R_100, R_50, R_75 com source=deriv, timeframe=3m, count=20000, thresholds=0.002,0.003,0.004,0.005, horizons=1,3,5, model_type=rf, class_weight=balanced, calibrate=sigmoid, objective=precision. Em seguida consultar GET /api/ml/job/{job_id} para status inicial. Não aguardar conclusão total nesta rodada (somente criar jobs e confirmar status queued/running)."
 ##   -agent: "testing"
