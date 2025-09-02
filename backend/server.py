@@ -527,7 +527,7 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
         "durations": durations,
         "duration_units": list(durations.keys()),
         "barriers": sorted(barrier_categories),
-        "has_barrier": len(barrier_categories) &gt; 0,
+        "has_barrier": len(barrier_categories) > 0,
         "product_type": product_type or "basic",
         "currency": resolved_currency,
         "landing_company": None if resolved_lc == "any" else resolved_lc,
