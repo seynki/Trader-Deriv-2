@@ -977,4 +977,5 @@ def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
     seg = arr[i - n:i]
     return sum(seg) / n if seg else None
 
-# ... THE REST OF THE FILE REMAINS UNCHANGED ...
+# Include the API router
+app.include_router(api_router)
