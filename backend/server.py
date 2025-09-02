@@ -467,7 +467,7 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
     resolved_lc = (landing_company or _deriv.landing_company_name or "").lower() or "any"
     cache_key = f"{symbol}:{product_type or 'basic'}:{resolved_currency}:{resolved_lc}"
     cached = _contracts_cache.get(cache_key)
-    if cached and now - cached.get("_ts", 0) &lt; _CONTRACTS_TTL:
+    if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
         return cached["data"]
 
     if not _deriv.connected:
