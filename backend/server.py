@@ -915,7 +915,7 @@ class GlobalStats:
     def _apply_profit(self, profit: float):
         self.total_trades += 1
         self.daily_pnl += profit
-        if profit &gt; 0:
+        if profit > 0:
             self.wins += 1
         else:
             self.losses += 1
