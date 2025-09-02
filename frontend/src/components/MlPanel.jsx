@@ -12,7 +12,7 @@ const API = BACKEND_BASE.endsWith("/api") ? BACKEND_BASE : `${BACKEND_BASE}/api`
 export default function MlPanel() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [source, setSource] = useState("deriv");
+  const [source, setSource] = useState("mongo");
   const [symbol, setSymbol] = useState("R_100");
   const [timeframe, setTimeframe] = useState("3m");
   const [horizon, setHorizon] = useState(3);
@@ -179,7 +179,7 @@ export default function MlPanel() {
               <SelectContent>
                 <SelectItem value="mongo">Mongo</SelectItem>
                 <SelectItem value="file">CSV (/data/ml/ohlcv.csv)</SelectItem>
-                <SelectItem value="deriv">Deriv (baixar candles online)</SelectItem>
+                {/* Removido: <SelectItem value="deriv">Deriv (baixar candles online)</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
@@ -202,58 +202,31 @@ export default function MlPanel() {
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Modelo</span>
             <Select value={modelType} onValueChange={setModelType}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Modelo"/></SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Modelo"/></SelectTrigger>
               <SelectContent>
                 <SelectItem value="rf">RandomForest</SelectItem>
                 <SelectItem value="dt">DecisionTree</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Button disabled={loading} onClick={startAsyncTrain}>
-              {loading ? "Treinando..." : jobId ? "Reiniciar treino" : "Treinar agora"}
-            </Button>
+          <div>
+            <Button disabled={loading} onClick={startAsyncTrain}>{loading ? "Treinando…" : "Treinar (assíncrono)"}</Button>
+          </div>
+          <div>
+            <span className="text-sm opacity-80">Gate prob≥</span>
+            <Input className="w-24 inline-block ml-2" type="number" step="0.01" min={0.01} max={0.99} value={probThreshold} onChange={(e)=>setProbThreshold(Number(e.target.value||0.5))} onBlur={saveProbThreshold} />
           </div>
         </div>
 
-        {/* Prob Threshold Control (post-calibration) */}
-        <div className="mt-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-100">
-          <div className="font-medium mb-1">Ajuste de prob_threshold (pós-calibração)</div>
-          <div className="text-xs opacity-90 mb-2">
-            Use este controle para travar uma precisão mínima exigindo probabilidade calibrada &gt;= threshold na decisão. O valor é salvo localmente e será usado na Passo 4 (quando o modelo for plugado na estratégia).
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={0.5}
-              max={0.9}
-              step={0.01}
-              value={probThreshold}
-              onChange={(e)=>setProbThreshold(parseFloat(e.target.value))}
-              className="flex-1"
-            />
-            <Input
-              className="w-24"
-              type="number"
-              step="0.01"
-              min={0.01}
-              max={0.99}
-              value={probThreshold}
-              onChange={(e)=>setProbThreshold(parseFloat(e.target.value || 0.5))}
-            />
-            <Button variant="secondary" onClick={saveProbThreshold}>Salvar</Button>
-            <Badge variant="secondary">mín. precisão via proba: {probThreshold.toFixed(2)}</Badge>
-          </div>
-        </div>
-
-        {/* Async job status */}
-        {jobId && (
-          <div className="rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-100 p-3 text-sm">
-            <div className="font-medium mb-1">Job ML em execução</div>
-            <div>job_id: {jobId}</div>
-            <div>status: {jobStatus || "-"} {jobStage ? `• etapa: ${jobStage}` : ""}</div>
-            {jobProgress?.total ? (
-              <div className="mt-1">progresso: {jobProgress.done}/{jobProgress.total} combos</div>
+        {/* Job status */}
+        {(jobStatus || loading) && (
+          <div className="rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-200 p-3 text-sm">
+            <div className="font-medium mb-1">Treinamento em background</div>
+            {jobStatus && (
+              <div className="text-xs opacity-90">Status: {jobStatus} {jobStage ? `• ${jobStage}` : ""}</div>
+            )}
+            {jobProgress?.total > 0 ? (
+              <div className="mt-1 text-xs opacity-80">Progresso: {jobProgress.done}/{jobProgress.total} combos</div>
             ) : null}
             {loading && transientErrRef.current > 0 && (
               <div className="mt-1 text-xs opacity-80">Algumas leituras falharam ({transientErrRef.current}). Tentando novamente…</div>

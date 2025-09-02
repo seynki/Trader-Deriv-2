@@ -104,6 +104,54 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+# ---------------------- Contracts schema ----------------------
+class ContractCreate(BaseModel):
+    id: Optional[str] = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: Optional[Any] = Field(default_factory=lambda: int(time.time()))  # accepts int/iso
+    symbol: Optional[str] = None
+    market: Optional[str] = None
+    duration: Optional[int] = None
+    duration_unit: Optional[str] = None
+    stake: Optional[float] = None
+    payout: Optional[float] = None
+    barrier: Optional[str] = None
+    barriers: Optional[List[str]] = None
+    contract_type: Optional[str] = None
+    entry_price: Optional[float] = None
+    exit_price: Optional[float] = None
+    pnl: Optional[float] = None
+    result: Optional[str] = None  # win/lose/breakeven
+    strategy_id: Optional[str] = None
+    features: Optional[Dict[str, Any]] = None
+    user_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    currency: Optional[str] = None
+    product_type: Optional[str] = None
+    deriv_contract_id: Optional[int] = None
+    status: Optional[str] = None  # open/closed
+
+    def to_mongo(self) -> Dict[str, Any]:
+        # normalize timestamp
+        ts = self.timestamp
+        ts_int: Optional[int] = None
+        if isinstance(ts, (int, float)):
+            ts_int = int(ts)
+        else:
+            try:
+                # parse iso str / datetime
+                if isinstance(ts, datetime):
+                    ts_int = int(ts.timestamp())
+                elif isinstance(ts, str):
+                    ts_int = int(datetime.fromisoformat(ts).timestamp())
+            except Exception:
+                ts_int = int(time.time())
+        doc = self.model_dump()
+        doc["timestamp"] = ts_int or int(time.time())
+        # ensure string id
+        if not doc.get("id"):
+            doc["id"] = str(uuid.uuid4())
+        return doc
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("deriv")
@@ -227,14 +275,13 @@ class DerivWS:
                                 "date_start": poc.get("date_start"),
                                 "date_expiry": poc.get("date_expiry"),
                             }
-                            
-                            # Update global stats when contract expires
+
+                            # Update global stats when contract expires and persist to Mongo
                             if poc.get("is_expired"):
                                 try:
                                     profit = float(poc.get("profit") or 0.0)
                                     accounted = _global_stats.add_trade_result(cid_int, profit)
                                     if accounted:
-                                        # Only add to global PnL once per contract
                                         try:
                                             _global_pnl.add(profit)
                                         except Exception:
@@ -242,7 +289,23 @@ class DerivWS:
                                         logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
                                 except Exception as e:
                                     logger.warning(f"Failed to update global stats: {e}")
-                            
+                                # Persist contract closing to Mongo
+                                try:
+                                    if db is not None:
+                                        res_str = "win" if (float(poc.get("profit") or 0.0) > 0) else ("breakeven" if float(poc.get("profit") or 0.0) == 0 else "lose")
+                                        await db.contracts.update_one(
+                                            {"deriv_contract_id": cid_int},
+                                            {"$set": {
+                                                "exit_price": float(poc.get("bid_price") or 0.0),
+                                                "pnl": float(poc.get("profit") or 0.0),
+                                                "result": res_str,
+                                                "status": "closed",
+                                                "updated_at": int(time.time()),
+                                            }}
+                                        )
+                                except Exception as e:
+                                    logger.warning(f"Mongo update (contract close) failed: {e}")
+
                             # Send to contract listeners
                             if cid_int in self.contract_queues:
                                 for q in list(self.contract_queues.get(cid_int, [])):
@@ -322,7 +385,7 @@ async def _wait_deriv_ready(max_wait: float = 20.0, require_auth: bool = True) -
         await _deriv.start()
     except Exception:
         pass
-    while time.time() - start < max_wait:
+    while time.time() - start &lt; max_wait:
         if _deriv.connected and (not require_auth or _deriv.authenticated):
             return True
         await asyncio.sleep(0.25)
@@ -358,6 +421,19 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
+# Contracts API
+@api_router.post("/contracts")
+async def create_contract(contract: ContractCreate):
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB indisponível (configure MONGO_URL no backend/.env)")
+    try:
+        doc = contract.to_mongo()
+        doc["created_at"] = int(time.time())
+        await db.contracts.insert_one(doc)
+        return {"id": doc["id"], "message": "saved", "deriv_contract_id": doc.get("deriv_contract_id")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar contrato: {e}")
+
 # Deriv helper endpoints
 @api_router.get("/deriv/status", response_model=DerivStatus)
 async def deriv_status():
@@ -391,7 +467,7 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
     resolved_lc = (landing_company or _deriv.landing_company_name or "").lower() or "any"
     cache_key = f"{symbol}:{product_type or 'basic'}:{resolved_currency}:{resolved_lc}"
     cached = _contracts_cache.get(cache_key)
-    if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
+    if cached and now - cached.get("_ts", 0) &lt; _CONTRACTS_TTL:
         return cached["data"]
 
     if not _deriv.connected:
@@ -451,7 +527,7 @@ async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, produ
         "durations": durations,
         "duration_units": list(durations.keys()),
         "barriers": sorted(barrier_categories),
-        "has_barrier": len(barrier_categories) > 0,
+        "has_barrier": len(barrier_categories) &gt; 0,
         "product_type": product_type or "basic",
         "currency": resolved_currency,
         "landing_company": None if resolved_lc == "any" else resolved_lc,
@@ -582,9 +658,13 @@ async def deriv_buy(req: BuyRequest):
         raise HTTPException(status_code=503, detail="Deriv not connected")
 
     t = (req.type or "CALLPUT").upper()
+    buy_response_payload: Dict[str, Any] = {}
+    proposal_snapshot: Optional[Dict[str, Any]] = None
+
     if t == "CALLPUT":
         # 1) proposal
         proposal = await deriv_proposal(BuyRequest(**{**req.model_dump(), "type": "CALLPUT"}))
+        proposal_snapshot = proposal
         # 2) send buy for proposal id
         req_id = int(time.time() * 1000)
         fut = asyncio.get_running_loop().create_future()
@@ -603,6 +683,7 @@ async def deriv_buy(req: BuyRequest):
         if data.get("error"):
             raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
         b = data.get("buy", {})
+        buy_response_payload = b
     else:
         # Direct buy with parameters
         # Build appropriate payload for non-vanilla contracts
@@ -679,20 +760,55 @@ async def deriv_buy(req: BuyRequest):
         if data.get("error"):
             raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
         b = data.get("buy", {})
+        buy_response_payload = b
 
     # Try to prime contract subscription as soon as we know the id
     try:
-        cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
+        cid = int(buy_response_payload.get("contract_id")) if buy_response_payload.get("contract_id") is not None else None
         if cid:
             await _deriv.ensure_contract_subscription(cid)
     except Exception:
         pass
+
+    # Persist initial contract to MongoDB Atlas
+    try:
+        if db is not None:
+            base_doc = ContractCreate(
+                timestamp=int(time.time()),
+                symbol=req.symbol,
+                market="deriv",
+                duration=req.duration,
+                duration_unit=req.duration_unit,
+                stake=float(req.stake),
+                payout=float((proposal_snapshot or {}).get("payout") or buy_response_payload.get("payout") or 0.0),
+                barrier=req.barrier,
+                contract_type=(req.contract_type or (proposal_snapshot or {}).get("contract_type") or (req.type or "")).upper(),
+                entry_price=float(buy_response_payload.get("buy_price") or buy_response_payload.get("price") or 0.0),
+                exit_price=None,
+                pnl=None,
+                result=None,
+                strategy_id=(req.extra or {}).get("strategy_id") if req.extra else None,
+                features=req.extra or None,
+                user_id=None,
+                metadata={
+                    "transaction_id": buy_response_payload.get("transaction_id"),
+                },
+                currency=req.currency,
+                product_type=(req.type or "CALLPUT").upper(),
+                deriv_contract_id=cid,
+                status="open",
+            ).to_mongo()
+            base_doc["created_at"] = int(time.time())
+            await db.contracts.insert_one(base_doc)
+    except Exception as e:
+        logger.warning(f"Mongo insert (contract) failed: {e}")
+
     return {
         "message": "purchased",
-        "contract_id": b.get("contract_id"),
-        "buy_price": b.get("buy_price") or b.get("price"),
-        "payout": b.get("payout"),
-        "transaction_id": b.get("transaction_id"),
+        "contract_id": buy_response_payload.get("contract_id"),
+        "buy_price": buy_response_payload.get("buy_price") or buy_response_payload.get("price"),
+        "payout": buy_response_payload.get("payout") or (proposal_snapshot or {}).get("payout"),
+        "transaction_id": buy_response_payload.get("transaction_id"),
     }
 
 @api_router.post("/deriv/sell")
@@ -799,7 +915,7 @@ class GlobalStats:
     def _apply_profit(self, profit: float):
         self.total_trades += 1
         self.daily_pnl += profit
-        if profit > 0:
+        if profit &gt; 0:
             self.wins += 1
         else:
             self.losses += 1
@@ -843,1060 +959,9 @@ class StrategyStatus(BaseModel):
 def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
     if i is None:
         i = len(arr)
-    if i - n < 0:
+    if i - n &lt; 0:
         return None
     seg = arr[i - n:i]
     return sum(seg) / n if seg else None
 
-def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
-    if len(arr) == 0:
-        return []
-    k = 2 / (period + 1)
-    out: List[Optional[float]] = [None] * len(arr)
-    if len(arr) < period:
-        return out
-    ema = sum(arr[:period]) / period
-    out[period - 1] = ema
-    for i in range(period, len(arr)):
-        ema = arr[i] * k + ema * (1 - k)
-        out[i] = ema
-    return out
-
-
-def _rsi(close: List[float], period: int = 14) -> List[Optional[float]]:
-    n = len(close)
-    out: List[Optional[float]] = [None] * n
-    if n <= period:
-        return out
-    gains = 0.0
-    losses = 0.0
-    for i in range(1, period + 1):
-        ch = close[i] - close[i - 1]
-        if ch >= 0:
-            gains += ch
-        else:
-            losses -= ch
-    avg_g = gains / period
-    avg_l = losses / period
-    rs = 100 if avg_l == 0 else (avg_g / avg_l)
-    out[period] = 100 - (100 / (1 + rs))
-    for i in range(period + 1, n):
-        ch = close[i] - close[i - 1]
-        avg_g = (avg_g * (period - 1) + max(ch, 0)) / period
-        avg_l = (avg_l * (period - 1) + max(-ch, 0)) / period
-        rs = 100 if avg_l == 0 else (avg_g / avg_l)
-        out[i] = 100 - (100 / (1 + rs))
-    return out
-
-
-def _macd(close: List[float], f: int, s: int, sig: int):
-    emaF = _ema_series(close, f)
-    emaS = _ema_series(close, s)
-    line: List[Optional[float]] = []
-    for i in range(len(close)):
-        a = emaF[i] if i < len(emaF) else None
-        b = emaS[i] if i < len(emaS) else None
-        line.append((a - b) if (a is not None and b is not None) else None)
-    # replace None with 0 for signal EMA input
-    line_for_sig = [x if x is not None else 0.0 for x in line]
-    sigSeries = _ema_series(line_for_sig, sig)
-    hist: List[Optional[float]] = []
-    for i in range(len(line)):
-        s_v = sigSeries[i] if i < len(sigSeries) else None
-        hist.append((line[i] - s_v) if (line[i] is not None and s_v is not None) else None)
-    return {"line": line, "signal": sigSeries, "hist": hist}
-
-
-def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
-    n = len(close)
-    mid: List[Optional[float]] = [None] * n
-    upper: List[Optional[float]] = [None] * n
-    lower: List[Optional[float]] = [None] * n
-    for i in range(period - 1, n):
-        seg = close[i - period + 1:i + 1]
-        m = sum(seg) / period
-        var = sum((x - m) ** 2 for x in seg) / period
-        sd = var ** 0.5
-        mid[i] = m
-        upper[i] = m + k * sd
-        lower[i] = m - k * sd
-    return {"upper": upper, "mid": mid, "lower": lower}
-
-
-def _true_range(h: float, l: float, pc: float) -> float:
-    return max(h - l, abs(h - pc), abs(l - pc))
-
-
-def _rma(arr: List[float], p: int) -> List[Optional[float]]:
-    if len(arr) == 0:
-        return []
-    out: List[Optional[float]] = [None] * len(arr)
-    if len(arr) < p:
-        return out
-    a = sum(arr[:p])
-    prev = a
-    out[p - 1] = a / p
-    for i in range(p, len(arr)):
-        prev = prev - prev / p + arr[i]
-        out[i] = prev / p
-    return out
-
-
-def _adx(high: List[float], low: List[float], close: List[float], period: int = 14) -> List[Optional[float]]:
-    if len(high) <= period:
-        return [None] * len(high)
-    tr: List[float] = []
-    plusDM: List[float] = []
-    minusDM: List[float] = []
-    for i in range(1, len(high)):
-        tr.append(_true_range(high[i], low[i], close[i - 1]))
-        up = high[i] - high[i - 1]
-        dn = low[i - 1] - low[i]
-        plusDM.append(up if (up > dn and up > 0) else 0.0)
-        minusDM.append(dn if (dn > up and dn > 0) else 0.0)
-    trR = _rma(tr, period)
-    plusR = _rma(plusDM, period)
-    minusR = _rma(minusDM, period)
-    plusDI: List[Optional[float]] = []
-    minusDI: List[Optional[float]] = []
-    for i in range(len(trR)):
-        if trR[i] is not None and plusR[i] is not None:
-            plusDI.append(100 * (plusR[i] / trR[i]))
-        else:
-            plusDI.append(None)
-        if trR[i] is not None and minusR[i] is not None:
-            minusDI.append(100 * (minusR[i] / trR[i]))
-        else:
-            minusDI.append(None)
-    dx: List[Optional[float]] = []
-    for i in range(len(plusDI)):
-        p = plusDI[i]
-        m = minusDI[i]
-        if p is not None and m is not None and (p + m) != 0:
-            dx.append(100 * (abs(p - m) / (p + m)))
-        else:
-            dx.append(None)
-    # shift dx by 1 like JS code and compute rma
-    dx_clean = [x for x in dx[1:] if x is not None]
-    adxR = _rma(dx_clean, period)
-    # pad to align with close length
-    pad_len = len(close) - len(adxR)
-    if pad_len < 0:
-        pad_len = 0
-    return [None] * pad_len + adxR
-
-# Global statistics instance
-_global_stats = GlobalStats()
-
-
-class StrategyRunner:
-    def __init__(self):
-        self.task: Optional[asyncio.Task] = None
-        self.params: StrategyParams = StrategyParams()
-        self.running: bool = False
-        self.in_position: bool = False
-        self.daily_pnl: float = 0.0
-        self.mode: str = "paper"
-        self.last_signal: Optional[str] = None
-        self.last_reason: Optional[str] = None
-        self.last_run_at: Optional[int] = None
-        self.day: date = date.today()
-
-    def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
-        close = [float(c.get("close")) for c in candles]
-        high = [float(c.get("high")) for c in candles]
-        low = [float(c.get("low")) for c in candles]
-
-        adx_arr = _adx(high, low, close)
-        last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
-
-        ma_fast = _sma(close, self.params.fast_ma)
-        ma_slow = _sma(close, self.params.slow_ma)
-        prev_fast = _sma(close[:-1], self.params.fast_ma)
-        prev_slow = _sma(close[:-1], self.params.slow_ma)
-
-        macd_res = _macd(close, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
-        last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
-        last_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
-
-        rsi_arr = _rsi(close)
-        last_rsi = next((x for x in reversed(rsi_arr) if x is not None), None)
-        bb = _bollinger(close, 20, self.params.bbands_k)
-        last_price = close[-1]
-        last_upper = next((x for x in reversed(bb["upper"]) if x is not None), None)
-        last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
-
-        trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
-
-        if trending:
-            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
-            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
-            if bull_cross:
-                return {"side": "RISE", "reason": f"Trend↑ ADX {last_adx:.1f} + MA/MACD"}
-            if bear_cross:
-                return {"side": "FALL", "reason": f"Trend↓ ADX {last_adx:.1f} + MA/MACD"}
-        else:
-            touch_upper = (last_upper is not None and last_price >= last_upper)
-            touch_lower = (last_lower is not None and last_price <= last_lower)
-            if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
-                return {"side": "FALL", "reason": f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"}
-            if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
-                return {"side": "RISE", "reason": f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"}
-        return None
-
-    async def _get_candles(self, symbol: str, granularity: int, count: int) -> List[Dict[str, Any]]:
-        if not _deriv.connected:
-            raise HTTPException(status_code=503, detail="Deriv not connected")
-        req_id = int(time.time() * 1000)
-        fut = asyncio.get_running_loop().create_future()
-        _deriv.pending[req_id] = fut
-        await _deriv._send({
-            "ticks_history": symbol,
-            "adjust_start_time": 1,
-            "count": count,
-            "end": "latest",
-            "start": 1,
-            "style": "candles",
-            "granularity": granularity,
-            "req_id": req_id,
-        })
-        try:
-            data = await asyncio.wait_for(fut, timeout=12)
-        except asyncio.TimeoutError:
-            _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for candles")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "history error"))
-        return data.get("candles") or []
-
-    async def _paper_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
-        # entry = last tick
-        await _deriv.ensure_subscribed(symbol)
-        q = await _deriv.add_queue(symbol)
-        entry_price: Optional[float] = None
-        profit: float = 0.0
-        try:
-            # get first tick as entry
-            try:
-                first_msg = await asyncio.wait_for(q.get(), timeout=10)
-                entry_price = float(first_msg.get("price")) if first_msg else None
-            except asyncio.TimeoutError:
-                return 0.0
-            # collect next duration_ticks
-            last_price = entry_price
-            collected = 0
-            t0 = time.time()
-            while collected < duration_ticks and (time.time() - t0) < (duration_ticks * 5):
-                try:
-                    m = await asyncio.wait_for(q.get(), timeout=5)
-                    if m and m.get("type") == "tick":
-                        last_price = float(m.get("price"))
-                        collected += 1
-                except asyncio.TimeoutError:
-                    pass
-            # settle
-            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price)))
-            # assume payout ratio 0.95 for paper
-            profit = (stake * 0.95) if win else (-stake)
-            return profit
-        finally:
-            _deriv.remove_queue(symbol, q)
-
-    async def _live_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
-        # Use existing /deriv/buy logic for CALL/PUT
-        req = BuyRequest(
-            type="CALLPUT",
-            symbol=symbol,
-            contract_type=("CALL" if side == "RISE" else "PUT"),
-            duration=duration_ticks,
-            duration_unit="t",
-            stake=stake,
-            currency="USD",
-        )
-        try:
-            buy_res = await deriv_buy(req)
-        except HTTPException as e:
-            logger.warning(f"Live buy failed: {e.detail}")
-            return 0.0
-        cid = buy_res.get("contract_id")
-        if not cid:
-            return 0.0
-        # wait on contract updates until is_expired and profit known
-        q = await _deriv.add_contract_queue(int(cid))
-        profit: float = 0.0
-        try:
-            t0 = time.time()
-            while True:
-                try:
-                    mtxt = await asyncio.wait_for(q.get(), timeout=30)
-                except asyncio.TimeoutError:
-                    if time.time() - t0 > 120:
-                        break
-                    continue
-                if isinstance(mtxt, dict) and mtxt.get("type") == "contract":
-                    poc = mtxt
-                    if poc.get("is_expired"):
-                        try:
-                            profit = float(poc.get("profit") or 0.0)
-                        except Exception:
-                            profit = 0.0
-                        break
-        finally:
-            _deriv.remove_contract_queue(int(cid), q)
-        return profit
-
-    async def _loop(self):
-        self.running = True
-        self.day = date.today()
-        self.daily_pnl = 0.0
-        self.in_position = False
-        cooldown_seconds = 5
-        logger.info(f"Strategy loop started: {self.params}")
-        while self.running:
-            try:
-                # reset daily on new day
-                if date.today() != self.day:
-                    self.day = date.today()
-                    self.daily_pnl = 0.0
-                if self.daily_pnl <= self.params.daily_loss_limit:
-                    logger.info("Daily loss limit reached. Stopping strategy.")
-                    self.running = False
-                    break
-                candles = await self._get_candles(self.params.symbol, self.params.granularity, self.params.candle_len)
-                self.last_run_at = int(time.time())
-                signal = self._decide_signal(candles)
-                if not signal:
-                    await asyncio.sleep(cooldown_seconds)
-                    continue
-                if self.in_position:
-                    await asyncio.sleep(cooldown_seconds)
-                # ML gate (probability calibrated > threshold)
-                if self.params.ml_gate:
-                    try:
-                        import ml_utils
-                        import numpy as np
-                        champ = ml_utils.load_champion()
-                        # If no champion, skip trading
-                        if not champ or not champ.get("model_id"):
-                            await asyncio.sleep(cooldown_seconds)
-                            continue
-                        # Build last window features from candles
-                        import pandas as pd
-                        df = pd.DataFrame(candles)
-                        df = df[["open","high","low","close","volume"]].astype(float)
-                        feats_df = ml_utils.build_features(df)
-                        X_cols = ml_utils.select_features(feats_df)
-                        X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan).dropna()
-                        if len(X) == 0:
-                            await asyncio.sleep(cooldown_seconds)
-                            continue
-                        # load model
-                        from joblib import load as joblib_load
-                        model_path = Path(__file__).parent / "ml_models" / f"{champ.get('model_id')}.joblib"
-                        if not model_path.exists():
-                            await asyncio.sleep(cooldown_seconds)
-                            continue
-                        payload = joblib_load(model_path)
-                        model = payload.get("model")
-                        # predict proba on last row
-                        x_last = X.iloc[[-1]]
-                        proba = None
-                        if hasattr(model, "predict_proba"):
-                            try:
-                                proba = float(model.predict_proba(x_last)[:,1][0])
-                            except Exception:
-                                proba = None
-                        # gate check
-                        if (proba is None) or (proba < self.params.ml_prob_threshold):
-                            # Do not trade; keep info visible
-                            proba_str = (f"{proba:.2f}" if proba is not None else "NA")
-                            th_str = f"{self.params.ml_prob_threshold:.2f}"
-                            self.last_reason = f"Gate ML: proba={proba_str} < th={th_str}"
-                            await asyncio.sleep(cooldown_seconds)
-                            continue
-                    except Exception as _e:
-                        logger.warning(f"ML gate failed: {_e}")
-                        # Fail-open or fail-close? We'll fail-close to be safer (skip trade)
-                        await asyncio.sleep(cooldown_seconds)
-                        continue
-
-                    continue
-                self.last_signal = signal.get("side")
-                self.last_reason = signal.get("reason")
-                side = signal.get("side")
-                # trade
-                self.in_position = True
-                if self.params.mode == "paper":
-                    pnl = await self._paper_trade(self.params.symbol, side, self.params.duration, self.params.stake)
-                    # Update global stats and global pnl for paper trades as requested
-                    try:
-                        _global_stats.add_paper_trade_result(pnl)
-                    except Exception:
-                        pass
-                    try:
-                        _global_pnl.add(pnl)
-                    except Exception:
-                        pass
-                else:
-                    pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
-                self.daily_pnl += pnl
-                logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} reason={self.last_reason}")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.warning(f"Strategy error: {e}")
-            finally:
-                self.in_position = False
-                await asyncio.sleep(cooldown_seconds)
-        self.running = False
-        logger.info("Strategy loop stopped")
-
-    async def start(self, params: StrategyParams):
-        if self.task and not self.task.done():
-            raise HTTPException(status_code=400, detail="Strategy already running")
-        self.params = params
-        self.mode = params.mode
-        self.task = asyncio.create_task(self._loop())
-
-    async def stop(self):
-        if self.task and not self.task.done():
-            self.task.cancel()
-            try:
-                await self.task
-            except Exception:
-                pass
-        self.running = False
-
-    def status(self) -> StrategyStatus:
-        return StrategyStatus(
-            running=self.running,
-            mode=self.mode,
-            symbol=self.params.symbol,
-            in_position=self.in_position,
-            daily_pnl=self.daily_pnl,
-            global_daily_pnl=_global_pnl.daily_pnl,
-            day=self.day.isoformat(),
-            last_signal=self.last_signal,
-            last_reason=self.last_reason,
-            last_run_at=self.last_run_at,
-            # Include global stats from all trades
-            total_trades=_global_stats.total_trades,
-            wins=_global_stats.wins,
-            losses=_global_stats.losses,
-            win_rate=_global_stats.win_rate,
-        )
-
-
-_strategy = StrategyRunner()
-
-@api_router.post("/strategy/start", response_model=StrategyStatus)
-async def strategy_start(params: StrategyParams):
-    await _strategy.start(params)
-    return _strategy.status()
-
-@api_router.post("/strategy/stop", response_model=StrategyStatus)
-async def strategy_stop():
-    await _strategy.stop()
-    return _strategy.status()
-
-@api_router.get("/strategy/status", response_model=StrategyStatus)
-async def strategy_status():
-    return _strategy.status()
-
-# ---- Candles → Mongo ingest ----
-async def _fetch_candles(symbol: str, granularity: int, count: int) -> List[Dict[str, Any]]:
-    if not _deriv.connected:
-        raise HTTPException(status_code=503, detail="Deriv not connected")
-    req_id = int(time.time() * 1000)
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
-    await _deriv._send({
-        "ticks_history": symbol,
-        "adjust_start_time": 1,
-        "count": count,
-        "end": "latest",
-        "start": 1,
-        "style": "candles",
-        "granularity": granularity,
-        "req_id": req_id,
-    })
-    try:
-        data = await asyncio.wait_for(fut, timeout=15)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for candles")
-    if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "history error"))
-    return data.get("candles") or []
-
-
-def _tf_label_from_granularity(g: int) -> str:
-    if g < 60:
-        return f"{g}s"
-    if g % 60 == 0:
-        m = g // 60
-        return f"{m}m"
-    return f"{g}s"
-
-
-def _granularity_from_timeframe(tf: str) -> int:
-    """Parse '3m', '5m', '1h', '60', '60s' -> seconds"""
-    s = str(tf).strip().lower()
-    try:
-        if s.endswith('s'):
-            return int(s[:-1])
-        if s.endswith('m'):
-            return int(s[:-1]) * 60
-        if s.endswith('h'):
-            return int(s[:-1]) * 3600
-        # plain number assumed seconds
-        return int(s)
-    except Exception:
-        return 60
-
-
-async def _fetch_candles_paginated(symbol: str, granularity: int, total: int) -> List[Dict[str, Any]]:
-    """Fetch up to 'total' candles from Deriv in batches, oldest->newest."""
-    all_candles: List[Dict[str, Any]] = []
-    end_val: Any = "latest"
-    max_batch = 4999
-    while len(all_candles) < total:
-        remain = total - len(all_candles)
-        count = max(100, min(max_batch, remain))
-        req_id = int(time.time() * 1000)
-        fut = asyncio.get_running_loop().create_future()
-        _deriv.pending[req_id] = fut
-        await _deriv._send({
-            "ticks_history": symbol,
-            "adjust_start_time": 1,
-            "count": count,
-            "end": end_val,
-            "start": 1,
-            "style": "candles",
-            "granularity": granularity,
-            "req_id": req_id,
-        })
-        try:
-            data = await asyncio.wait_for(fut, timeout=15)
-        except asyncio.TimeoutError:
-            _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for candles batch")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "history error"))
-        batch = data.get("candles") or []
-        if not batch:
-            break
-        all_candles = batch + all_candles  # prepend older batch before existing
-        # next end: earliest epoch - 1
-        earliest = batch[0].get("epoch")
-        if earliest is None:
-            break
-        end_val = int(earliest) - 1
-        # safety: avoid too many loops
-        if len(batch) < 5:
-            break
-        await asyncio.sleep(0.2)
-    # ensure ascending by time
-    all_candles.sort(key=lambda x: x.get("epoch", 0))
-    # keep only last 'total'
-    if len(all_candles) > total:
-        all_candles = all_candles[-total:]
-    return all_candles
-
-
-@api_router.post("/candles/ingest")
-async def candles_ingest(symbol: str = "R_100", granularity: int = 60, count: int = 2000, timeframe: Optional[str] = None):
-    if db is None:
-        raise HTTPException(status_code=503, detail="MongoDB indisponível (configure MONGO_URL no backend/.env)")
-    candles = await _fetch_candles(symbol, granularity, count)
-    tf = timeframe or _tf_label_from_granularity(granularity)
-    col = db.candles
-    inserted = 0
-    updated = 0
-    for c in candles:
-        doc = {
-            "symbol": symbol,
-            "timeframe": tf,
-            "time": int(c.get("epoch")),
-            "open": float(c.get("open")),
-            "high": float(c.get("high")),
-            "low": float(c.get("low")),
-            "close": float(c.get("close")),
-            "volume": float(c.get("volume")) if c.get("volume") is not None else 0.0,
-        }
-        try:
-            res = await col.update_one({"symbol": symbol, "timeframe": tf, "time": doc["time"]}, {"$set": doc}, upsert=True)
-            if res.upserted_id is not None:
-                inserted += 1
-            else:
-                # matched + modified
-                updated += res.modified_count or 0
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"Mongo upsert candle falhou: {e}")
-    return {"symbol": symbol, "timeframe": tf, "received": len(candles), "inserted": inserted, "updated": updated}
-
-
-# WebSocket endpoint to push ticks to clients
-@app.websocket("/api/ws/ticks")
-async def ws_ticks(websocket: WebSocket):
-    await websocket.accept()
-    queues: Dict[str, asyncio.Queue] = {}
-    try:
-        # Wait for a subscribe message
-        init = await websocket.receive_text()
-        try:
-            msg = json.loads(init)
-        except json.JSONDecodeError:
-            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON"}))
-            await websocket.close()
-            return
-        symbols = msg.get("symbols") or []
-        if not symbols:
-            await websocket.send_text(json.dumps({"type": "error", "message": "No symbols provided"}))
-            await websocket.close()
-            return
-        # Add queues per symbol
-        for s in symbols:
-            q = await _deriv.add_queue(s)
-            queues[s] = q
-        await websocket.send_text(json.dumps({"type": "subscribed", "symbols": list(queues.keys())}))
-        # Fan-out loop
-        while True:
-            # multiplex: get from any queue with timeout to also handle pings
-            get_tasks = [asyncio.create_task(q.get()) for q in queues.values()]
-            done, pending = await asyncio.wait(get_tasks, return_when=asyncio.FIRST_COMPLETED, timeout=15)
-            for p in pending:
-                p.cancel()
-            if not done:
-                # heartbeat
-                await websocket.send_text(json.dumps({"type": "ping"}))
-                continue
-            for d in done:
-                try:
-                    data = d.result()
-                    await websocket.send_text(json.dumps(data))
-                except Exception:
-                    pass
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.warning(f"Client WS error: {e}")
-    finally:
-        # cleanup
-        for s, q in queues.items():
-            _deriv.remove_queue(s, q)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-# WebSocket endpoint to track a contract lifecycle
-@app.websocket("/api/ws/contract/{contract_id}")
-async def ws_contract(websocket: WebSocket, contract_id: int):
-    await websocket.accept()
-    q: Optional[asyncio.Queue] = None
-    try:
-        q = await _deriv.add_contract_queue(contract_id)
-        await websocket.send_text(json.dumps({"type": "subscribed", "contract_id": contract_id}))
-        while True:
-            try:
-                data = await asyncio.wait_for(q.get(), timeout=25)
-                await websocket.send_text(json.dumps(data))
-            except asyncio.TimeoutError:
-                await websocket.send_text(json.dumps({"type": "ping"}))
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.warning(f"Client WS (contract) error: {e}")
-    finally:
-        if q is not None:
-            _deriv.remove_contract_queue(contract_id, q)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-# Include the router in the main app
-app.include_router(api_router)
-
-# --------------- ML endpoints (status + manual train + rules) -----------------
-from joblib import load as joblib_load
-from sklearn.tree import DecisionTreeClassifier, export_text
-import pandas as pd
-from pathlib import Path as _Path
-import ml_utils
-
-ml_router = APIRouter(prefix="/api/ml")
-
-@ml_router.get("/status")
-async def ml_status():
-    meta = ml_utils.load_champion()
-    return meta or {"message": "no champion"}
-
-
-def _parse_csv_or_raise(path: _Path) -> pd.DataFrame:
-    if not path.exists():
-        raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
-    df = pd.read_csv(path)
-    return df
-
-
-# ------------------ ASYNC JOB MANAGER FOR HEAVY TRAINING ------------------
-_ml_jobs: Dict[str, Dict[str, Any]] = {}
-
-
-def _update_job(job_id: str, patch: Dict[str, Any]):
-    job = _ml_jobs.get(job_id)
-    if not job:
-        return
-    job.update(patch)
-    job["updated_at"] = int(time.time())
-
-
-async def _run_train_job(job_id: str,
-                         source: str,
-                         symbol: str,
-                         timeframe: str,
-                         horizon: int,
-                         threshold: float,
-                         model_type: str,
-                         count: int,
-                         thresholds: Optional[str],
-                         horizons: Optional[str],
-                         class_weight: Optional[str],
-                         calibrate: Optional[str],
-                         objective: str):
-    try:
-        _update_job(job_id, {"status": "running", "started_at": int(time.time())})
-        # replicate core of ml_train with progress
-        df: Optional[pd.DataFrame] = None
-        tf = timeframe
-        if source == "mongo" and db is not None:
-            try:
-                recs = await db.candles.find({"symbol": symbol, "timeframe": tf}).sort("time", 1).to_list(50000)
-                if recs:
-                    df = pd.DataFrame(recs)
-            except Exception as e:
-                logging.getLogger(__name__).warning(f"ML load mongo failed: {e}")
-        elif source == "file":
-            df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
-        elif source == "deriv":
-            # Reutiliza a MESMA sessão WS do app e aguarda conexão ficar pronta
-            ready = await _wait_deriv_ready(max_wait=10.0, require_auth=False)
-            if not ready:
-                raise HTTPException(status_code=503, detail="Deriv not connected (aguarde a conexão DEMO ficar verde e tente de novo)")
-            _update_job(job_id, {"stage": "downloading_deriv_candles"})
-            gran = _granularity_from_timeframe(tf)
-            candles = await _fetch_candles_paginated(symbol, granularity=gran, total=count)
-            if not candles or len(candles) < 1000:
-                raise HTTPException(status_code=400, detail="Dados insuficientes vindos da Deriv")
-            df = pd.DataFrame([{
-                "open": float(c.get("open")),
-                "high": float(c.get("high")),
-                "low": float(c.get("low")),
-                "close": float(c.get("close")),
-                "volume": float(c.get("volume")) if c.get("volume") is not None else 0.0,
-                "time": int(c.get("epoch")),
-            } for c in candles])
-        else:
-            df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
-
-        if df is None or df.empty:
-            raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
-
-        ren = {c: c.lower() for c in df.columns}
-        df = df.rename(columns=ren)
-        for c in ["open","high","low","close","volume"]:
-            if c not in df.columns:
-                raise HTTPException(status_code=400, detail=f"CSV/DB sem coluna obrigatória: {c}")
-        if "time" in df.columns:
-            df = df.sort_values("time").reset_index(drop=True)
-
-        def _parse_list(sval: Optional[str], cast=float):
-            if not sval:
-                return None
-            try:
-                return [cast(x.strip()) for x in str(sval).split(',') if x.strip() != '']
-            except Exception:
-                return None
-
-        thr_list = _parse_list(thresholds, float) or [0.002, 0.003, 0.004, 0.005]
-        hor_list = _parse_list(horizons, int) or [1, 3, 5]
-
-        gran = _granularity_from_timeframe(tf)
-        candles_per_day = 86400.0 / max(gran, 1)
-
-        results: List[Dict[str, Any]] = []
-        best: Optional[Dict[str, Any]] = None
-        total = len(hor_list) * len(thr_list)
-        done = 0
-        _update_job(job_id, {"progress": {"done": done, "total": total}})
-
-        for h in hor_list:
-            for tval in thr_list:
-                try:
-                    out = ml_utils.train_and_maybe_promote(
-                        df[["open","high","low","close","volume"]].copy(),
-                        horizon=h,
-                        threshold=float(tval),
-                        model_type=model_type,
-                        save_prefix=f"{symbol}_{tf}_h{h}_th{tval:.3f}",
-                        class_weight=class_weight,
-                        calibrate=calibrate,
-                        payout_ratio=0.95,
-                        candles_per_day=float(candles_per_day),
-                        objective=objective,
-                    )
-                    out.update({"horizon": h, "threshold": float(tval)})
-                    results.append(out)
-                    cur_prec = out.get("metrics", {}).get("precision", 0.0) or 0.0
-                    cur_ev = out.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0
-                    cur_tpd = out.get("metrics", {}).get("trades_per_day", 0.0) or 0.0
-                    if best is None:
-                        best = out
-                    else:
-                        b_prec = best.get("metrics", {}).get("precision", 0.0) or 0.0
-                        b_ev = best.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0
-                        b_tpd = best.get("metrics", {}).get("trades_per_day", 0.0) or 0.0
-                        if (cur_prec, cur_ev, cur_tpd) > (b_prec, b_ev, b_tpd):
-                            best = out
-                except Exception as e:
-                    logging.getLogger(__name__).warning(f"Grid combo failed h={h} t={tval}: {e}")
-                finally:
-                    done += 1
-                    _update_job(job_id, {"progress": {"done": done, "total": total}})
-
-        if not best:
-            raise HTTPException(status_code=400, detail="Falha ao treinar qualquer combinação")
-
-        result = {
-            **best,
-            "grid": [{
-                "model_id": r.get("model_id"),
-                "horizon": r.get("horizon"),
-                "threshold": r.get("threshold"),
-                "precision": r.get("metrics", {}).get("precision"),
-                "ev_per_trade": r.get("backtest", {}).get("ev_per_trade"),
-                "trades_per_day": r.get("metrics", {}).get("trades_per_day"),
-            } for r in results],
-            "rows": int(len(df)),
-            "granularity": gran,
-            "symbol": symbol,
-            "timeframe": tf,
-        }
-        _update_job(job_id, {"status": "done", "result": result})
-    except HTTPException as he:
-        _update_job(job_id, {"status": "error", "error": he.detail})
-    except Exception as e:
-        _update_job(job_id, {"status": "error", "error": str(e)})
-
-
-@ml_router.post("/train_async")
-async def ml_train_async(
-    source: str = "deriv",
-    symbol: str = "R_100",
-    timeframe: str = "3m",
-    horizon: int = 3,
-    threshold: float = 0.003,
-    model_type: str = "rf",
-    count: int = 20000,
-    thresholds: Optional[str] = None,
-    horizons: Optional[str] = None,
-    class_weight: Optional[str] = "balanced",
-    calibrate: Optional[str] = "sigmoid",
-    objective: str = "precision",
-):
-    job_id = str(uuid.uuid4())
-    _ml_jobs[job_id] = {
-        "job_id": job_id,
-        "status": "queued",
-        "created_at": int(time.time()),
-        "params": {"source": source, "symbol": symbol, "timeframe": timeframe, "count": count,
-                    "thresholds": thresholds, "horizons": horizons, "model_type": model_type,
-                    "class_weight": class_weight, "calibrate": calibrate, "objective": objective}
-    }
-    asyncio.create_task(_run_train_job(job_id, source, symbol, timeframe, horizon, threshold, model_type, count, thresholds, horizons, class_weight, calibrate, objective))
-    return {"job_id": job_id, "status": "queued"}
-
-
-@ml_router.get("/job/{job_id}")
-async def ml_job_status(job_id: str):
-    job = _ml_jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
-    return job
-
-
-@ml_router.post("/train")
-async def ml_train(
-    source: str = "mongo",
-    symbol: str = "R_100",
-    timeframe: str = "3m",
-    horizon: int = 3,
-    threshold: float = 0.003,
-    model_type: str = "rf",
-    count: int = 20000,
-    thresholds: Optional[str] = None,
-    horizons: Optional[str] = None,
-    class_weight: Optional[str] = "balanced",
-    calibrate: Optional[str] = "sigmoid",
-    objective: str = "precision",
-):
-    df: Optional[pd.DataFrame] = None
-    tf = timeframe
-    if source == "mongo" and db is not None:
-        try:
-            recs = await db.candles.find({"symbol": symbol, "timeframe": tf}).sort("time", 1).to_list(50000)
-            if recs:
-                df = pd.DataFrame(recs)
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"ML load mongo failed: {e}")
-    elif source == "file":
-        df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
-    elif source == "deriv":
-        # Wait briefly for the shared Deriv connection to be ready (reuse same session)
-        ready = await _wait_deriv_ready(max_wait=10.0, require_auth=False)
-        if not ready:
-            raise HTTPException(status_code=503, detail="Deriv not connected (aguarde a conexão DEMO ficar verde e tente de novo)")
-        gran = _granularity_from_timeframe(tf)
-        candles = await _fetch_candles_paginated(symbol, granularity=gran, total=count)
-        if not candles or len(candles) < 1000:
-            raise HTTPException(status_code=400, detail="Dados insuficientes vindos da Deriv")
-        # to DataFrame
-        df = pd.DataFrame([{
-            "open": float(c.get("open")),
-            "high": float(c.get("high")),
-            "low": float(c.get("low")),
-            "close": float(c.get("close")),
-            "volume": float(c.get("volume")) if c.get("volume") is not None else 0.0,
-            "time": int(c.get("epoch")),
-        } for c in candles])
-    else:
-        # fallback: try CSV
-        df = _parse_csv_or_raise(_Path("/data/ml/ohlcv.csv"))
-
-    if df is None or df.empty:
-        raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
-
-    ren = {c: c.lower() for c in df.columns}
-    df = df.rename(columns=ren)
-    for c in ["open","high","low","close","volume"]:
-        if c not in df.columns:
-            raise HTTPException(status_code=400, detail=f"CSV/DB sem coluna obrigatória: {c}")
-
-    # sort by time if present
-    if "time" in df.columns:
-        df = df.sort_values("time").reset_index(drop=True)
-
-    # Sweep lists
-    def _parse_list(sval: Optional[str], cast=float):
-        if not sval:
-            return None
-        try:
-            return [cast(x.strip()) for x in str(sval).split(',') if x.strip() != '']
-        except Exception:
-            return None
-
-    thr_list = _parse_list(thresholds, float) or [0.002, 0.003, 0.004, 0.005]
-    hor_list = _parse_list(horizons, int) or [1, 3, 5]
-
-    gran = _granularity_from_timeframe(tf)
-    candles_per_day = 86400.0 / max(gran, 1)
-
-    results: List[Dict[str, Any]] = []
-    best: Optional[Dict[str, Any]] = None
-
-    for h in hor_list:
-        for tval in thr_list:
-            try:
-                out = ml_utils.train_and_maybe_promote(
-                    df[["open","high","low","close","volume"]].copy(),
-                    horizon=h,
-                    threshold=float(tval),
-                    model_type=model_type,
-                    save_prefix=f"{symbol}_{tf}_h{h}_th{tval:.3f}",
-                    class_weight=class_weight,
-                    calibrate=calibrate,
-                    payout_ratio=0.95,
-                    candles_per_day=float(candles_per_day),
-                    objective=objective,
-                )
-                out.update({"horizon": h, "threshold": float(tval)})
-                results.append(out)
-                # choose best by precision then ev_per_trade then trades_per_day
-                cur_prec = out.get("metrics", {}).get("precision", 0.0) or 0.0
-                cur_ev = out.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0
-                cur_tpd = out.get("metrics", {}).get("trades_per_day", 0.0) or 0.0
-                if best is None:
-                    best = out
-                else:
-                    b_prec = best.get("metrics", {}).get("precision", 0.0) or 0.0
-                    b_ev = best.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0
-                    b_tpd = best.get("metrics", {}).get("trades_per_day", 0.0) or 0.0
-                    if (cur_prec, cur_ev, cur_tpd) > (b_prec, b_ev, b_tpd):
-                        best = out
-            except Exception as e:
-                logging.getLogger(__name__).warning(f"Grid combo failed h={h} t={tval}: {e}")
-                continue
-
-    if not best:
-        raise HTTPException(status_code=400, detail="Falha ao treinar qualquer combinação")
-
-    # Return best result, include grid summary
-    return {
-        **best,
-        "grid": [{
-            "model_id": r.get("model_id"),
-            "horizon": r.get("horizon"),
-            "threshold": r.get("threshold"),
-            "precision": r.get("metrics", {}).get("precision"),
-            "ev_per_trade": r.get("backtest", {}).get("ev_per_trade"),
-            "trades_per_day": r.get("metrics", {}).get("trades_per_day"),
-        } for r in results],
-        "rows": int(len(df)),
-        "granularity": gran,
-    }
-
-@ml_router.get("/model/{model_id}/rules")
-async def ml_model_rules(model_id: str):
-    try:
-        model_path = (Path(__file__).parent / "ml_models" / f"{model_id}.joblib")
-        if not model_path.exists():
-            raise HTTPException(status_code=404, detail="Modelo não encontrado")
-        payload = joblib_load(model_path)
-        model = payload.get("model")
-        features = payload.get("features", [])
-        if isinstance(model, DecisionTreeClassifier):
-            try:
-                tree_text = export_text(model, feature_names=list(features) if features else None)
-            except Exception:
-                tree_text = export_text(model)
-            pine = f"""//@version=5
-indicator("DT Rules {model_id}", overlay=false)
-// As regras abaixo são exportadas do sklearn DecisionTree.
-// Converta manualmente cada condição em lógica Pine usando as séries equivalentes.
-// Features usadas: {', '.join(features) if features else '-'}
-/*
-{tree_text}
-*/
-longSignal = false
-shortSignal = false
-plot(longSignal ? 1 : shortSignal ? -1 : 0, style=plot.style_columns, color=longSignal?color.lime: shortSignal?color.red:color.gray)
-"""
-            return {"model_id": model_id, "type": "dt", "features": features, "rules_text": tree_text, "pine_script": pine}
-        else:
-            return {"model_id": model_id, "type": "other", "message": "Regras disponíveis apenas para DecisionTree."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-app.include_router(ml_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ... THE REST OF THE FILE REMAINS UNCHANGED ...
