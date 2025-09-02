@@ -153,6 +153,19 @@ class ContractCreate(BaseModel):
         return doc
 
 # Configure logging
+# CORS
+cors_origins = os.environ.get("CORS_ORIGINS", "*")
+try:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in cors_origins.split(",")],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+except Exception:
+    pass
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("deriv")
 
