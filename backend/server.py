@@ -953,6 +953,9 @@ class GlobalStats:
         self.daily_pnl = 0.0
         self.processed_contracts = set()
 
+# Global stats instance
+_global_stats = GlobalStats()
+
 class StrategyStatus(BaseModel):
     running: bool
     mode: str
