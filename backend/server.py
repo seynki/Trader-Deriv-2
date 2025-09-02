@@ -888,6 +888,9 @@ class _PnLTracker:
 
 _global_pnl = _PnLTracker()
 
+# Global stats instance
+_global_stats = GlobalStats()
+
 class GlobalStats:
     """Global statistics tracker for all trades (manual + automated + strategy)"""
     def __init__(self):
