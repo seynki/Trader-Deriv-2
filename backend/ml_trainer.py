@@ -35,7 +35,8 @@ def load_data_from_mongo(symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
             return None
         df = pd.DataFrame(recs)
         return df
-    except Exception:
+    except Exception as e:
+        print(f"[ml_trainer] Mongo read error: {e}")
         return None
 
 
