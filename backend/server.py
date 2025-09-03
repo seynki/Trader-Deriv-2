@@ -970,6 +970,461 @@ class StrategyStatus(BaseModel):
     losses: int = 0
     win_rate: float = 0.0
 
+
+# ---- indicator helpers (ported from backup) ----
+from typing import Optional as _Optional
+
+def _ema_series(arr: List[float], period: int) -> List[_Optional[float]]:
+    if period <= 0:
+        return [None for _ in arr]
+    k = 2 / (period + 1)
+    out: List[_Optional[float]] = []
+    ema: _Optional[float] = None
+    for x in arr:
+        if ema is None:
+            ema = x
+        else:
+            ema = (x - ema) * k + ema
+        out.append(ema)
+    return out
+
+def _rsi(close: List[float], period: int = 14) -> List[_Optional[float]]:
+    if len(close) < period + 1:
+        return [None for _ in close]
+    gains: List[float] = []
+    losses: List[float] = []
+    for i in range(1, len(close)):
+        diff = close[i] - close[i - 1]
+        gains.append(max(diff, 0.0))
+        losses.append(max(-diff, 0.0))
+    avg_gain = _ema_series(gains, period)
+    avg_loss = _ema_series(losses, period)
+    rsi: List[_Optional[float]] = [None]
+    for i in range(len(avg_gain)):
+        g = avg_gain[i]
+        l = avg_loss[i]
+        if g is None or l is None or l == 0:
+            rsi.append(None)
+            continue
+        rs = g / l
+        rsi.append(100 - (100 / (1 + rs)))
+    # pad to match len(close)
+    if len(rsi) < len(close):
+        rsi = [None] * (len(close) - len(rsi)) + rsi
+    return rsi[:len(close)]
+
+def _macd(close: List[float], f: int, s: int, sig: int):
+    ema_f = _ema_series(close, f)
+    ema_s = _ema_series(close, s)
+    line: List[_Optional[float]] = []
+    for i in range(len(close)):
+        a = ema_f[i]
+        b = ema_s[i]
+        line.append((a - b) if (a is not None and b is not None) else None)
+    # signal ema on non-None
+    clean = [x for x in line if x is not None]
+    sig_series = _ema_series(clean, sig) if clean else []
+    # align
+    pad = len(line) - len(sig_series)
+    signal = [None] * pad + sig_series
+    hist: List[_Optional[float]] = []
+    for i in range(len(line)):
+        l = line[i]
+        s_v = signal[i] if i < len(signal) else None
+        hist.append((l - s_v) if (l is not None and s_v is not None) else None)
+    return {"line": line, "signal": signal, "hist": hist}
+
+def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
+    out_mid: List[_Optional[float]] = []
+    out_up: List[_Optional[float]] = []
+    out_lo: List[_Optional[float]] = []
+    for i in range(len(close)):
+        if i + 1 < period:
+            out_mid.append(None); out_up.append(None); out_lo.append(None)
+            continue
+        seg = close[i + 1 - period:i + 1]
+        mid = sum(seg) / period
+        var = sum((x - mid) ** 2 for x in seg) / period
+        std = var ** 0.5
+        out_mid.append(mid)
+        out_up.append(mid + k * std)
+        out_lo.append(mid - k * std)
+    return {"mid": out_mid, "upper": out_up, "lower": out_lo}
+
+def _true_range(h: float, l: float, pc: float) -> float:
+    return max(h - l, abs(h - pc), abs(l - pc))
+
+def _rma(arr: List[float], p: int) -> List[_Optional[float]]:
+    if not arr:
+        return []
+    alpha = 1.0 / p
+    out: List[_Optional[float]] = []
+    prev: _Optional[float] = None
+    for x in arr:
+        if prev is None:
+            prev = x
+        else:
+            prev = prev + alpha * (x - prev)
+        out.append(prev)
+    return out
+
+def _adx(high: List[float], low: List[float], close: List[float], period: int = 14) -> List[_Optional[float]]:
+    if len(close) < period + 1:
+        return [None for _ in close]
+    tr: List[float] = []
+    plusDM: List[float] = []
+    minusDM: List[float] = []
+    for i in range(1, len(close)):
+        tr.append(_true_range(high[i], low[i], close[i - 1]))
+        up = high[i] - high[i - 1]
+        dn = low[i - 1] - low[i]
+        plusDM.append(up if (up > dn and up > 0) else 0.0)
+        minusDM.append(dn if (dn > up and dn > 0) else 0.0)
+    trR = _rma(tr, period)
+    plusR = _rma(plusDM, period)
+    minusR = _rma(minusDM, period)
+    plusDI: List[_Optional[float]] = []
+    minusDI: List[_Optional[float]] = []
+    for i in range(len(trR)):
+        if trR[i] is not None and plusR[i] is not None:
+            plusDI.append(100 * (plusR[i] / trR[i]))
+        else:
+            plusDI.append(None)
+        if trR[i] is not None and minusR[i] is not None:
+            minusDI.append(100 * (minusR[i] / trR[i]))
+        else:
+            minusDI.append(None)
+    dx: List[_Optional[float]] = []
+    for i in range(len(plusDI)):
+        p = plusDI[i]
+        m = minusDI[i]
+        if p is not None and m is not None and (p + m) != 0:
+            dx.append(100 * (abs(p - m) / (p + m)))
+        else:
+            dx.append(None)
+    dx_clean = [x for x in dx[1:] if x is not None]
+    adxR = _rma(dx_clean, period)
+    pad_len = len(close) - len(adxR)
+    if pad_len < 0:
+        pad_len = 0
+    return [None] * pad_len + adxR
+
+class StrategyRunner:
+    def __init__(self):
+        self.task: Optional[asyncio.Task] = None
+        self.params: StrategyParams = StrategyParams()
+        self.running: bool = False
+        self.in_position: bool = False
+        self.daily_pnl: float = 0.0
+        self.mode: str = "paper"
+        self.last_signal: Optional[str] = None
+        self.last_reason: Optional[str] = None
+        self.last_run_at: Optional[int] = None
+        self.day: date = date.today()
+
+    def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+        close = [float(c.get("close")) for c in candles]
+        high = [float(c.get("high")) for c in candles]
+        low = [float(c.get("low")) for c in candles]
+        adx_arr = _adx(high, low, close)
+        last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
+        ma_fast = _sma(close, self.params.fast_ma)
+        ma_slow = _sma(close, self.params.slow_ma)
+        prev_fast = _sma(close[:-1], self.params.fast_ma)
+        prev_slow = _sma(close[:-1], self.params.slow_ma)
+        macd_res = _macd(close, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
+        last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
+        last_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
+        rsi_arr = _rsi(close)
+        last_rsi = next((x for x in reversed(rsi_arr) if x is not None), None)
+        bb = _bollinger(close, 20, self.params.bbands_k)
+        last_price = close[-1]
+        last_upper = next((x for x in reversed(bb["upper"]) if x is not None), None)
+        last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
+        trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
+        if trending:
+            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
+            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
+            if bull_cross:
+                return {"side": "RISE", "reason": f"Trend↑ ADX {last_adx:.1f} + MA/MACD"}
+            if bear_cross:
+                return {"side": "FALL", "reason": f"Trend↓ ADX {last_adx:.1f} + MA/MACD"}
+        else:
+            touch_upper = (last_upper is not None and last_price >= last_upper)
+            touch_lower = (last_lower is not None and last_price <= last_lower)
+            if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
+                return {"side": "FALL", "reason": f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"}
+            if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
+                return {"side": "RISE", "reason": f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"}
+        return None
+
+    async def _get_candles(self, symbol: str, granularity: int, count: int) -> List[Dict[str, Any]]:
+        if not _deriv.connected:
+            raise HTTPException(status_code=503, detail="Deriv not connected")
+        req_id = int(time.time() * 1000)
+        fut = asyncio.get_running_loop().create_future()
+        _deriv.pending[req_id] = fut
+        await _deriv._send({
+            "ticks_history": symbol,
+            "adjust_start_time": 1,
+            "count": count,
+            "end": "latest",
+            "start": 1,
+            "style": "candles",
+            "granularity": granularity,
+            "req_id": req_id,
+        })
+        try:
+            data = await asyncio.wait_for(fut, timeout=12)
+        except asyncio.TimeoutError:
+            _deriv.pending.pop(req_id, None)
+            raise HTTPException(status_code=504, detail="Timeout waiting for candles")
+        if data.get("error"):
+            raise HTTPException(status_code=400, detail=data["error"].get("message", "history error"))
+        return data.get("candles") or []
+
+    async def _paper_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
+        await _deriv.ensure_subscribed(symbol)
+        q = await _deriv.add_queue(symbol)
+        entry_price: Optional[float] = None
+        profit: float = 0.0
+        try:
+            try:
+                first_msg = await asyncio.wait_for(q.get(), timeout=10)
+                entry_price = float(first_msg.get("price")) if first_msg else None
+            except asyncio.TimeoutError:
+                return 0.0
+            last_price = entry_price
+            collected = 0
+            t0 = time.time()
+            while collected < duration_ticks and (time.time() - t0) < (duration_ticks * 5):
+                try:
+                    m = await asyncio.wait_for(q.get(), timeout=5)
+                    if m and m.get("type") == "tick":
+                        last_price = float(m.get("price"))
+                        collected += 1
+                except asyncio.TimeoutError:
+                    pass
+            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price)))
+            profit = (stake * 0.95) if win else (-stake)
+            return profit
+        finally:
+            _deriv.remove_queue(symbol, q)
+
+    async def _live_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
+        req = BuyRequest(
+            type="CALLPUT",
+            symbol=symbol,
+            contract_type=("CALL" if side == "RISE" else "PUT"),
+            duration=duration_ticks,
+            duration_unit="t",
+            stake=stake,
+            currency="USD",
+        )
+        try:
+            buy_res = await deriv_buy(req)
+        except HTTPException as e:
+            logger.warning(f"Live buy failed: {e.detail}")
+            return 0.0
+        cid = buy_res.get("contract_id")
+        if not cid:
+            return 0.0
+        q = await _deriv.add_contract_queue(int(cid))
+        profit: float = 0.0
+        try:
+            t0 = time.time()
+            while True:
+                try:
+                    mtxt = await asyncio.wait_for(q.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    if time.time() - t0 > 120:
+                        break
+                    continue
+                if isinstance(mtxt, dict) and mtxt.get("type") == "contract":
+                    poc = mtxt
+                    if poc.get("is_expired"):
+                        try:
+                            profit = float(poc.get("profit") or 0.0)
+                        except Exception:
+                            profit = 0.0
+                        break
+        finally:
+            _deriv.remove_contract_queue(int(cid), q)
+        return profit
+
+    async def _loop(self):
+        self.running = True
+        self.day = date.today()
+        self.daily_pnl = 0.0
+        self.in_position = False
+        cooldown_seconds = 5
+        logger.info(f"Strategy loop started: {self.params}")
+        while self.running:
+            try:
+                if date.today() != self.day:
+                    self.day = date.today()
+                    self.daily_pnl = 0.0
+                if self.daily_pnl <= self.params.daily_loss_limit:
+                    logger.info("Daily loss limit reached. Stopping strategy.")
+                    self.running = False
+                    break
+                candles = await self._get_candles(self.params.symbol, self.params.granularity, self.params.candle_len)
+                self.last_run_at = int(time.time())
+                signal = self._decide_signal(candles)
+                if not signal:
+                    await asyncio.sleep(cooldown_seconds)
+                    continue
+                if self.in_position:
+                    await asyncio.sleep(cooldown_seconds)
+                    continue
+                self.last_signal = signal.get("side")
+                self.last_reason = signal.get("reason")
+                side = signal.get("side")
+                self.in_position = True
+                if self.params.mode == "paper":
+                    pnl = await self._paper_trade(self.params.symbol, side, self.params.duration, self.params.stake)
+                else:
+                    pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
+                self.daily_pnl += pnl
+                try:
+                    _global_stats.add_paper_trade_result(pnl)
+                    _global_pnl.add(pnl)
+                except Exception:
+                    pass
+                logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} reason={self.last_reason}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Strategy error: {e}")
+            finally:
+                self.in_position = False
+                await asyncio.sleep(cooldown_seconds)
+        self.running = False
+        logger.info("Strategy loop stopped")
+
+    async def start(self, params: StrategyParams):
+        if self.task and not self.task.done():
+            raise HTTPException(status_code=400, detail="Strategy already running")
+        self.params = params
+        self.mode = params.mode
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self):
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except Exception:
+                pass
+        self.running = False
+
+    def status(self) -> StrategyStatus:
+        return StrategyStatus(
+            running=self.running,
+            mode=self.mode,
+            symbol=self.params.symbol,
+            in_position=self.in_position,
+            daily_pnl=self.daily_pnl,
+            global_daily_pnl=_global_pnl.daily_pnl,
+            day=self.day.isoformat(),
+            last_signal=self.last_signal,
+            last_reason=self.last_reason,
+            last_run_at=self.last_run_at,
+            total_trades=_global_stats.total_trades,
+            wins=_global_stats.wins,
+            losses=_global_stats.losses,
+            win_rate=_global_stats.win_rate,
+        )
+
+_strategy = StrategyRunner()
+
+@api_router.post("/strategy/start", response_model=StrategyStatus)
+async def strategy_start(params: StrategyParams):
+    await _strategy.start(params)
+    return _strategy.status()
+
+@api_router.post("/strategy/stop", response_model=StrategyStatus)
+async def strategy_stop():
+    await _strategy.stop()
+    return _strategy.status()
+
+@api_router.get("/strategy/status", response_model=StrategyStatus)
+async def strategy_status():
+    return _strategy.status()
+
+# ---- WebSocket endpoints for clients ----
+@app.websocket("/api/ws/ticks")
+async def ws_ticks(websocket: WebSocket):
+    await websocket.accept()
+    queues: Dict[str, asyncio.Queue] = {}
+    try:
+        init = await websocket.receive_text()
+        try:
+            msg = json.loads(init)
+        except json.JSONDecodeError:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON"}))
+            await websocket.close()
+            return
+        symbols = msg.get("symbols") or []
+        if not symbols:
+            await websocket.send_text(json.dumps({"type": "error", "message": "No symbols provided"}))
+            await websocket.close()
+            return
+        for s in symbols:
+            q = await _deriv.add_queue(s)
+            queues[s] = q
+        await websocket.send_text(json.dumps({"type": "subscribed", "symbols": list(queues.keys())}))
+        while True:
+            get_tasks = [asyncio.create_task(q.get()) for q in queues.values()]
+            done, pending = await asyncio.wait(get_tasks, return_when=asyncio.FIRST_COMPLETED, timeout=15)
+            for p in pending:
+                p.cancel()
+            if not done:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+                continue
+            for d in done:
+                try:
+                    data = d.result()
+                    await websocket.send_text(json.dumps(data))
+                except Exception:
+                    pass
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"Client WS error: {e}")
+    finally:
+        for s, q in queues.items():
+            _deriv.remove_queue(s, q)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+@app.websocket("/api/ws/contract/{contract_id}")
+async def ws_contract(websocket: WebSocket, contract_id: int):
+    await websocket.accept()
+    q: Optional[asyncio.Queue] = None
+    try:
+        q = await _deriv.add_contract_queue(contract_id)
+        await websocket.send_text(json.dumps({"type": "subscribed", "contract_id": contract_id}))
+        while True:
+            try:
+                data = await asyncio.wait_for(q.get(), timeout=25)
+                await websocket.send_text(json.dumps(data))
+            except asyncio.TimeoutError:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"Client WS (contract) error: {e}")
+    finally:
+        if q is not None:
+            _deriv.remove_contract_queue(contract_id, q)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
 # ---- indicator helpers (python versions) ----
 
 def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
