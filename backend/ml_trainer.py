@@ -8,6 +8,7 @@ from typing import Optional
 
 import pandas as pd
 from pymongo import MongoClient
+import certifi
 
 import ml_utils
 
