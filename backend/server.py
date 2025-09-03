@@ -18,6 +18,9 @@ import time
 import websockets
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
+import pandas as pd
+from fastapi import Query
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
