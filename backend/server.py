@@ -981,6 +981,139 @@ def _ema_series(arr: List[float], period: int) -> List[_Optional[float]]:
     if period <= 0:
         return [None for _ in arr]
     k = 2 / (period + 1)
+
+# -------------------- ML Endpoints (async + sync) -----------------------
+
+class MlTrainParams(BaseModel):
+    source: str = "mongo"  # mongo|deriv|file
+    symbol: str = "R_100"
+    timeframe: str = "3m"
+    horizon: int = 3
+    threshold: float = 0.003
+    model_type: str = "rf"  # rf|dt
+    class_weight: Optional[str] = None
+    calibrate: Optional[str] = None  # sigmoid|isotonic
+    objective: str = "precision"
+    count: Optional[int] = None  # for source=deriv/file
+
+_jobs: Dict[str, Dict[str, Any]] = {}
+
+@api_router.get("/ml/status")
+async def ml_status():
+    champ = ml_utils.load_champion()
+    return champ or {"message": "no champion"}
+
+@api_router.post("/ml/train")
+async def ml_train(
+    source: str = Query("mongo"),
+    symbol: str = Query("R_100"),
+    timeframe: str = Query("3m"),
+    horizon: int = Query(3),
+    threshold: float = Query(0.003),
+    model_type: str = Query("rf"),
+    class_weight: Optional[str] = Query(None),
+    calibrate: Optional[str] = Query(None),
+    objective: str = Query("precision"),
+):
+    try:
+        if source != "mongo":
+            raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
+        # load data from Mongo or CSV (fallback)
+        df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+        out = await asyncio.to_thread(
+            ml_utils.train_and_maybe_promote,
+            df,
+            horizon,
+            threshold,
+            model_type,
+            f"{symbol}_{timeframe}",
+            class_weight,
+            calibrate,
+            0.95,
+            480.0,
+            objective,
+        )
+        return {
+            "model_id": out.get("model_id"),
+            "metrics": out.get("metrics"),
+            "backtest": out.get("backtest"),
+            "grid": [],
+            "rows": int(len(df)),
+        }
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.post("/ml/train_async")
+async def ml_train_async(
+    source: str = Query("mongo"),
+    symbol: str = Query("R_100"),
+    timeframe: str = Query("3m"),
+    horizon: str = Query("1,3,5"),
+    threshold: str = Query("0.002,0.003,0.004,0.005"),
+    model_type: str = Query("rf"),
+    class_weight: Optional[str] = Query(None),
+    calibrate: Optional[str] = Query(None),
+    objective: str = Query("precision"),
+):
+    if source != "mongo":
+        raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
+    job_id = f"ml-{int(time.time()*1000)}"
+    _jobs[job_id] = {"status": "queued", "progress": 0}
+
+    async def runner():
+        _jobs[job_id].update({"status": "running", "progress": 1})
+        try:
+            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+            horizons = [int(x.strip()) for x in str(horizon).split(",") if x.strip()]
+            thresholds = [float(x.strip()) for x in str(threshold).split(",") if x.strip()]
+            best = None
+            grid = []
+            step = 0
+            total = max(1, len(horizons) * len(thresholds))
+            for h in horizons:
+                for th in thresholds:
+                    step += 1
+                    _jobs[job_id]["progress"] = int(step * 100 / total)
+                    out = await asyncio.to_thread(
+                        ml_utils.train_and_maybe_promote,
+                        df,
+                        h,
+                        th,
+                        model_type,
+                        f"{symbol}_{timeframe}",
+                        class_weight,
+                        calibrate,
+                        0.95,
+                        480.0,
+                        objective,
+                    )
+                    grid.append({"horizon": h, "threshold": th, **out})
+                    cand = {
+                        "precision": float(out.get("metrics", {}).get("precision", 0.0) or 0.0),
+                        "ev": float(out.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0),
+                        "tpd": float(out.get("metrics", {}).get("trades_per_day", 0.0) or 0.0),
+                    }
+                    if best is None or (cand["precision"], cand["ev"], cand["tpd"]) > (best["precision"], best["ev"], best["tpd"]):
+                        best = {**cand, **out, "horizon": h, "threshold": th}
+            _jobs[job_id].update({
+                "status": "completed",
+                "best": best,
+                "grid": grid,
+                "rows": int(len(df)),
+            })
+        except Exception as e:
+            _jobs[job_id].update({"status": "failed", "error": str(e)})
+
+    asyncio.create_task(runner())
+    return {"job_id": job_id, "status": "running"}
+
+@api_router.get("/ml/job/{job_id}")
+async def ml_job_status(job_id: str):
+    data = _jobs.get(job_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="job not found")
+    return data
+
     out: List[_Optional[float]] = []
     ema: _Optional[float] = None
     for x in arr:
