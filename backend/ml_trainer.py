@@ -24,7 +24,10 @@ def load_data_from_mongo(symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
     if not mongo_url:
         return None
     try:
-        client = MongoClient(mongo_url)
+        if mongo_url.startswith("mongodb+srv://"):
+            client = MongoClient(mongo_url, tls=True, tlsCAFile=certifi.where())
+        else:
+            client = MongoClient(mongo_url)
         db = client[db_name]
         cur = db.candles.find({"symbol": symbol, "timeframe": timeframe}).sort("time", 1)
         recs = list(cur)
