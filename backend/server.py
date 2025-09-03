@@ -1114,16 +1114,6 @@ async def ml_job_status(job_id: str):
         raise HTTPException(status_code=404, detail="job not found")
     return data
 
-    out: List[_Optional[float]] = []
-    ema: _Optional[float] = None
-    for x in arr:
-        if ema is None:
-            ema = x
-        else:
-            ema = (x - ema) * k + ema
-        out.append(ema)
-    return out
-
 def _rsi(close: List[float], period: int = 14) -> List[_Optional[float]]:
     if len(close) < period + 1:
         return [None for _ in close]
