@@ -14,7 +14,7 @@ import json
 import time
 from datetime import datetime
 
-BASE_URL = "https://reconnect-aid.preview.emergentagent.com"
+BASE_URL = "https://mongo-training-help.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def log(message):
