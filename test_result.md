@@ -303,6 +303,20 @@
 
 
 ## backend:
+##   - task: "WebSocket e Strategy endpoints: conectividade e health check"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "HOTFIX: Reintegrei no backend os endpoints WebSocket /api/ws/ticks e /api/ws/contract/{id} e os endpoints de Estratégia (/api/strategy/start, /api/strategy/stop, /api/strategy/status) que estavam presentes no server_backup.py mas não no server.py. Necessário configurar DERIV_APP_ID e (opcional) DERIV_API_TOKEN em backend/.env para garantir conexão/autorização com a Deriv WS."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "CONNECTIVITY AND HEALTH TESTING COMPLETED (2025-09-03): ✅ ALL 3 TESTS PASSED - Executado conforme review request português: 1) GET /api/deriv/status ✅ retorna 200 com connected=true, authenticated=false (conexão anônima funcionando corretamente após adicionar DERIV_APP_ID=1089 no backend/.env) 2) WebSocket /api/ws/ticks ✅ conecta com sucesso, recebe payload inicial {'symbols':['R_10','R_25']} e valida recepção de 10 mensagens {type:'tick', symbol, price} em 10s 3) GET /api/strategy/status ✅ retorna 200 com running=false inicialmente, win_rate=0.0%, total_trades=0, global_daily_pnl=0.0. CORREÇÃO APLICADA: Adicionado DERIV_APP_ID=1089 em backend/.env que resolveu erro HTTP 401 na conexão Deriv WS. Backend agora conecta corretamente com Deriv em modo anônimo (connected=true, authenticated=false). Todos os endpoints de conectividade e health funcionando perfeitamente."
 ##   - task: "Contracts: persistir contratos no Mongo (Atlas) + endpoint POST /api/contracts"
 ##     implemented: true
 ##     working: "NA"
