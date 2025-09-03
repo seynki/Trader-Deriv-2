@@ -1057,6 +1057,8 @@ async def ml_train_async(
     class_weight: Optional[str] = Query(None),
     calibrate: Optional[str] = Query(None),
     objective: str = Query("precision"),
+    horizons: Optional[str] = Query(None),
+    thresholds: Optional[str] = Query(None),
 ):
     if source != "mongo":
         raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
@@ -1064,19 +1066,22 @@ async def ml_train_async(
     _jobs[job_id] = {"status": "queued", "progress": 0}
 
     async def runner():
-        _jobs[job_id].update({"status": "running", "progress": 1})
+        _jobs[job_id].update({"status": "running", "progress": {"done": 0, "total": 0}})
         try:
             df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
-            horizons = [int(x.strip()) for x in str(horizon).split(",") if x.strip()]
-            thresholds = [float(x.strip()) for x in str(threshold).split(",") if x.strip()]
+            h_str = horizons or str(horizon)
+            t_str = thresholds or str(threshold)
+            horizons_list = [int(x.strip()) for x in h_str.split(",") if x.strip()]
+            thresholds_list = [float(x.strip()) for x in t_str.split(",") if x.strip()]
             best = None
             grid = []
             step = 0
-            total = max(1, len(horizons) * len(thresholds))
-            for h in horizons:
-                for th in thresholds:
+            total = max(1, len(horizons_list) * len(thresholds_list))
+            _jobs[job_id]["progress"] = {"done": 0, "total": total}
+            for h in horizons_list:
+                for th in thresholds_list:
                     step += 1
-                    _jobs[job_id]["progress"] = int(step * 100 / total)
+                    _jobs[job_id]["progress"] = {"done": step, "total": total}
                     out = await asyncio.to_thread(
                         ml_utils.train_and_maybe_promote,
                         df,
@@ -1105,7 +1110,7 @@ async def ml_train_async(
                 "rows": int(len(df)),
             })
         except Exception as e:
-            _jobs[job_id].update({"status": "failed", "error": str(e)})
+            _jobs[job_id].update({"status": "error", "error": str(e)})
 
     asyncio.create_task(runner())
     return {"job_id": job_id, "status": "running"}
