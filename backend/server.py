@@ -1064,9 +1064,10 @@ async def ml_train_async(
     objective: str = Query("precision"),
     horizons: Optional[str] = Query(None),
     thresholds: Optional[str] = Query(None),
+    count: Optional[int] = Query(20000),
 ):
-    # Only 'mongo' source supported for async training. Fallback to CSV handled inside loader.
-    if source != "mongo":
+    # Support both 'mongo' and 'deriv' sources for async training
+    if source not in ["mongo", "deriv"]:
         raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
     job_id = f"ml-{int(time.time()*1000)}"
     _jobs[job_id] = {"status": "queued", "progress": {"done": 0, "total": 0}}
