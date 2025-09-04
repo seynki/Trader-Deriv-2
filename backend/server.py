@@ -1017,12 +1017,17 @@ async def ml_train(
     class_weight: Optional[str] = Query(None),
     calibrate: Optional[str] = Query(None),
     objective: str = Query("precision"),
+    count: Optional[int] = Query(1000),
 ):
     try:
-        if source != "mongo":
+        if source == "deriv":
+            # Fetch data directly from Deriv
+            df = await _fetch_deriv_data_for_ml(symbol, timeframe, count or 1000)
+        elif source == "mongo":
+            # load data from Mongo or CSV (fallback)  
+            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+        else:
             raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
-        # load data from Mongo or CSV (fallback)
-        df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
         out = await asyncio.to_thread(
             ml_utils.train_and_maybe_promote,
             df,
