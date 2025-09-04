@@ -1241,6 +1241,233 @@ class DerivAPITester:
         
         return False, {}
 
+    def test_candles_ingest_deriv(self):
+        """Test POST /api/candles/ingest with Deriv data source and CSV fallback"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-DERIV-1: Candles Ingest from Deriv with CSV Fallback")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "Candles Ingest from Deriv",
+            "POST",
+            "candles/ingest?symbol=R_100&granularity=180&count=1000",
+            200,
+            timeout=45
+        )
+        
+        if success:
+            received = data.get('received', 0)
+            csv_created = data.get('csv_created', 0)
+            mongo_error = data.get('mongo_error')
+            message = data.get('message', '')
+            
+            self.log(f"   Message: {message}")
+            self.log(f"   Received: {received}")
+            self.log(f"   CSV Created: {csv_created}")
+            if mongo_error:
+                self.log(f"   MongoDB Error: {mongo_error}")
+            
+            # Validate that data was fetched and CSV fallback created
+            if received >= 900 and csv_created >= 900:  # Allow some variance
+                self.log("✅ Candles Ingest: Successfully fetched from Deriv and created CSV fallback")
+                return True, data
+            else:
+                self.log("❌ Candles Ingest: Insufficient data received or CSV not created")
+                return False, data
+        
+        return False, {}
+
+    def test_ml_train_deriv_source(self):
+        """Test POST /api/ml/train with source=deriv"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-DERIV-2: ML Train with source=deriv")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "ML Train with Deriv Source",
+            "POST",
+            "ml/train?source=deriv&symbol=R_100&timeframe=3m&count=1200&model_type=rf",
+            200,
+            timeout=60
+        )
+        
+        if success:
+            model_id = data.get('model_id', '')
+            metrics = data.get('metrics', {})
+            backtest = data.get('backtest', {})
+            rows = data.get('rows', 0)
+            
+            self.log(f"   Model ID: {model_id}")
+            self.log(f"   Rows: {rows}")
+            self.log(f"   Metrics: {json.dumps(metrics, indent=2)}")
+            self.log(f"   Backtest: {json.dumps(backtest, indent=2)}")
+            
+            # Validate required fields
+            if model_id and rows >= 1000 and isinstance(metrics, dict) and isinstance(backtest, dict):
+                self.log("✅ ML Train Deriv: Successfully trained model with Deriv data")
+                return True, data
+            else:
+                self.log("❌ ML Train Deriv: Missing required fields or insufficient data")
+                return False, data
+        
+        return False, {}
+
+    def test_ml_train_async_deriv(self):
+        """Test POST /api/ml/train_async with source=deriv"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-DERIV-3: ML Train Async with source=deriv")
+        self.log("="*60)
+        
+        success, data, status_code = self.run_test(
+            "ML Train Async with Deriv Source",
+            "POST",
+            "ml/train_async?source=deriv&symbol=R_100&timeframe=3m&count=1500&model_type=rf&thresholds=0.003&horizons=3",
+            200,
+            timeout=30
+        )
+        
+        if success:
+            job_id = data.get('job_id', '')
+            status = data.get('status', '')
+            
+            self.log(f"   Job ID: {job_id}")
+            self.log(f"   Status: {status}")
+            
+            if job_id and status in ['queued', 'running']:
+                self.log("✅ ML Train Async: Successfully created async job")
+                return True, data, job_id
+            else:
+                self.log("❌ ML Train Async: Invalid job creation response")
+                return False, data, None
+        
+        return False, {}, None
+
+    def test_ml_job_status(self, job_id):
+        """Test GET /api/ml/job/{job_id}"""
+        self.log("\n" + "="*60)
+        self.log("TEST ML-DERIV-4: ML Job Status Check")
+        self.log("="*60)
+        
+        if not job_id:
+            self.log("❌ No job_id provided - skipping job status test")
+            return False, {}
+        
+        success, data, status_code = self.run_test(
+            f"ML Job Status for {job_id}",
+            "GET",
+            f"ml/job/{job_id}",
+            200,
+            timeout=15
+        )
+        
+        if success:
+            status = data.get('status', '')
+            progress = data.get('progress', {})
+            stage = data.get('stage', '')
+            
+            self.log(f"   Status: {status}")
+            self.log(f"   Stage: {stage}")
+            self.log(f"   Progress: {json.dumps(progress, indent=2)}")
+            
+            if status in ['queued', 'running', 'done', 'failed']:
+                self.log("✅ ML Job Status: Valid status returned")
+                return True, data
+            else:
+                self.log("❌ ML Job Status: Invalid status")
+                return False, data
+        
+        return False, {}
+
+    def run_ml_deriv_tests(self):
+        """Run ML tests with source=deriv as requested in review"""
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ML DERIV SOURCE TESTS - NEW SYSTEM")
+        self.log("🧠" + "="*58)
+        self.log("📋 Testing new ML system with source=deriv:")
+        self.log("   1. GET /api/deriv/status - validate Deriv connectivity")
+        self.log("   2. POST /api/candles/ingest?symbol=R_100&granularity=180&count=1000")
+        self.log("   3. POST /api/ml/train?source=deriv&symbol=R_100&timeframe=3m&count=1200&model_type=rf")
+        self.log("   4. POST /api/ml/train_async?source=deriv&symbol=R_100&timeframe=3m&count=1500&model_type=rf&thresholds=0.003&horizons=3")
+        self.log("   5. GET /api/ml/job/{job_id}")
+        
+        # Test 1: Deriv Status (prerequisite)
+        self.log("\n🔍 TEST 1: GET /api/deriv/status")
+        deriv_ok, deriv_data = self.test_deriv_status()
+        
+        if not deriv_ok:
+            self.log("❌ CRITICAL: Deriv not connected - aborting ML Deriv tests")
+            return False
+        
+        connected = deriv_data.get('connected', False)
+        authenticated = deriv_data.get('authenticated', False)
+        
+        if not connected:
+            self.log("❌ CRITICAL: Deriv connected=false - aborting ML Deriv tests")
+            return False
+        
+        # Test 2: Candles Ingest
+        self.log("\n🔍 TEST 2: POST /api/candles/ingest")
+        ingest_ok, ingest_data = self.test_candles_ingest_deriv()
+        
+        # Test 3: ML Train with Deriv source
+        self.log("\n🔍 TEST 3: POST /api/ml/train (source=deriv)")
+        train_ok, train_data = self.test_ml_train_deriv_source()
+        
+        # Test 4: ML Train Async with Deriv source
+        self.log("\n🔍 TEST 4: POST /api/ml/train_async (source=deriv)")
+        async_ok, async_data, job_id = self.test_ml_train_async_deriv()
+        
+        # Test 5: ML Job Status
+        self.log("\n🔍 TEST 5: GET /api/ml/job/{job_id}")
+        job_ok, job_data = self.test_ml_job_status(job_id)
+        
+        # Summary of ML Deriv tests
+        self.log("\n" + "🧠" + "="*58)
+        self.log("ML DERIV SOURCE TEST RESULTS")
+        self.log("🧠" + "="*58)
+        
+        if deriv_ok:
+            self.log("✅ Deriv Status: Connected and ready")
+        else:
+            self.log("❌ Deriv Status: Failed")
+            
+        if ingest_ok:
+            self.log("✅ Candles Ingest: Successfully fetched from Deriv with CSV fallback")
+        else:
+            self.log("❌ Candles Ingest: Failed")
+            
+        if train_ok:
+            self.log("✅ ML Train (Deriv): Successfully trained model with Deriv data")
+        else:
+            self.log("❌ ML Train (Deriv): Failed")
+            
+        if async_ok:
+            self.log("✅ ML Train Async (Deriv): Successfully created async job")
+        else:
+            self.log("❌ ML Train Async (Deriv): Failed")
+            
+        if job_ok:
+            self.log("✅ ML Job Status: Successfully retrieved job status")
+        else:
+            self.log("❌ ML Job Status: Failed")
+        
+        all_ml_deriv_tests_passed = deriv_ok and ingest_ok and train_ok and async_ok and job_ok
+        
+        if all_ml_deriv_tests_passed:
+            self.log("\n🎉 ALL ML DERIV SOURCE TESTS PASSED!")
+            self.log("📋 New ML system with source=deriv working correctly")
+            self.log("📋 Key findings:")
+            self.log("   - Deriv connectivity validated")
+            self.log("   - Data ingestion from Deriv API working")
+            self.log("   - CSV fallback created when MongoDB fails")
+            self.log("   - ML training with Deriv data successful")
+            self.log("   - Async ML jobs working correctly")
+        else:
+            self.log("\n⚠️  SOME ML DERIV SOURCE TESTS FAILED")
+            self.log("📋 Check individual test results above")
+        
+        return all_ml_deriv_tests_passed
+
     def run_ml_smoke_tests(self):
         """Run ML endpoint smoke tests as requested in review"""
         self.log("\n" + "🧠" + "="*58)
