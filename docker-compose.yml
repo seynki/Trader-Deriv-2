@@ -67,8 +67,10 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017}
+      MONGO_URL: ${MONGO_URL:-mongodb+srv://S1un1:21172313laura@se1nclust.k2r0pdw.mongodb.net/?retryWrites=true&w=majority&appName=Se1nClust}
       DB_NAME: ${DB_NAME:-market_ticks}
+      DERIV_APP_ID: ${DERIV_APP_ID:-99281}
+      DERIV_API_TOKEN: ${DERIV_API_TOKEN:-im0D7QKAWIRQ8vX}
       TRAIN_SYMBOL: ${TRAIN_SYMBOL:-R_100}
       TRAIN_TIMEFRAME: ${TRAIN_TIMEFRAME:-3m}
       TRAIN_HORIZON: ${TRAIN_HORIZON:-3}
