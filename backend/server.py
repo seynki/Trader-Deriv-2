@@ -1075,7 +1075,10 @@ async def ml_train_async(
     async def runner():
         _jobs[job_id].update({"status": "running", "stage": "loading_data", "progress": {"done": 0, "total": 0}})
         try:
-            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+            if source == "deriv":
+                df = await _fetch_deriv_data_for_ml(symbol, timeframe, count or 20000)
+            else:
+                df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
             h_str = horizons or str(horizon)
             t_str = thresholds or str(threshold)
             horizons_list = [int(x.strip()) for x in h_str.split(",") if x.strip()]
