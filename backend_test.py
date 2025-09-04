@@ -3419,6 +3419,12 @@ def main():
     # Run the specific ML Deriv tests as requested in the review
     tester.log("🚀 TESTANDO NOVO SISTEMA ML COM SOURCE=DERIV")
     tester.log("📋 Conforme review request: validar ML training com dados da Deriv")
+    tester.log("📋 Testes específicos:")
+    tester.log("   1. GET /api/deriv/status - validar conectividade Deriv")
+    tester.log("   2. POST /api/candles/ingest?symbol=R_100&granularity=180&count=1000")
+    tester.log("   3. POST /api/ml/train?source=deriv&symbol=R_100&timeframe=3m&count=1200&model_type=rf")
+    tester.log("   4. POST /api/ml/train_async?source=deriv&symbol=R_100&timeframe=3m&count=1500&model_type=rf&thresholds=0.003&horizons=3")
+    tester.log("   5. GET /api/ml/job/{job_id}")
     
     success = tester.run_ml_deriv_tests()
     
