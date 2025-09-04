@@ -1060,13 +1060,14 @@ async def ml_train_async(
     horizons: Optional[str] = Query(None),
     thresholds: Optional[str] = Query(None),
 ):
+    # Only 'mongo' source supported for async training. Fallback to CSV handled inside loader.
     if source != "mongo":
         raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
     job_id = f"ml-{int(time.time()*1000)}"
-    _jobs[job_id] = {"status": "queued", "progress": 0}
+    _jobs[job_id] = {"status": "queued", "progress": {"done": 0, "total": 0}}
 
     async def runner():
-        _jobs[job_id].update({"status": "running", "progress": {"done": 0, "total": 0}})
+        _jobs[job_id].update({"status": "running", "stage": "loading_data", "progress": {"done": 0, "total": 0}})
         try:
             df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
             h_str = horizons or str(horizon)
@@ -1077,6 +1078,7 @@ async def ml_train_async(
             grid = []
             step = 0
             total = max(1, len(horizons_list) * len(thresholds_list))
+            _jobs[job_id]["stage"] = "training_grid"
             _jobs[job_id]["progress"] = {"done": 0, "total": total}
             for h in horizons_list:
                 for th in thresholds_list:
@@ -1103,17 +1105,31 @@ async def ml_train_async(
                     }
                     if best is None or (cand["precision"], cand["ev"], cand["tpd"]) > (best["precision"], best["ev"], best["tpd"]):
                         best = {**cand, **out, "horizon": h, "threshold": th}
+            # Wrap best as 'result' to match frontend contract and mark status as 'done'
+            result = None
+            if best is not None:
+                result = {
+                    "model_id": best.get("model_id"),
+                    "metrics": best.get("metrics"),
+                    "backtest": best.get("backtest"),
+                    "promoted": best.get("promoted", False),
+                    "grid": grid,
+                    "rows": int(len(df)),
+                    "horizon": best.get("horizon"),
+                    "threshold": best.get("threshold"),
+                }
             _jobs[job_id].update({
-                "status": "completed",
+                "status": "done",
+                "result": result,
                 "best": best,
                 "grid": grid,
                 "rows": int(len(df)),
             })
         except Exception as e:
-            _jobs[job_id].update({"status": "error", "error": str(e)})
+            _jobs[job_id].update({"status": "failed", "error": str(e)})
 
     asyncio.create_task(runner())
-    return {"job_id": job_id, "status": "running"}
+    return {"job_id": job_id, "status": "queued"}
 
 @api_router.get("/ml/job/{job_id}")
 async def ml_job_status(job_id: str):
