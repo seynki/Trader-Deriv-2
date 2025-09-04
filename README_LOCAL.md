@@ -19,10 +19,18 @@ curl -s http://localhost:8001/api/deriv/status | jq
 - Variáveis default: TRAIN_SYMBOL=R_100, TRAIN_TIMEFRAME=3m
 
 ## Ajustes
-- Para usar Atlas ao invés do Mongo local, exporte as variáveis antes do up:
+- **PADRÃO**: Agora usa MongoDB Atlas por padrão (mesmo do preview)
+- Para usar Mongo local, exporte as variáveis antes do up:
 ```bash
-export MONGO_URL="mongodb+srv://..."
+export MONGO_URL="mongodb://mongo:27017"
 export DB_NAME="market_ticks"
+docker compose up -d --build
+```
+- Para usar credenciais diferentes:
+```bash
+export MONGO_URL="mongodb+srv://sua_string_conexao"
+export DERIV_APP_ID="seu_app_id"  
+export DERIV_API_TOKEN="seu_token"
 docker compose up -d --build
 ```
 - Para treinar manualmente 1x, rode:
