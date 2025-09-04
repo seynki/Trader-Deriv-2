@@ -104,6 +104,19 @@
 
 ## user_problem_statement: "Integrar fluxo Deriv authorize → proposal → buy → track contract (Buy CALL/PUT) com backend seguro e painel de acompanhamento no frontend."
 ## backend:
+##   - task: "ML async job status: align to 'queued/running/done/failed' and include result"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Atualizado /api/ml/train_async para status 'queued' inicial, progresso com 'stage', conclusão em 'done' com campo 'result' (best combo) e falhas como 'failed'. Corrige incompatibilidade anterior (backend retornava 'completed'/'error' enquanto o frontend esperava 'done'). Previna 'error: no found' intermitente do polling ao manter contrato consistente."
+
+## backend:
 ##   - task: "Deriv: proposal/buy + WS track contract + fixes"
 ##     implemented: true
 ##     working: true
