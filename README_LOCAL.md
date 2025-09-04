@@ -39,13 +39,15 @@ docker compose run --rm -e TRAIN_RUN_ONCE=1 ml_trainer
 ```
 
 ## Dados iniciais (seed)
-- O serviço seed_candles executa automaticamente após o backend ficar pronto (R_100, 3m=180s, 2000 candles). Você pode mudar com variáveis de ambiente:
+- O serviço seed_candles executa automaticamente após o backend ficar pronto
+- **BUSCA DADOS DA DERIV**: Baixa candles diretamente da Deriv API (R_100, 3m=180s, 2000 candles)
+- **FALLBACK CSV**: Se MongoDB Atlas falhar, salva automaticamente em `/data/ml/ohlcv.csv`
+- Customizar com variáveis de ambiente:
 ```bash
 export SEED_SYMBOL=R_100
-export SEED_GRANULARITY=180
+export SEED_GRANULARITY=180  
 export SEED_COUNT=2000
 ```
-- Se preferir CSV, coloque em ./data/ml/ohlcv.csv
 
 ## Parar
 ```bash
