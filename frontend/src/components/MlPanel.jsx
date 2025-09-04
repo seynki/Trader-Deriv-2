@@ -79,7 +79,7 @@ export default function MlPanel() {
           horizon,
           threshold,
           model_type: modelType,
-          count: 20000,
+          count: source === "deriv" ? 3000 : 20000,
           thresholds: "0.002,0.003,0.004,0.005",
           horizons: "1,3,5",
           class_weight: "balanced",
