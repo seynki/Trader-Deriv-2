@@ -6,7 +6,7 @@ A aplicação mostra "Desconectado" quando rodando localmente com docker-compose
 ## Causas Identificadas
 
 ### 1. Configuração de URL Incorreta
-- O arquivo `/frontend/.env` aponta para `https://mongo-training-help.preview.emergentagent.com`  
+- O arquivo `/frontend/.env` aponta para `https://error-resolver-26.preview.emergentagent.com`  
 - Quando roda localmente, deveria apontar para `http://localhost:8001`
 
 ### 2. Erro no Código JavaScript 
@@ -81,8 +81,8 @@ Após aplicar uma das soluções, teste:
 - WebSocket: `ws://localhost:8001/api/ws/ticks`
 
 ### Produção (Emergent):
-- Frontend: `https://mongo-training-help.preview.emergentagent.com`
-- Backend API: `https://mongo-training-help.preview.emergentagent.com/api`
+- Frontend: `https://error-resolver-26.preview.emergentagent.com`
+- Backend API: `https://error-resolver-26.preview.emergentagent.com/api`
 - WebSocket: `wss://fica-desconectado.preview.emergentagent.com/api/ws/ticks`
 
 ## Logs para Debug
