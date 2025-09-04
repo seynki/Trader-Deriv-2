@@ -1317,7 +1317,7 @@ async def ingest_candles(
         df = pd.DataFrame(records)
         df.to_csv("/data/ml/ohlcv.csv", index=False)
         
-        return {
+        result = {
             "message": "Dados ingeridos com sucesso",
             "symbol": symbol,
             "timeframe": timeframe,
@@ -1326,6 +1326,12 @@ async def ingest_candles(
             "mongo_updated": mongo_updated,
             "csv_created": len(records)
         }
+        
+        if mongo_error:
+            result["mongo_error"] = mongo_error
+            result["message"] = "Dados salvos em CSV (MongoDB indisponível)"
+        
+        return result
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na ingestão: {str(e)}")
