@@ -1215,6 +1215,116 @@ async def ml_job_status(job_id: str):
         raise HTTPException(status_code=404, detail="job not found")
     return data
 
+@api_router.post("/candles/ingest")
+async def ingest_candles(
+    symbol: str = Query("R_100"),
+    granularity: int = Query(60),
+    count: int = Query(1000)
+):
+    """Fetch candles from Deriv and store in MongoDB + create CSV fallback"""
+    try:
+        # Fetch from Deriv
+        if not _deriv.connected:
+            raise HTTPException(status_code=503, detail="Deriv desconectado")
+        
+        req_id = int(time.time() * 1000)
+        fut = asyncio.get_running_loop().create_future()
+        _deriv.pending[req_id] = fut
+        
+        await _deriv._send({
+            "ticks_history": symbol,
+            "adjust_start_time": 1,
+            "count": count,
+            "end": "latest",
+            "start": 1,
+            "style": "candles",
+            "granularity": granularity,
+            "req_id": req_id,
+        })
+        
+        try:
+            data = await asyncio.wait_for(fut, timeout=30)
+        except asyncio.TimeoutError:
+            _deriv.pending.pop(req_id, None)
+            raise HTTPException(status_code=504, detail="Timeout buscando dados da Deriv")
+        
+        if data.get("error"):
+            raise HTTPException(status_code=400, detail=f"Erro da Deriv: {data['error'].get('message', 'unknown')}")
+        
+        candles = data.get("candles") or []
+        if not candles:
+            raise HTTPException(status_code=400, detail="Nenhum candle recebido da Deriv")
+        
+        # Map granularity to timeframe
+        timeframe_map = {
+            60: "1m",
+            180: "3m", 
+            300: "5m",
+            900: "15m",
+            1800: "30m",
+            3600: "1h",
+            14400: "4h",
+            86400: "1d"
+        }
+        timeframe = timeframe_map.get(granularity, f"{granularity}s")
+        
+        # Store in MongoDB (if available)
+        mongo_inserted = 0
+        mongo_updated = 0
+        if db is not None:
+            for candle in candles:
+                doc = {
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "time": int(candle["epoch"]),
+                    "open": float(candle["open"]),
+                    "high": float(candle["high"]),
+                    "low": float(candle["low"]),
+                    "close": float(candle["close"]),
+                    "volume": int(candle.get("volume", 0))
+                }
+                result = await db.candles.replace_one(
+                    {"symbol": symbol, "timeframe": timeframe, "time": int(candle["epoch"])},
+                    doc,
+                    upsert=True
+                )
+                if result.upserted_id:
+                    mongo_inserted += 1
+                elif result.modified_count > 0:
+                    mongo_updated += 1
+        
+        # Create CSV fallback
+        import os
+        os.makedirs("/data/ml", exist_ok=True)
+        
+        records = []
+        for candle in candles:
+            records.append({
+                "open": float(candle["open"]),
+                "high": float(candle["high"]),
+                "low": float(candle["low"]),
+                "close": float(candle["close"]),
+                "volume": int(candle.get("volume", 0)),
+                "time": int(candle["epoch"])
+            })
+        
+        import pandas as pd
+        df = pd.DataFrame(records)
+        df.to_csv("/data/ml/ohlcv.csv", index=False)
+        
+        return {
+            "message": "Dados ingeridos com sucesso",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "received": len(candles),
+            "mongo_inserted": mongo_inserted,
+            "mongo_updated": mongo_updated,
+            "csv_created": len(records)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na ingestão: {str(e)}")
+
 def _rsi(close: List[float], period: int = 14) -> List[_Optional[float]]:
     if len(close) < period + 1:
         return [None for _ in close]
