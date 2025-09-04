@@ -178,8 +178,8 @@ export default function MlPanel() {
               <SelectTrigger className="w-40"><SelectValue placeholder="Fonte"/></SelectTrigger>
               <SelectContent>
                 <SelectItem value="mongo">Mongo</SelectItem>
+                <SelectItem value="deriv">Deriv (baixar candles online)</SelectItem>
                 <SelectItem value="file">CSV (/data/ml/ohlcv.csv)</SelectItem>
-                {/* Removido: <SelectItem value="deriv">Deriv (baixar candles online)</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
