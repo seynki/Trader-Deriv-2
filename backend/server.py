@@ -1271,27 +1271,32 @@ async def ingest_candles(
         # Store in MongoDB (if available)
         mongo_inserted = 0
         mongo_updated = 0
+        mongo_error = None
+        
         if db is not None:
-            for candle in candles:
-                doc = {
-                    "symbol": symbol,
-                    "timeframe": timeframe,
-                    "time": int(candle["epoch"]),
-                    "open": float(candle["open"]),
-                    "high": float(candle["high"]),
-                    "low": float(candle["low"]),
-                    "close": float(candle["close"]),
-                    "volume": int(candle.get("volume", 0))
-                }
-                result = await db.candles.replace_one(
-                    {"symbol": symbol, "timeframe": timeframe, "time": int(candle["epoch"])},
-                    doc,
-                    upsert=True
-                )
-                if result.upserted_id:
-                    mongo_inserted += 1
-                elif result.modified_count > 0:
-                    mongo_updated += 1
+            try:
+                for candle in candles:
+                    doc = {
+                        "symbol": symbol,
+                        "timeframe": timeframe,
+                        "time": int(candle["epoch"]),
+                        "open": float(candle["open"]),
+                        "high": float(candle["high"]),
+                        "low": float(candle["low"]),
+                        "close": float(candle["close"]),
+                        "volume": int(candle.get("volume", 0))
+                    }
+                    result = await db.candles.replace_one(
+                        {"symbol": symbol, "timeframe": timeframe, "time": int(candle["epoch"])},
+                        doc,
+                        upsert=True
+                    )
+                    if result.upserted_id:
+                        mongo_inserted += 1
+                    elif result.modified_count > 0:
+                        mongo_updated += 1
+            except Exception as e:
+                mongo_error = f"MongoDB falhou: {str(e)[:100]}..."
         
         # Create CSV fallback
         import os
