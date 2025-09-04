@@ -3413,32 +3413,29 @@ class DerivAPITester:
         return all_ml_deriv_tests_passed
 
 def main():
-    """Main test runner for Strategy PnL/Counters Paper Mode as per review request"""
+    """Main test runner for ML Deriv Source Tests as per review request"""
     tester = DerivAPITester()
     
-    # Run the specific Strategy PnL/Counters test as requested
-    tester.log("🚀 EXECUTANDO TESTE DE PnL/CONTADORES DA ESTRATÉGIA (MODO PAPER)")
-    tester.log("📋 Conforme instruções da review request em português")
+    # Run the specific ML Deriv tests as requested in the review
+    tester.log("🚀 TESTANDO NOVO SISTEMA ML COM SOURCE=DERIV")
+    tester.log("📋 Conforme review request: validar ML training com dados da Deriv")
     
-    success, results = tester.test_strategy_pnl_counters_paper_mode()
+    success = tester.run_ml_deriv_tests()
     
     # Print final summary
     tester.print_summary()
     
     if success:
-        tester.log("\n🎉 TESTE DE PnL/CONTADORES CONCLUÍDO COM SUCESSO!")
+        tester.log("\n🎉 TESTE DO SISTEMA ML COM SOURCE=DERIV CONCLUÍDO COM SUCESSO!")
         tester.log("📊 Todas as validações passaram:")
-        tester.log("   - Paper trades alimentam métricas globais ✅")
-        tester.log("   - total_trades aumenta com o tempo ✅")
-        tester.log("   - wins + losses == total_trades ✅")
-        tester.log("   - daily_pnl muda coerentemente (~±1.0 por trade) ✅")
-        tester.log("   - global_daily_pnl reflete a soma ✅")
+        tester.log("   - Conectividade Deriv validada ✅")
+        tester.log("   - Ingestão de dados da Deriv funcionando ✅")
+        tester.log("   - CSV fallback criado quando MongoDB falha ✅")
+        tester.log("   - ML training com dados da Deriv bem-sucedido ✅")
+        tester.log("   - Jobs assíncronos funcionando corretamente ✅")
     else:
-        tester.log("\n❌ TESTE DE PnL/CONTADORES FALHOU")
-        if results and 'validation_results' in results:
-            failed_count = sum(1 for result in results['validation_results'] if not result)
-            total_count = len(results['validation_results'])
-            tester.log(f"💥 {failed_count}/{total_count} validações falharam")
+        tester.log("\n❌ TESTE DO SISTEMA ML COM SOURCE=DERIV FALHOU")
+        tester.log("💥 Verificar resultados individuais acima")
     
     return 0 if success else 1
 
