@@ -544,14 +544,27 @@ def train_walkforward_and_maybe_promote(
     candles_per_day: float = 480.0,
     objective: str = "f1",
 ) -> Dict[str, Any]:
-    # Build dataset
+    # Enhanced dataset building with advanced features
     feats_df = build_features(df)
+    
+    # Add feature interactions
+    feats_df = add_feature_interactions(feats_df, max_interactions=15)
+    
     y = make_target(df, horizon=horizon, threshold=threshold)
-    X_cols = select_features(feats_df)
-    X = feats_df[X_cols].replace([np.inf, -np.inf], np.nan)
+    
+    # Enhanced feature selection
+    initial_features = select_features(feats_df)
+    
+    # Remove highly correlated features
+    final_features = remove_correlated_features(feats_df, initial_features, threshold=0.95)
+    
+    print(f"Feature engineering: {len(initial_features)} initial → {len(final_features)} final features")
+    
+    X = feats_df[final_features].replace([np.inf, -np.inf], np.nan)
     mask = X.notna().all(axis=1) & y.notna()
     X, y = X[mask], y[mask]
     close_series = df.loc[X.index, "close"]
+    
     if len(X) < 800:
         raise ValueError("Dados insuficientes após limpeza (>= 800 linhas)")
 
@@ -621,6 +634,7 @@ def train_walkforward_and_maybe_promote(
         "ev_per_trade": ev_per_trade,
         "trades": trades,
         "trades_per_day": trades_per_day,
+        "num_features": len(final_features),  # Track feature count
     }
 
     # Fit final model on full data using the same configuration
@@ -629,7 +643,7 @@ def train_walkforward_and_maybe_promote(
 
     model_id = f"{save_prefix}_{model_type}"
     model_path = ML_DIR / f"{model_id}.joblib"
-    dump({"model": final_model, "features": X_cols}, model_path)
+    dump({"model": final_model, "features": final_features}, model_path)
 
     # backtest proxy using full data predictions
     try:
@@ -642,7 +656,7 @@ def train_walkforward_and_maybe_promote(
     cur_prec = float(champ.get("metrics", {}).get("precision", 0.0) or 0.0)
     cur_ev = float(champ.get("backtest", {}).get("ev_per_trade", 0.0) or 0.0)
 
-    # Promotion policy: prioritize precision, then EV, then drawdown
+    # Enhanced promotion policy: prioritize precision, then EV, then drawdown
     promoted = bool((metrics["precision"] >= max(0.5, 1.05 * cur_prec)) and (metrics["ev_per_trade"] >= cur_ev))
     if promoted:
         meta = {
@@ -654,6 +668,7 @@ def train_walkforward_and_maybe_promote(
             "threshold": threshold,
             "ts_rows": int(len(X)),
             "vs_rows": int(max(1, int((1 - train_size) * n))),
+            "features": final_features,  # Store feature list
         }
         meta["updated_at"] = datetime.utcnow().isoformat() + "Z"
         save_champion(meta)
@@ -663,6 +678,7 @@ def train_walkforward_and_maybe_promote(
         "metrics": metrics,
         "backtest": {**bt, "ev_per_trade": ev_per_trade},
         "promoted": promoted,
+        "features_used": len(final_features),
     }
 
 
