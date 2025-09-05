@@ -3,18 +3,18 @@
     "model_type": "sgd",
     "is_fitted": true,
     "update_count": 0,
-    "features_count": 72,
+    "features_count": 77,
     "buffer_size": 0,
     "performance_samples": 1
   },
   "performance_history": [
     {
-      "timestamp": "2025-09-05T23:15:27.542474",
-      "accuracy": 0.5377015080603225,
-      "precision": 0.2319004524886878,
+      "timestamp": "2025-09-05T23:20:49.025267",
+      "accuracy": 0.6142697881828316,
+      "precision": 0.31958762886597936,
       "update_count": 0,
-      "sample_size": 1923
+      "sample_size": 897
     }
   ],
-  "last_updated": "2025-09-05T23:15:27.544012"
+  "last_updated": "2025-09-05T23:20:49.026737"
 }
