@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for ML Feature Engineering Improvements
-Tests the ML endpoints with advanced feature engineering as requested in Portuguese review
+Backend API Testing for Advanced ML Feature Engineering System
+Tests as requested in Portuguese review:
+1. Basic Connectivity (Deriv + ML status)
+2. Feature Engineering Test (77+ technical indicators)
+3. MongoDB Atlas Test (SSL connectivity)
 """
 
 import requests
