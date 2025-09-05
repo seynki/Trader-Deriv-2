@@ -23,6 +23,7 @@ import websockets
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
 import pandas as pd
+import numpy as np
 from fastapi import Query
 
 ROOT_DIR = Path(__file__).parent
