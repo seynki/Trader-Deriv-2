@@ -62,7 +62,8 @@ class OnlineLearningModel:
                 max_iter=self.max_iter,
                 class_weight=self.class_weight,
                 random_state=self.random_state,
-                warm_start=True  # Allows incremental learning
+                warm_start=True,  # Allows incremental learning
+                eta0=0.01  # Initial learning rate
             )
         elif self.model_type == "passive_aggressive":
             return PassiveAggressiveClassifier(
