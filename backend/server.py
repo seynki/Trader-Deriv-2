@@ -895,6 +895,10 @@ class _PnLTracker:
 
 _global_pnl = _PnLTracker()
 
+# Initialize Online Learning Manager
+from online_learning import OnlineLearningManager
+_online_manager = OnlineLearningManager()
+
 class GlobalStats:
     """Global statistics tracker for all trades (manual + automated + strategy)"""
     def __init__(self):
