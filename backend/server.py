@@ -16,6 +16,7 @@ import time
 
 import ml_utils
 import ml_trainer
+import online_learning
 
 # 3rd party realtime
 import websockets
