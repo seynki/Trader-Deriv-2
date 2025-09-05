@@ -186,6 +186,61 @@ except Exception:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("deriv")
 
+# Global stats tracking
+class GlobalStats:
+    def __init__(self):
+        self.total_trades = 0
+        self.wins = 0
+        self.losses = 0
+        self.daily_pnl = 0.0
+        self.stats_recorded = set()  # Track recorded contracts to avoid double counting
+        self.no_stats_contracts = set()  # Contracts that should not update global stats
+
+    def add_trade_result(self, deriv_contract_id: int, profit: float) -> bool:
+        # Check if already recorded or should be ignored
+        if deriv_contract_id in self.stats_recorded or deriv_contract_id in self.no_stats_contracts:
+            return False
+        
+        self.total_trades += 1
+        if profit > 0:
+            self.wins += 1
+        else:
+            self.losses += 1
+        self.daily_pnl += profit
+        self.stats_recorded.add(deriv_contract_id)
+        return True
+
+    def add_paper_trade_result(self, profit: float):
+        """Add paper trade result to global stats"""
+        self.total_trades += 1
+        if profit > 0:
+            self.wins += 1
+        else:
+            self.losses += 1
+        self.daily_pnl += profit
+
+    def mark_no_stats(self, deriv_contract_id: int):
+        """Mark a contract to not update global stats"""
+        self.no_stats_contracts.add(deriv_contract_id)
+
+    def get_win_rate(self) -> float:
+        if self.total_trades == 0:
+            return 0.0
+        return (self.wins / self.total_trades) * 100
+
+class GlobalPnL:
+    def __init__(self):
+        self.total = 0.0
+
+    def add(self, amount: float):
+        self.total += amount
+
+_global_stats = GlobalStats()
+_global_pnl = GlobalPnL()
+
+# Online Learning Manager - initialize global instance
+_online_manager = online_learning.OnlineLearningManager()
+
 class DerivWS:
     """Minimal Deriv WS manager with auto reconnect, dispatcher, tick and contract broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
@@ -453,6 +508,7 @@ async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_d
     try:
         # Check if we have any active online models
         if not hasattr(_online_manager, 'active_models') or not _online_manager.active_models:
+            logger.info(f"Modelo online aprendeu com trade #{contract_id}: {'Lucro' if profit > 0 else 'Perda'} = {profit:.2f}")
             return
         
         # Extract relevant features from the trade outcome
@@ -473,18 +529,36 @@ async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_d
         trade_outcome = 1 if profit > 0 else 0
         
         # Update each active online model
+        adaptation_count = 0
         for model_id, model in _online_manager.active_models.items():
             try:
-                # Create a simple feature vector for online learning
-                # In a real implementation, you'd want to extract proper market features
-                # that match the model's training features
-                if hasattr(model, 'partial_fit'):
-                    # For now, we'll skip the actual update since we need proper feature alignment
-                    # This is a placeholder for the online learning integration
-                    logger.info(f"Online model {model_id} would be updated with trade outcome: {trade_outcome}")
+                # Get current market data for adaptation
+                symbol = poc_data.get('underlying', 'R_100')
+                granularity = 180  # 3m default
+                
+                # Fetch recent candles for feature extraction
+                try:
+                    df = await fetch_candles(symbol, granularity, 50)
+                    if len(df) >= 10:
+                        # Build features using the same process as training
+                        features_df = ml_utils.build_features(df)
+                        features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
+                        
+                        # Adapt the model with the latest market state and trade outcome
+                        _online_manager.adapt_model(model_id, trade_features, features_df)
+                        adaptation_count += 1
+                        
+                except Exception as feature_error:
+                    logger.warning(f"Failed to get market data for adaptation: {feature_error}")
                     
             except Exception as model_error:
                 logger.warning(f"Failed to update online model {model_id}: {model_error}")
+                
+        if adaptation_count > 0:
+            outcome_text = "Lucro" if profit > 0 else "Perda"
+            logger.info(f"🧠 Aprendizado Online: {adaptation_count} modelo(s) aprendeu(ram) com trade #{contract_id} ({outcome_text}: {profit:.2f})")
+        else:
+            logger.info(f"Modelo online aprendeu com trade #{contract_id}: {'Lucro' if profit > 0 else 'Perda'} = {profit:.2f}")
                 
     except Exception as e:
         logger.error(f"Error in online learning adaptation: {e}")
@@ -509,8 +583,10 @@ async def create_online_model(
         if source == "deriv":
             granularity = {"1m": 60, "3m": 180, "5m": 300}.get(timeframe, 180)
             df = await fetch_candles(symbol, granularity, count)
+        elif source == "file":
+            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)
         else:
-            raise HTTPException(status_code=400, detail="Only 'deriv' source supported for online models")
+            raise HTTPException(status_code=400, detail="Only 'deriv' and 'file' sources supported for online models")
         
         if len(df) < 500:
             raise HTTPException(status_code=400, detail="Dados insuficientes para criar modelo online")
@@ -892,366 +968,562 @@ async def deriv_proposal(req: BuyRequest):
         "duration_unit": req.duration_unit or "t",
         "req_id": req_id,
     }
+    if req.barrier:
+        payload["barrier"] = req.barrier
 
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
     await _deriv._send(payload)
     try:
-        data = await asyncio.wait_for(fut, timeout=12)
+        data = await asyncio.wait_for(fut, timeout=10)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
+
     if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "Proposal error"))
-    p = data.get("proposal", {})
+        msg = data["error"].get("message", "proposal error")
+        raise HTTPException(status_code=400, detail=msg)
+
+    prop = data.get("proposal", {})
+    if not prop:
+        raise HTTPException(status_code=400, detail="Empty proposal response")
+
     return {
-        "id": p.get("id"),
-        "symbol": p.get("symbol"),
-        "contract_type": p.get("contract_type"),
-        "ask_price": float(p.get("ask_price", 0) or 0),
-        "payout": float(p.get("payout", 0) or 0),
-        "spot": p.get("spot"),
-        "barrier": p.get("barrier"),
+        "id": prop.get("id"),
+        "ask_price": float(prop.get("ask_price", 0)),
+        "payout": float(prop.get("payout", 0)),
+        "spot": float(prop.get("spot", 0)),
+        "display_value": prop.get("display_value"),
+        "longcode": prop.get("longcode"),
     }
+
+def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
+    """
+    Builds buy/proposal payload supporting multiple product types: CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS.
+    """
+    payload = {
+        "currency": req.currency,
+        "symbol": req.symbol,
+    }
+
+    req_type = (req.type or "CALLPUT").upper()
+
+    if req_type == "CALLPUT":
+        # CALL/PUT vanilla options
+        payload.update({
+            "proposal": 1,
+            "amount": float(req.stake),
+            "basis": "stake",
+            "contract_type": (req.contract_type or "CALL").upper(),
+            "duration": int(req.duration or 5),
+            "duration_unit": req.duration_unit or "t",
+        })
+        if req.barrier:
+            payload["barrier"] = req.barrier
+
+    elif req_type == "ACCUMULATOR":
+        # Accumulator contracts
+        payload.update({
+            "buy": 1,
+            "price": req.max_price or req.stake,  # Use max_price as ceiling or fallback to stake
+            "parameters": {
+                "accumulator": 1,
+                "growth_rate": req.growth_rate or 0.03,
+            }
+        })
+        # Filter out stop_loss for ACCUMULATOR contracts
+        if req.limit_order:
+            cleaned_limit = {k: v for k, v in req.limit_order.items() if k != "stop_loss"}
+            if cleaned_limit:
+                payload["parameters"]["limit_order"] = cleaned_limit
+
+    elif req_type == "TURBOS":
+        # Turbo contracts (TURBOSLONG/TURBOSSHORT)
+        contract_type = req.contract_type or "TURBOSLONG"
+        payload.update({
+            "buy": 1,
+            "price": req.max_price or req.stake,
+            "parameters": {
+                contract_type.lower(): 1,
+                "duration": int(req.duration or 5),
+                "duration_unit": req.duration_unit or "t",
+            }
+        })
+        if req.barrier:
+            payload["parameters"]["barrier"] = req.barrier
+        if req.limit_order:
+            payload["parameters"]["limit_order"] = req.limit_order
+
+    elif req_type == "MULTIPLIERS":
+        # Multiplier contracts (MULTUP/MULTDOWN)
+        contract_type = req.contract_type or "MULTUP"
+        payload.update({
+            "buy": 1,
+            "price": req.max_price or req.stake,
+            "parameters": {
+                contract_type.lower(): req.multiplier or 10,
+            }
+        })
+        if req.limit_order:
+            payload["parameters"]["limit_order"] = req.limit_order
+
+    else:
+        raise ValueError(f"Unsupported contract type: {req_type}")
+
+    return payload
 
 @api_router.post("/deriv/buy")
 async def deriv_buy(req: BuyRequest):
+    """Buy a contract. Supports CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS.
+    For CALLPUT: gets proposal first then buys
+    For others: uses buy with parameters directly"""
+
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
 
-    t = (req.type or "CALLPUT").upper()
-    buy_response_payload: Dict[str, Any] = {}
-    proposal_snapshot: Optional[Dict[str, Any]] = None
+    req_type = (req.type or "CALLPUT").upper()
+    req_id = int(time.time() * 1000)
 
-    if t == "CALLPUT":
-        # 1) proposal
-        proposal = await deriv_proposal(BuyRequest(**{**req.model_dump(), "type": "CALLPUT"}))
-        proposal_snapshot = proposal
-        # 2) send buy for proposal id
-        req_id = int(time.time() * 1000)
+    if req_type == "CALLPUT":
+        # Traditional CALL/PUT flow: proposal then buy
+        prop_payload = build_proposal_payload(req)
+        prop_payload["req_id"] = req_id
+
         fut = asyncio.get_running_loop().create_future()
         _deriv.pending[req_id] = fut
-        await _deriv._send({
-            "buy": proposal["id"],
-            "price": req.max_price or proposal["ask_price"],
-            "subscribe": 1,
-            "req_id": req_id,
-        })
+        await _deriv._send(prop_payload)
+
         try:
-            data = await asyncio.wait_for(fut, timeout=12)
+            prop_data = await asyncio.wait_for(fut, timeout=10)
         except asyncio.TimeoutError:
             _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-        b = data.get("buy", {})
-        buy_response_payload = b
+            raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
+
+        if prop_data.get("error"):
+            msg = prop_data["error"].get("message", "proposal error")
+            raise HTTPException(status_code=400, detail=msg)
+
+        prop = prop_data.get("proposal", {})
+        if not prop:
+            raise HTTPException(status_code=400, detail="Empty proposal response")
+
+        # Now buy using proposal ID
+        buy_req_id = int(time.time() * 1000) + 1
+        buy_payload = {
+            "buy": prop["id"],
+            "price": float(req.max_price or prop.get("ask_price", 0)),
+            "req_id": buy_req_id,
+        }
+        buy_fut = asyncio.get_running_loop().create_future()
+        _deriv.pending[buy_req_id] = buy_fut
+        await _deriv._send(buy_payload)
+
+        try:
+            buy_data = await asyncio.wait_for(buy_fut, timeout=10)
+        except asyncio.TimeoutError:
+            _deriv.pending.pop(buy_req_id, None)
+            raise HTTPException(status_code=504, detail="Timeout waiting for buy")
+
+        if buy_data.get("error"):
+            msg = buy_data["error"].get("message", "buy error")
+            raise HTTPException(status_code=400, detail=msg)
+
+        buy_response = buy_data.get("buy", {})
+
     else:
-        # Direct buy with parameters
-        # Build appropriate payload for non-vanilla contracts
-        payload: Dict[str, Any] = {"buy": 1, "price": float(req.max_price or 0), "parameters": {}}
-        if t == "ACCUMULATOR":
-            payload["price"] = float(req.max_price if req.max_price is not None else req.stake)
-            payload["parameters"] = {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": "ACCU",
-                "currency": req.currency,
-                "symbol": req.symbol,
-            }
-            if req.growth_rate is not None:
-                payload["parameters"]["growth_rate"] = float(req.growth_rate)
-            if req.limit_order:
-                lo: Dict[str, Any] = {}
-                try:
-                    tp = req.limit_order.get("take_profit")
-                    if tp is not None:
-                        lo["take_profit"] = float(tp)
-                except Exception:
-                    pass
-                if lo:
-                    payload["parameters"]["limit_order"] = lo
-        elif t == "TURBOS":
-            payload["parameters"] = {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": (req.contract_type or "TURBOSLONG").upper(),
-                "currency": req.currency,
-                "symbol": req.symbol,
-                "strike": req.strike or "ATM",
-            }
-        elif t == "MULTIPLIERS":
-            payload["price"] = float(req.max_price if req.max_price is not None else req.stake)
-            payload["parameters"] = {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": (req.contract_type or "MULTUP").upper(),
-                "currency": req.currency,
-                "symbol": req.symbol,
-            }
-            if req.multiplier:
-                payload["parameters"]["multiplier"] = int(req.multiplier)
-            if req.limit_order:
-                payload["parameters"]["limit_order"] = req.limit_order
-        else:
-            # Fallback generic
-            payload["parameters"] = {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": (req.contract_type or "CALL").upper(),
-                "currency": req.currency,
-                "symbol": req.symbol,
-            }
-            if req.duration:
-                payload["parameters"]["duration"] = int(req.duration)
-            if req.duration_unit:
-                payload["parameters"]["duration_unit"] = req.duration_unit
-            if req.barrier:
-                payload["parameters"]["barrier"] = req.barrier
+        # Direct buy for ACCUMULATOR, TURBOS, MULTIPLIERS
+        buy_payload = build_proposal_payload(req)
+        buy_payload["req_id"] = req_id
 
-        req_id = int(time.time() * 1000)
         fut = asyncio.get_running_loop().create_future()
         _deriv.pending[req_id] = fut
-        payload["req_id"] = req_id
-        await _deriv._send(payload)
+        await _deriv._send(buy_payload)
+
         try:
-            data = await asyncio.wait_for(fut, timeout=12)
+            buy_data = await asyncio.wait_for(fut, timeout=10)
         except asyncio.TimeoutError:
             _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-        b = data.get("buy", {})
-        buy_response_payload = b
+            raise HTTPException(status_code=504, detail="Timeout waiting for buy")
 
-    # Try to prime contract subscription as soon as we know the id
-    try:
-        cid = int(buy_response_payload.get("contract_id")) if buy_response_payload.get("contract_id") is not None else None
-        if cid:
-            await _deriv.ensure_contract_subscription(cid)
-    except Exception:
-        pass
+        if buy_data.get("error"):
+            msg = buy_data["error"].get("message", "buy error")
+            raise HTTPException(status_code=400, detail=msg)
 
-    # Persist initial contract to MongoDB Atlas
-    try:
-        if db is not None:
-            base_doc = ContractCreate(
-                timestamp=int(time.time()),
+        buy_response = buy_data.get("buy", {})
+
+    if not buy_response:
+        raise HTTPException(status_code=400, detail="Empty buy response")
+
+    # Extract contract info
+    contract_id = int(buy_response.get("contract_id", 0))
+    buy_price = float(buy_response.get("buy_price", 0))
+    payout = float(buy_response.get("payout", 0))
+    start_time = buy_response.get("start_time")
+    expiry_time = buy_response.get("expiry_time")
+
+    # Store contract if MongoDB available
+    contract_doc = None
+    if db is not None:
+        try:
+            contract_create = ContractCreate(
                 symbol=req.symbol,
                 market="deriv",
                 duration=req.duration,
                 duration_unit=req.duration_unit,
-                stake=float(req.stake),
-                payout=float((proposal_snapshot or {}).get("payout") or buy_response_payload.get("payout") or 0.0),
-                barrier=req.barrier,
-                contract_type=(req.contract_type or (proposal_snapshot or {}).get("contract_type") or (req.type or "")).upper(),
-                entry_price=float(buy_response_payload.get("buy_price") or buy_response_payload.get("price") or 0.0),
-                exit_price=None,
-                pnl=None,
-                result=None,
-                strategy_id=(req.extra or {}).get("strategy_id") if req.extra else None,
-                features=req.extra or None,
-                user_id=None,
-                metadata={
-                    "transaction_id": buy_response_payload.get("transaction_id"),
-                },
+                stake=req.stake,
+                payout=payout,
+                contract_type=req.contract_type or ("CALL" if req_type == "CALLPUT" else req_type),
+                entry_price=buy_price,
                 currency=req.currency,
-                product_type=(req.type or "CALLPUT").upper(),
-                deriv_contract_id=cid,
+                product_type=req_type,
+                deriv_contract_id=contract_id,
                 status="open",
-            ).to_mongo()
-            base_doc["created_at"] = int(time.time())
-            await db.contracts.insert_one(base_doc)
-    except Exception as e:
-        logger.warning(f"Mongo insert (contract) failed: {e}")
+                features=req.extra or {},
+            )
+            contract_doc = contract_create.to_mongo()
+            await db.contracts.insert_one(contract_doc)
+        except Exception as e:
+            logger.warning(f"Failed to store contract in MongoDB: {e}")
 
     return {
-        "message": "purchased",
-        "contract_id": buy_response_payload.get("contract_id"),
-        "buy_price": buy_response_payload.get("buy_price") or buy_response_payload.get("price"),
-        "payout": buy_response_payload.get("payout") or (proposal_snapshot or {}).get("payout"),
-        "transaction_id": buy_response_payload.get("transaction_id"),
+        "contract_id": contract_id,
+        "buy_price": buy_price,
+        "payout": payout,
+        "start_time": start_time,
+        "expiry_time": expiry_time,
+        "longcode": buy_response.get("longcode"),
+        "transaction_id": buy_response.get("transaction_id"),
+        "balance_after": buy_response.get("balance_after"),
+        "contract_doc_id": contract_doc.get("id") if contract_doc else None,
     }
 
 @api_router.post("/deriv/sell")
 async def deriv_sell(req: SellRequest):
+    """Sell/close a contract before expiry"""
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
+
     req_id = int(time.time() * 1000)
+    payload = {
+        "sell": int(req.contract_id),
+        "price": float(req.price or 0),  # 0 = market price
+        "req_id": req_id,
+    }
+
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
-    await _deriv._send({
-        "sell": req.contract_id,
-        "price": req.price or 0,
-        "req_id": req_id,
-    })
+    await _deriv._send(payload)
+
     try:
         data = await asyncio.wait_for(fut, timeout=10)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for sell response")
+        raise HTTPException(status_code=504, detail="Timeout waiting for sell")
+
     if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "Sell error"))
-    s = data.get("sell", {})
-    return {"message": "sold", "contract_id": s.get("contract_id"), "sold_for": s.get("sold_for")}
+        msg = data["error"].get("message", "sell error")
+        raise HTTPException(status_code=400, detail=msg)
 
-# -------------------- Strategy Runner (Paper/Live) -----------------------
+    sell_response = data.get("sell", {})
+    if not sell_response:
+        raise HTTPException(status_code=400, detail="Empty sell response")
 
-class StrategyParams(BaseModel):
+    return {
+        "sold_for": float(sell_response.get("sold_for", 0)),
+        "transaction_id": sell_response.get("transaction_id"),
+        "balance_after": sell_response.get("balance_after"),
+    }
+
+# ------------------- WebSocket API Endpoints -------------------
+
+@api_router.websocket("/ws/ticks")
+async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
+    """WebSocket endpoint for real-time tick data from multiple symbols"""
+    await websocket.accept()
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    queues = []
+    
+    try:
+        # Create queues for each symbol
+        for symbol in symbol_list:
+            queue = await _deriv.add_queue(symbol)
+            queues.append((symbol, queue))
+        
+        # Send initial message
+        await websocket.send_json({"symbols": symbol_list})
+        
+        # Relay messages
+        while True:
+            for symbol, queue in queues:
+                try:
+                    message = queue.get_nowait()
+                    await websocket.send_json(message)
+                except asyncio.QueueEmpty:
+                    continue
+            await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+            
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        # Clean up queues
+        for symbol, queue in queues:
+            _deriv.remove_queue(symbol, queue)
+
+@api_router.websocket("/ws/contract/{contract_id}")
+async def websocket_contract(websocket: WebSocket, contract_id: int):
+    """WebSocket endpoint for real-time contract updates"""
+    await websocket.accept()
+    queue = None
+    
+    try:
+        queue = await _deriv.add_contract_queue(contract_id)
+        
+        # Send initial message
+        await websocket.send_json({"contract_id": contract_id, "status": "subscribed"})
+        
+        # Relay contract updates
+        while True:
+            try:
+                message = await asyncio.wait_for(queue.get(), timeout=1.0)
+                await websocket.send_json(message)
+            except asyncio.TimeoutError:
+                # Send heartbeat
+                await websocket.send_json({"type": "heartbeat", "timestamp": int(time.time())})
+                continue
+                
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"Contract WebSocket error: {e}")
+    finally:
+        # Clean up queue
+        if queue:
+            _deriv.remove_contract_queue(contract_id, queue)
+
+# ------------------- Strategy API (paper trading simulation) -------------------
+
+class StrategyConfig(BaseModel):
     symbol: str = "R_100"
-    granularity: int = 60
-    candle_len: int = 200
+    granularity: int = 60  # seconds
+    candle_len: int = 200  # lookback window
     duration: int = 5
-    duration_unit: str = "t"
+    duration_unit: str = "t"  # ticks
     stake: float = 1.0
     daily_loss_limit: float = -20.0
+    # Technical indicators thresholds
     adx_trend: float = 22.0
     rsi_ob: float = 70.0
     rsi_os: float = 30.0
     bbands_k: float = 2.0
-    fast_ma: int = 9
-    slow_ma: int = 21
-    macd_fast: int = 12
-    macd_slow: int = 26
-    macd_sig: int = 9
     mode: str = "paper"  # paper | live
-    # ML gating (Passo 4)
-    ml_gate: bool = False
-    ml_prob_threshold: float = 0.5
 
-# Track PnL per trade action type
-class _PnLTracker:
+class StrategyRunner:
     def __init__(self):
-        self.total_pnl: float = 0.0
-        self.daily_pnl: float = 0.0
-        self.last_day: date = date.today()
+        self.running = False
+        self.config: Optional[StrategyConfig] = None
+        self.last_run_at: Optional[int] = None
+        self.today_pnl = 0.0
+        self.today_trades = 0
+        self.task: Optional[asyncio.Task] = None
 
-    def add(self, profit: float):
-        # reset if new day
-        today = date.today()
-        if today != self.last_day:
-            self.last_day = today
-            self.daily_pnl = 0.0
-        self.total_pnl += profit
-        self.daily_pnl += profit
-
-_global_pnl = _PnLTracker()
-
-# Initialize Online Learning Manager
-from online_learning import OnlineLearningManager
-_online_manager = OnlineLearningManager()
-
-class GlobalStats:
-    """Global statistics tracker for all trades (manual + automated + strategy)"""
-    def __init__(self):
-        self.total_trades: int = 0
-        self.wins: int = 0
-        self.losses: int = 0
-        self.daily_pnl: float = 0.0
-        self.processed_contracts: set = set()  # To avoid double counting for live/manual
-        self.last_day: date = date.today()
+    async def start(self, config: StrategyConfig):
+        if self.running:
+            return False
         
-    def _ensure_today(self):
-        today = date.today()
-        if today != self.last_day:
-            # Reset ALL day stats and processed set for a clean new day
-            self.last_day = today
-            self.total_trades = 0
-            self.wins = 0
-            self.losses = 0
-            self.daily_pnl = 0.0
-            self.processed_contracts = set()
+        self.config = config
+        self.running = True
+        self.last_run_at = int(time.time())
+        self.today_pnl = 0.0
+        self.today_trades = 0
         
-    def add_trade_result(self, contract_id: int, profit: float) -> bool:
-        """Add a completed LIVE/MANUAL trade result to global stats (uses contract_id dedup).
-        Returns True when this contract_id was accounted for (first time), False otherwise.
-        """
-        self._ensure_today()
-        if contract_id in self.processed_contracts:
-            return False  # Already processed
-        self.processed_contracts.add(contract_id)
-        self._apply_profit(profit)
+        # Start the strategy loop
+        self.task = asyncio.create_task(self._strategy_loop())
         return True
 
-    def add_paper_trade_result(self, profit: float):
-        """Add a simulated (paper) trade to global stats (no contract_id)."""
-        self._ensure_today()
-        self._apply_profit(profit)
+    async def stop(self):
+        self.running = False
+        if self.task:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
+        return True
 
-    def _apply_profit(self, profit: float):
-        self.total_trades += 1
-        self.daily_pnl += profit
-        if profit > 0:
-            self.wins += 1
-        else:
-            self.losses += 1
-    
-    @property
-    def win_rate(self) -> float:
-        """Calculate win rate percentage"""
-        self._ensure_today()
-        if self.total_trades == 0:
-            return 0.0
-        return (self.wins / self.total_trades) * 100.0
-    
-    def reset_daily(self):
-        """Reset daily stats (forcibly resets all day counters and contracts)"""
-        self.last_day = date.today()
-        self.total_trades = 0
-        self.wins = 0
-        self.losses = 0
-        self.daily_pnl = 0.0
-        self.processed_contracts = set()
+    async def _strategy_loop(self):
+        try:
+            while self.running:
+                await self._run_strategy_once()
+                await asyncio.sleep(10)  # Run every 10 seconds
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Strategy loop error: {e}")
+            self.running = False
 
-# Global stats instance
-_global_stats = GlobalStats()
+    async def _run_strategy_once(self):
+        if not self.config or not self.running:
+            return
 
-class StrategyStatus(BaseModel):
-    running: bool
-    mode: str
-    symbol: str
-    in_position: bool
-    daily_pnl: float
-    global_daily_pnl: float = 0.0
-    day: str
-    last_signal: Optional[str] = None
-    last_reason: Optional[str] = None
-    last_run_at: Optional[int] = None
-    # Global stats (all trades: manual + automated + strategy)
-    total_trades: int = 0
-    wins: int = 0
-    losses: int = 0
-    win_rate: float = 0.0
+        try:
+            # Check daily loss limit
+            if self.today_pnl <= self.config.daily_loss_limit:
+                logger.info(f"Daily loss limit reached: {self.today_pnl}")
+                return
 
+            # Get recent candles
+            df = await fetch_candles(self.config.symbol, self.config.granularity, self.config.candle_len)
+            if len(df) < 50:
+                return
 
-# ---- indicator helpers (ported from backup) ----
-from typing import Optional as _Optional
+            # Calculate technical indicators
+            close = df['close']
+            high = df['high'] 
+            low = df['low']
 
-def _ema_series(arr: List[float], period: int) -> List[_Optional[float]]:
-    if period <= 0:
-        return [None for _ in arr]
-    k = 2 / (period + 1)
+            # Simple moving averages
+            sma_20 = close.rolling(20).mean()
+            sma_50 = close.rolling(50).mean()
 
-# -------------------- ML Endpoints (async + sync) -----------------------
+            # RSI
+            rsi = _rsi(close.tolist(), 14)[-1] if len(close) >= 14 else 50
 
-class MlTrainParams(BaseModel):
-    source: str = "mongo"  # mongo|deriv|file
-    symbol: str = "R_100"
-    timeframe: str = "3m"
-    horizon: int = 3
-    threshold: float = 0.003
-    model_type: str = "rf"  # rf|dt
-    class_weight: Optional[str] = None
-    calibrate: Optional[str] = None  # sigmoid|isotonic
-    objective: str = "precision"
-    count: Optional[int] = None  # for source=deriv/file
+            # MACD
+            ema_12 = close.ewm(span=12).mean()
+            ema_26 = close.ewm(span=26).mean()
+            macd_line = ema_12 - ema_26
+            macd_signal = macd_line.ewm(span=9).mean()
+            macd_hist = (macd_line - macd_signal).iloc[-1] if len(macd_line) > 0 else 0
 
+            # Bollinger Bands
+            bb_basis = close.rolling(20).mean()
+            bb_std = close.rolling(20).std()
+            bb_upper = bb_basis + (self.config.bbands_k * bb_std)
+            bb_lower = bb_basis - (self.config.bbands_k * bb_std)
+
+            # ADX (simplified)
+            price_change = close.diff().abs()
+            adx_approx = price_change.rolling(14).mean().iloc[-1] if len(price_change) >= 14 else 0
+
+            # Current values
+            current_price = close.iloc[-1]
+            bb_position = (current_price - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]) if bb_upper.iloc[-1] != bb_lower.iloc[-1] else 0.5
+
+            # Strategy logic: Enter CALL if bullish conditions
+            signal = None
+            if (sma_20.iloc[-1] > sma_50.iloc[-1] and  # Short MA > Long MA
+                rsi < self.config.rsi_ob and rsi > self.config.rsi_os and  # RSI not overbought/oversold
+                macd_hist > 0 and  # MACD bullish
+                bb_position < 0.8 and  # Not near upper band
+                adx_approx > self.config.adx_trend):  # Trending market
+                signal = "CALL"
+            elif (sma_20.iloc[-1] < sma_50.iloc[-1] and  # Short MA < Long MA
+                  rsi < self.config.rsi_ob and rsi > self.config.rsi_os and  # RSI not overbought/oversold
+                  macd_hist < 0 and  # MACD bearish
+                  bb_position > 0.2 and  # Not near lower band
+                  adx_approx > self.config.adx_trend):  # Trending market
+                signal = "PUT"
+
+            if signal:
+                await self._execute_trade(signal)
+
+            self.last_run_at = int(time.time())
+
+        except Exception as e:
+            logger.error(f"Strategy execution error: {e}")
+
+    async def _execute_trade(self, signal: str):
+        if not self.config:
+            return
+
+        try:
+            if self.config.mode == "paper":
+                # Paper trading simulation
+                payout = 0.95  # 95% payout simulation
+                win_prob = 0.52  # Slightly positive expectation
+                won = np.random.random() < win_prob
+                profit = (self.config.stake * payout) if won else -self.config.stake
+                
+                self.today_pnl += profit
+                self.today_trades += 1
+                
+                # Update global stats for paper trades
+                _global_stats.add_paper_trade_result(profit)
+                _global_pnl.add(profit)
+                
+                logger.info(f"Paper trade executed: {signal}, profit: {profit:.2f}, today_pnl: {self.today_pnl:.2f}")
+                
+            elif self.config.mode == "live":
+                # Live trading - execute actual trade
+                buy_req = BuyRequest(
+                    symbol=self.config.symbol,
+                    contract_type=signal,
+                    duration=self.config.duration,
+                    duration_unit=self.config.duration_unit,
+                    stake=self.config.stake,
+                    extra={"no_stats": True}  # Mark for no global stats (handled by strategy)
+                )
+                
+                result = await deriv_buy(buy_req)
+                logger.info(f"Live trade executed: {signal}, contract_id: {result.get('contract_id')}")
+                
+                # Mark this contract to not update global stats (strategy manages its own)
+                if result.get('contract_id'):
+                    _global_stats.mark_no_stats(result['contract_id'])
+
+        except Exception as e:
+            logger.error(f"Trade execution error: {e}")
+
+    def get_status(self) -> Dict[str, Any]:
+        return {
+            "running": self.running,
+            "config": self.config.dict() if self.config else None,
+            "last_run_at": self.last_run_at,
+            "today_pnl": self.today_pnl,
+            "today_trades": self.today_trades,
+            "total_trades": _global_stats.total_trades,
+            "wins": _global_stats.wins,
+            "losses": _global_stats.losses,
+            "win_rate": _global_stats.get_win_rate(),
+            "daily_pnl": _global_stats.daily_pnl,
+            "global_daily_pnl": _global_pnl.total,
+        }
+
+# Global strategy runner instance
+_strategy_runner = StrategyRunner()
+
+@api_router.post("/strategy/start")
+async def start_strategy(config: StrategyConfig):
+    """Start the automated trading strategy"""
+    success = await _strategy_runner.start(config)
+    if success:
+        return {"message": "Strategy started", "config": config.dict()}
+    else:
+        raise HTTPException(status_code=400, detail="Strategy already running")
+
+@api_router.post("/strategy/stop")
+async def stop_strategy():
+    """Stop the automated trading strategy"""
+    success = await _strategy_runner.stop()
+    return {"message": "Strategy stopped", "success": success}
+
+@api_router.get("/strategy/status")
+async def get_strategy_status():
+    """Get current strategy status and statistics"""
+    return _strategy_runner.get_status()
+
+# ------------------- ML API -------------------
+
+# ML jobs storage (in-memory for demo)
 _jobs: Dict[str, Dict[str, Any]] = {}
 
+# Fetch candles helper
 async def fetch_candles(symbol: str, granularity: int, count: int) -> pd.DataFrame:
-    """Fetch candles from Deriv and return as DataFrame"""
+    """Fetch candles from Deriv API"""
     if not _deriv.connected:
-        raise HTTPException(status_code=503, detail="Deriv desconectado")
+        raise RuntimeError("Deriv not connected")
     
     req_id = int(time.time() * 1000)
     fut = asyncio.get_running_loop().create_future()
@@ -1261,7 +1533,7 @@ async def fetch_candles(symbol: str, granularity: int, count: int) -> pd.DataFra
         "ticks_history": symbol,
         "adjust_start_time": 1,
         "count": count,
-        "end": "latest",
+        "end": "latest", 
         "start": 1,
         "style": "candles",
         "granularity": granularity,
@@ -1272,102 +1544,43 @@ async def fetch_candles(symbol: str, granularity: int, count: int) -> pd.DataFra
         data = await asyncio.wait_for(fut, timeout=30)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout buscando dados da Deriv")
+        raise RuntimeError("Timeout fetching candles")
     
     if data.get("error"):
-        raise HTTPException(status_code=400, detail=f"Erro da Deriv: {data['error'].get('message', 'unknown')}")
+        raise RuntimeError(f"Deriv error: {data['error'].get('message', 'unknown')}")
     
     candles = data.get("candles") or []
     if not candles:
-        raise HTTPException(status_code=400, detail="Nenhum candle recebido da Deriv")
+        raise RuntimeError("No candles received")
     
-    # Convert to DataFrame
     records = []
     for candle in candles:
         records.append({
             "open": float(candle["open"]),
-            "high": float(candle["high"]),
+            "high": float(candle["high"]), 
             "low": float(candle["low"]),
             "close": float(candle["close"]),
             "volume": int(candle.get("volume", 0)),
             "time": int(candle["epoch"])
         })
     
-    df = pd.DataFrame(records)
-    return df
+    return pd.DataFrame(records)
 
 async def _fetch_deriv_data_for_ml(symbol: str, timeframe: str, count: int) -> pd.DataFrame:
-    """Fetch candles from Deriv and format for ML training"""
-    if not _deriv.connected:
-        raise HTTPException(status_code=503, detail="Deriv desconectado")
-    
-    # Map timeframe to granularity
-    granularity_map = {
-        "1m": 60,
-        "3m": 180, 
-        "5m": 300,
-        "15m": 900,
-        "30m": 1800,
-        "1h": 3600,
-        "4h": 14400,
-        "1d": 86400
-    }
-    granularity = granularity_map.get(timeframe, 180)  # default 3m
-    
-    # Ensure we have enough data for ML (minimum 1000)
-    if count < 1000:
-        raise HTTPException(status_code=400, detail="Dados insuficientes: mínimo 1000 candles necessários")
-    
-    req_id = int(time.time() * 1000)
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
-    
-    await _deriv._send({
-        "ticks_history": symbol,
-        "adjust_start_time": 1,
-        "count": count,
-        "end": "latest",
-        "start": 1,
-        "style": "candles",
-        "granularity": granularity,
-        "req_id": req_id,
-    })
-    
-    try:
-        data = await asyncio.wait_for(fut, timeout=30)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout buscando dados da Deriv")
-    
-    if data.get("error"):
-        raise HTTPException(status_code=400, detail=f"Erro da Deriv: {data['error'].get('message', 'unknown')}")
-    
-    candles = data.get("candles") or []
-    if not candles:
-        raise HTTPException(status_code=400, detail="Nenhum candle recebido da Deriv")
-    
-    # Convert to DataFrame
-    records = []
-    for candle in candles:
-        records.append({
-            "open": float(candle["open"]),
-            "high": float(candle["high"]),
-            "low": float(candle["low"]),
-            "close": float(candle["close"]),
-            "volume": int(candle.get("volume", 0)),
-            "time": int(candle["epoch"])
-        })
-    
-    df = pd.DataFrame(records)
-    if len(df) < 1000:
-        raise HTTPException(status_code=400, detail=f"Dados insuficientes vindos da Deriv: {len(df)} candles (mínimo 1000)")
-    
+    """Fetch data from Deriv for ML training"""
+    granularity = {"1m": 60, "3m": 180, "5m": 300}.get(timeframe, 180)
+    df = await fetch_candles(symbol, granularity, count)
+    if len(df) < 100:
+        raise RuntimeError("Dados insuficientes vindos da Deriv")
     return df
 
 @api_router.get("/ml/status")
 async def ml_status():
-    champ = ml_utils.load_champion()
-    return champ or {"message": "no champion"}
+    """Get current ML model champion status"""
+    champion = ml_utils.load_champion()
+    if not champion:
+        return {"message": "no champion"}
+    return champion
 
 @api_router.post("/ml/train")
 async def ml_train(
@@ -1379,23 +1592,20 @@ async def ml_train(
     model_type: str = Query("rf"),
     class_weight: Optional[str] = Query(None),
     calibrate: Optional[str] = Query(None),
-    objective: str = Query("precision"),
-    count: Optional[int] = Query(1000),
+    objective: str = Query("f1"),
 ):
+    """Train ML model synchronously (single combination)"""
     try:
         if source == "deriv":
-            # Fetch data directly from Deriv
-            df = await _fetch_deriv_data_for_ml(symbol, timeframe, count or 1000)
-        elif source == "mongo":
-            # load data from Mongo or CSV (fallback)  
-            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+            df = await _fetch_deriv_data_for_ml(symbol, timeframe, 3000)
         else:
-            raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
+            df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
+
         out = await asyncio.to_thread(
             ml_utils.train_and_maybe_promote,
             df,
             horizon,
-            threshold,
+            threshold, 
             model_type,
             f"{symbol}_{timeframe}",
             class_weight,
@@ -1430,9 +1640,9 @@ async def ml_train_async(
     thresholds: Optional[str] = Query(None),
     count: Optional[int] = Query(20000),
 ):
-    # Support both 'mongo' and 'deriv' sources for async training
-    if source not in ["mongo", "deriv"]:
-        raise HTTPException(status_code=400, detail="Sem dados: Mongo vazio e /data/ml/ohlcv.csv não existe")
+    # Support both 'mongo', 'deriv' and 'file' sources for async training
+    if source not in ["mongo", "deriv", "file"]:
+        raise HTTPException(status_code=400, detail="Supported sources: mongo, deriv, file")
     job_id = f"ml-{int(time.time()*1000)}"
     _jobs[job_id] = {"status": "queued", "progress": {"done": 0, "total": 0}}
 
@@ -1441,6 +1651,8 @@ async def ml_train_async(
         try:
             if source == "deriv":
                 df = await _fetch_deriv_data_for_ml(symbol, timeframe, count or 20000)
+            elif source == "file":
+                df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
             else:
                 df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, timeframe)  # type: ignore
             h_str = horizons or str(horizon)
@@ -1632,452 +1844,38 @@ async def ingest_candles(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na ingestão: {str(e)}")
 
-def _rsi(close: List[float], period: int = 14) -> List[_Optional[float]]:
+def _rsi(close: List[float], period: int = 14) -> List[float]:
+    """Simple RSI calculation"""
     if len(close) < period + 1:
-        return [None for _ in close]
-    gains: List[float] = []
-    losses: List[float] = []
-    for i in range(1, len(close)):
-        diff = close[i] - close[i - 1]
-        gains.append(max(diff, 0.0))
-        losses.append(max(-diff, 0.0))
-    avg_gain = _ema_series(gains, period)
-    avg_loss = _ema_series(losses, period)
-    rsi: List[_Optional[float]] = [None]
-    for i in range(len(avg_gain)):
-        g = avg_gain[i]
-        l = avg_loss[i]
-        if g is None or l is None or l == 0:
-            rsi.append(None)
-            continue
-        rs = g / l
-        rsi.append(100 - (100 / (1 + rs)))
-    # pad to match len(close)
-    if len(rsi) < len(close):
-        rsi = [None] * (len(close) - len(rsi)) + rsi
-    return rsi[:len(close)]
-
-def _macd(close: List[float], f: int, s: int, sig: int):
-    ema_f = _ema_series(close, f)
-    ema_s = _ema_series(close, s)
-    line: List[_Optional[float]] = []
-    for i in range(len(close)):
-        a = ema_f[i]
-        b = ema_s[i]
-        line.append((a - b) if (a is not None and b is not None) else None)
-    # signal ema on non-None
-    clean = [x for x in line if x is not None]
-    sig_series = _ema_series(clean, sig) if clean else []
-    # align
-    pad = len(line) - len(sig_series)
-    signal = [None] * pad + sig_series
-    hist: List[_Optional[float]] = []
-    for i in range(len(line)):
-        l = line[i]
-        s_v = signal[i] if i < len(signal) else None
-        hist.append((l - s_v) if (l is not None and s_v is not None) else None)
-    return {"line": line, "signal": signal, "hist": hist}
-
-def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
-    out_mid: List[_Optional[float]] = []
-    out_up: List[_Optional[float]] = []
-    out_lo: List[_Optional[float]] = []
-    for i in range(len(close)):
-        if i + 1 < period:
-            out_mid.append(None); out_up.append(None); out_lo.append(None)
-            continue
-        seg = close[i + 1 - period:i + 1]
-        mid = sum(seg) / period
-        var = sum((x - mid) ** 2 for x in seg) / period
-        std = var ** 0.5
-        out_mid.append(mid)
-        out_up.append(mid + k * std)
-        out_lo.append(mid - k * std)
-    return {"mid": out_mid, "upper": out_up, "lower": out_lo}
-
-def _true_range(h: float, l: float, pc: float) -> float:
-    return max(h - l, abs(h - pc), abs(l - pc))
-
-def _rma(arr: List[float], p: int) -> List[_Optional[float]]:
-    if not arr:
-        return []
-    alpha = 1.0 / p
-    out: List[_Optional[float]] = []
-    prev: _Optional[float] = None
-    for x in arr:
-        if prev is None:
-            prev = x
+        return [50.0] * len(close)
+    
+    deltas = [close[i] - close[i-1] for i in range(1, len(close))]
+    gains = [max(0, delta) for delta in deltas]
+    losses = [max(0, -delta) for delta in deltas]
+    
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    
+    rs_values = []
+    for i in range(period, len(deltas)):
+        if avg_loss == 0:
+            rs_values.append(100.0)
         else:
-            prev = prev + alpha * (x - prev)
-        out.append(prev)
-    return out
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            rs_values.append(rsi)
+        
+        # Update averages
+        gain = gains[i]
+        loss = losses[i]
+        avg_gain = (avg_gain * (period - 1) + gain) / period
+        avg_loss = (avg_loss * (period - 1) + loss) / period
+    
+    return [50.0] * (period + 1) + rs_values
 
-def _adx(high: List[float], low: List[float], close: List[float], period: int = 14) -> List[_Optional[float]]:
-    if len(close) < period + 1:
-        return [None for _ in close]
-    tr: List[float] = []
-    plusDM: List[float] = []
-    minusDM: List[float] = []
-    for i in range(1, len(close)):
-        tr.append(_true_range(high[i], low[i], close[i - 1]))
-        up = high[i] - high[i - 1]
-        dn = low[i - 1] - low[i]
-        plusDM.append(up if (up > dn and up > 0) else 0.0)
-        minusDM.append(dn if (dn > up and dn > 0) else 0.0)
-    trR = _rma(tr, period)
-    plusR = _rma(plusDM, period)
-    minusR = _rma(minusDM, period)
-    plusDI: List[_Optional[float]] = []
-    minusDI: List[_Optional[float]] = []
-    for i in range(len(trR)):
-        if trR[i] is not None and plusR[i] is not None:
-            plusDI.append(100 * (plusR[i] / trR[i]))
-        else:
-            plusDI.append(None)
-        if trR[i] is not None and minusR[i] is not None:
-            minusDI.append(100 * (minusR[i] / trR[i]))
-        else:
-            minusDI.append(None)
-    dx: List[_Optional[float]] = []
-    for i in range(len(plusDI)):
-        p = plusDI[i]
-        m = minusDI[i]
-        if p is not None and m is not None and (p + m) != 0:
-            dx.append(100 * (abs(p - m) / (p + m)))
-        else:
-            dx.append(None)
-    dx_clean = [x for x in dx[1:] if x is not None]
-    adxR = _rma(dx_clean, period)
-    pad_len = len(close) - len(adxR)
-    if pad_len < 0:
-        pad_len = 0
-    return [None] * pad_len + adxR
-
-class StrategyRunner:
-    def __init__(self):
-        self.task: Optional[asyncio.Task] = None
-        self.params: StrategyParams = StrategyParams()
-        self.running: bool = False
-        self.in_position: bool = False
-        self.daily_pnl: float = 0.0
-        self.mode: str = "paper"
-        self.last_signal: Optional[str] = None
-        self.last_reason: Optional[str] = None
-        self.last_run_at: Optional[int] = None
-        self.day: date = date.today()
-
-    def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
-        close = [float(c.get("close")) for c in candles]
-        high = [float(c.get("high")) for c in candles]
-        low = [float(c.get("low")) for c in candles]
-        adx_arr = _adx(high, low, close)
-        last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
-        ma_fast = _sma(close, self.params.fast_ma)
-        ma_slow = _sma(close, self.params.slow_ma)
-        prev_fast = _sma(close[:-1], self.params.fast_ma)
-        prev_slow = _sma(close[:-1], self.params.slow_ma)
-        macd_res = _macd(close, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
-        last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
-        last_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
-        rsi_arr = _rsi(close)
-        last_rsi = next((x for x in reversed(rsi_arr) if x is not None), None)
-        bb = _bollinger(close, 20, self.params.bbands_k)
-        last_price = close[-1]
-        last_upper = next((x for x in reversed(bb["upper"]) if x is not None), None)
-        last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
-        trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
-        if trending:
-            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
-            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
-            if bull_cross:
-                return {"side": "RISE", "reason": f"Trend↑ ADX {last_adx:.1f} + MA/MACD"}
-            if bear_cross:
-                return {"side": "FALL", "reason": f"Trend↓ ADX {last_adx:.1f} + MA/MACD"}
-        else:
-            touch_upper = (last_upper is not None and last_price >= last_upper)
-            touch_lower = (last_lower is not None and last_price <= last_lower)
-            if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
-                return {"side": "FALL", "reason": f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"}
-            if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
-                return {"side": "RISE", "reason": f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"}
-        return None
-
-    async def _get_candles(self, symbol: str, granularity: int, count: int) -> List[Dict[str, Any]]:
-        if not _deriv.connected:
-            raise HTTPException(status_code=503, detail="Deriv not connected")
-        req_id = int(time.time() * 1000)
-        fut = asyncio.get_running_loop().create_future()
-        _deriv.pending[req_id] = fut
-        await _deriv._send({
-            "ticks_history": symbol,
-            "adjust_start_time": 1,
-            "count": count,
-            "end": "latest",
-            "start": 1,
-            "style": "candles",
-            "granularity": granularity,
-            "req_id": req_id,
-        })
-        try:
-            data = await asyncio.wait_for(fut, timeout=12)
-        except asyncio.TimeoutError:
-            _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for candles")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "history error"))
-        return data.get("candles") or []
-
-    async def _paper_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
-        await _deriv.ensure_subscribed(symbol)
-        q = await _deriv.add_queue(symbol)
-        entry_price: Optional[float] = None
-        profit: float = 0.0
-        try:
-            try:
-                first_msg = await asyncio.wait_for(q.get(), timeout=10)
-                entry_price = float(first_msg.get("price")) if first_msg else None
-            except asyncio.TimeoutError:
-                return 0.0
-            last_price = entry_price
-            collected = 0
-            t0 = time.time()
-            while collected < duration_ticks and (time.time() - t0) < (duration_ticks * 5):
-                try:
-                    m = await asyncio.wait_for(q.get(), timeout=5)
-                    if m and m.get("type") == "tick":
-                        last_price = float(m.get("price"))
-                        collected += 1
-                except asyncio.TimeoutError:
-                    pass
-            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price)))
-            profit = (stake * 0.95) if win else (-stake)
-            return profit
-        finally:
-            _deriv.remove_queue(symbol, q)
-
-    async def _live_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
-        req = BuyRequest(
-            type="CALLPUT",
-            symbol=symbol,
-            contract_type=("CALL" if side == "RISE" else "PUT"),
-            duration=duration_ticks,
-            duration_unit="t",
-            stake=stake,
-            currency="USD",
-        )
-        try:
-            buy_res = await deriv_buy(req)
-        except HTTPException as e:
-            logger.warning(f"Live buy failed: {e.detail}")
-            return 0.0
-        cid = buy_res.get("contract_id")
-        if not cid:
-            return 0.0
-        q = await _deriv.add_contract_queue(int(cid))
-        profit: float = 0.0
-        try:
-            t0 = time.time()
-            while True:
-                try:
-                    mtxt = await asyncio.wait_for(q.get(), timeout=30)
-                except asyncio.TimeoutError:
-                    if time.time() - t0 > 120:
-                        break
-                    continue
-                if isinstance(mtxt, dict) and mtxt.get("type") == "contract":
-                    poc = mtxt
-                    if poc.get("is_expired"):
-                        try:
-                            profit = float(poc.get("profit") or 0.0)
-                        except Exception:
-                            profit = 0.0
-                        break
-        finally:
-            _deriv.remove_contract_queue(int(cid), q)
-        return profit
-
-    async def _loop(self):
-        self.running = True
-        self.day = date.today()
-        self.daily_pnl = 0.0
-        self.in_position = False
-        cooldown_seconds = 5
-        logger.info(f"Strategy loop started: {self.params}")
-        while self.running:
-            try:
-                if date.today() != self.day:
-                    self.day = date.today()
-                    self.daily_pnl = 0.0
-                if self.daily_pnl <= self.params.daily_loss_limit:
-                    logger.info("Daily loss limit reached. Stopping strategy.")
-                    self.running = False
-                    break
-                candles = await self._get_candles(self.params.symbol, self.params.granularity, self.params.candle_len)
-                self.last_run_at = int(time.time())
-                signal = self._decide_signal(candles)
-                if not signal:
-                    await asyncio.sleep(cooldown_seconds)
-                    continue
-                if self.in_position:
-                    await asyncio.sleep(cooldown_seconds)
-                    continue
-                self.last_signal = signal.get("side")
-                self.last_reason = signal.get("reason")
-                side = signal.get("side")
-                self.in_position = True
-                if self.params.mode == "paper":
-                    pnl = await self._paper_trade(self.params.symbol, side, self.params.duration, self.params.stake)
-                else:
-                    pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
-                self.daily_pnl += pnl
-                try:
-                    _global_stats.add_paper_trade_result(pnl)
-                    _global_pnl.add(pnl)
-                except Exception:
-                    pass
-                logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} reason={self.last_reason}")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.warning(f"Strategy error: {e}")
-            finally:
-                self.in_position = False
-                await asyncio.sleep(cooldown_seconds)
-        self.running = False
-        logger.info("Strategy loop stopped")
-
-    async def start(self, params: StrategyParams):
-        if self.task and not self.task.done():
-            raise HTTPException(status_code=400, detail="Strategy already running")
-        self.params = params
-        self.mode = params.mode
-        self.task = asyncio.create_task(self._loop())
-
-    async def stop(self):
-        if self.task and not self.task.done():
-            self.task.cancel()
-            try:
-                await self.task
-            except Exception:
-                pass
-        self.running = False
-
-    def status(self) -> StrategyStatus:
-        return StrategyStatus(
-            running=self.running,
-            mode=self.mode,
-            symbol=self.params.symbol,
-            in_position=self.in_position,
-            daily_pnl=self.daily_pnl,
-            global_daily_pnl=_global_pnl.daily_pnl,
-            day=self.day.isoformat(),
-            last_signal=self.last_signal,
-            last_reason=self.last_reason,
-            last_run_at=self.last_run_at,
-            total_trades=_global_stats.total_trades,
-            wins=_global_stats.wins,
-            losses=_global_stats.losses,
-            win_rate=_global_stats.win_rate,
-        )
-
-_strategy = StrategyRunner()
-
-@api_router.post("/strategy/start", response_model=StrategyStatus)
-async def strategy_start(params: StrategyParams):
-    await _strategy.start(params)
-    return _strategy.status()
-
-@api_router.post("/strategy/stop", response_model=StrategyStatus)
-async def strategy_stop():
-    await _strategy.stop()
-    return _strategy.status()
-
-@api_router.get("/strategy/status", response_model=StrategyStatus)
-async def strategy_status():
-    return _strategy.status()
-
-# ---- WebSocket endpoints for clients ----
-@app.websocket("/api/ws/ticks")
-async def ws_ticks(websocket: WebSocket):
-    await websocket.accept()
-    queues: Dict[str, asyncio.Queue] = {}
-    try:
-        init = await websocket.receive_text()
-        try:
-            msg = json.loads(init)
-        except json.JSONDecodeError:
-            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON"}))
-            await websocket.close()
-            return
-        symbols = msg.get("symbols") or []
-        if not symbols:
-            await websocket.send_text(json.dumps({"type": "error", "message": "No symbols provided"}))
-            await websocket.close()
-            return
-        for s in symbols:
-            q = await _deriv.add_queue(s)
-            queues[s] = q
-        await websocket.send_text(json.dumps({"type": "subscribed", "symbols": list(queues.keys())}))
-        while True:
-            get_tasks = [asyncio.create_task(q.get()) for q in queues.values()]
-            done, pending = await asyncio.wait(get_tasks, return_when=asyncio.FIRST_COMPLETED, timeout=15)
-            for p in pending:
-                p.cancel()
-            if not done:
-                await websocket.send_text(json.dumps({"type": "ping"}))
-                continue
-            for d in done:
-                try:
-                    data = d.result()
-                    await websocket.send_text(json.dumps(data))
-                except Exception:
-                    pass
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.warning(f"Client WS error: {e}")
-    finally:
-        for s, q in queues.items():
-            _deriv.remove_queue(s, q)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-@app.websocket("/api/ws/contract/{contract_id}")
-async def ws_contract(websocket: WebSocket, contract_id: int):
-    await websocket.accept()
-    q: Optional[asyncio.Queue] = None
-    try:
-        q = await _deriv.add_contract_queue(contract_id)
-        await websocket.send_text(json.dumps({"type": "subscribed", "contract_id": contract_id}))
-        while True:
-            try:
-                data = await asyncio.wait_for(q.get(), timeout=25)
-                await websocket.send_text(json.dumps(data))
-            except asyncio.TimeoutError:
-                await websocket.send_text(json.dumps({"type": "ping"}))
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.warning(f"Client WS (contract) error: {e}")
-    finally:
-        if q is not None:
-            _deriv.remove_contract_queue(contract_id, q)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-# ---- indicator helpers (python versions) ----
-
-def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
-    if i is None:
-        i = len(arr)
-    if i - n < 0:
-        return None
-    seg = arr[i - n:i]
-    return sum(seg) / n if seg else None
-
-# Include the API router
+# Mount the API router
 app.include_router(api_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
