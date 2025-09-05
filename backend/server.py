@@ -308,6 +308,13 @@ class DerivWS:
                                         except Exception:
                                             pass
                                         logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
+                                        
+                                        # Online Learning: Adapt models with trade outcome
+                                        try:
+                                            await _adapt_online_models_with_trade(cid_int, profit, poc)
+                                        except Exception as e:
+                                            logger.warning(f"Online learning adaptation failed: {e}")
+                                            
                                 except Exception as e:
                                     logger.warning(f"Failed to update global stats: {e}")
                                 # Persist contract closing to Mongo
