@@ -28,6 +28,11 @@ export default function MlPanel() {
   const pollRef = useRef(null);
   const transientErrRef = useRef(0);
 
+  // Online Learning states
+  const [onlineModels, setOnlineModels] = useState([]);
+  const [onlineProgress, setOnlineProgress] = useState(null);
+  const [creatingOnlineModel, setCreatingOnlineModel] = useState(false);
+
   // Post-calibration probability threshold (for Step 4 usage)
   const [probThreshold, setProbThreshold] = useState(() => {
     const v = localStorage.getItem("ml_prob_threshold");
