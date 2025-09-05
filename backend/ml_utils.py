@@ -221,17 +221,122 @@ def volume_indicators(close: pd.Series, volume: pd.Series) -> Dict[str, pd.Serie
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Enhanced feature engineering with advanced technical indicators"""
     df = df.copy()
+    
+    # Original indicators
     df["rsi_14"] = rsi(df["close"], 14)
+    df["rsi_7"] = rsi(df["close"], 7)  # Shorter period RSI
+    df["rsi_21"] = rsi(df["close"], 21)  # Longer period RSI
+    
+    # MACD with multiple timeframes
     macd_line, macd_sig, macd_hist = macd(df["close"], 12, 26, 9)
     df["macd_line"], df["macd_signal"], df["macd_hist"] = macd_line, macd_sig, macd_hist
+    
+    # Fast MACD
+    macd_fast_line, macd_fast_sig, macd_fast_hist = macd(df["close"], 5, 13, 4)
+    df["macd_fast_line"], df["macd_fast_signal"], df["macd_fast_hist"] = macd_fast_line, macd_fast_sig, macd_fast_hist
+    
+    # Bollinger Bands with multiple periods
     bb_mid, bb_up, bb_lo = bollinger(df["close"], 20, 2.0)
     df["bb_basis"], df["bb_upper"], df["bb_lower"] = bb_mid, bb_up, bb_lo
-    for col in [
-        "rsi_14","macd_line","macd_signal","macd_hist","bb_basis","bb_upper","bb_lower","close"
-    ]:
-        df[f"{col}_slope3"] = df[col].diff(3)
-    df["close_z20"] = (df["close"] - df["close"].rolling(20).mean()) / (df["close"].rolling(20).std() + 1e-9)
+    
+    bb_mid_short, bb_up_short, bb_lo_short = bollinger(df["close"], 10, 1.5)
+    df["bb_basis_short"], df["bb_upper_short"], df["bb_lower_short"] = bb_mid_short, bb_up_short, bb_lo_short
+    
+    # Advanced momentum indicators
+    df["adx_14"] = adx(df["high"], df["low"], df["close"], 14)
+    
+    stoch_k, stoch_d = stochastic(df["high"], df["low"], df["close"], 14, 3)
+    df["stoch_k"], df["stoch_d"] = stoch_k, stoch_d
+    
+    df["williams_r"] = williams_r(df["high"], df["low"], df["close"], 14)
+    df["cci_20"] = cci(df["high"], df["low"], df["close"], 20)
+    
+    # Volatility indicators
+    df["atr_14"] = atr(df["high"], df["low"], df["close"], 14)
+    df["atr_7"] = atr(df["high"], df["low"], df["close"], 7)
+    
+    # Volume indicators (if volume available)
+    if "volume" in df.columns and df["volume"].sum() > 0:
+        df["mfi_14"] = mfi(df["high"], df["low"], df["close"], df["volume"], 14)
+        df["vwap"] = vwap(df["high"], df["low"], df["close"], df["volume"])
+        
+        vol_indicators = volume_indicators(df["close"], df["volume"])
+        for key, value in vol_indicators.items():
+            df[f"vol_{key}"] = value
+    
+    # Ichimoku components
+    ichimoku_dict = ichimoku(df["high"], df["low"], df["close"], 9, 26, 52)
+    for key, value in ichimoku_dict.items():
+        df[f"ichi_{key}"] = value
+    
+    # Fibonacci levels
+    fib_levels = fibonacci_levels(df["high"], df["low"], 20)
+    for key, value in fib_levels.items():
+        df[key] = value
+        # Distance to fibonacci levels
+        df[f"{key}_distance"] = (df["close"] - value) / value
+    
+    # Support/Resistance
+    sr_levels = support_resistance(df["close"], 20, 2)
+    for key, value in sr_levels.items():
+        df[f"sr_{key}"] = value
+    
+    # Price patterns
+    if "open" in df.columns:
+        patterns = price_patterns(df["open"], df["high"], df["low"], df["close"])
+        for key, value in patterns.items():
+            df[f"pattern_{key}"] = value
+    
+    # Multiple timeframe EMAs
+    for period in [5, 9, 12, 21, 50, 100, 200]:
+        df[f"ema_{period}"] = ema(df["close"], period)
+        # EMA slopes
+        df[f"ema_{period}_slope"] = df[f"ema_{period}"].diff(3)
+        # Price relative to EMA
+        df[f"close_vs_ema_{period}"] = (df["close"] - df[f"ema_{period}"]) / df[f"ema_{period}"]
+    
+    # Price momentum features
+    for period in [1, 3, 5, 10, 20]:
+        df[f"returns_{period}"] = df["close"].pct_change(period)
+        df[f"price_rank_{period}"] = df["close"].rolling(period).rank(pct=True)
+    
+    # Volatility features
+    df["price_volatility_10"] = df["close"].rolling(10).std()
+    df["price_volatility_20"] = df["close"].rolling(20).std()
+    df["returns_volatility"] = df["close"].pct_change().rolling(20).std()
+    
+    # Market structure
+    df["higher_high"] = (df["high"] > df["high"].shift(1)).astype(int)
+    df["lower_low"] = (df["low"] < df["low"].shift(1)).astype(int)
+    df["inside_bar"] = ((df["high"] < df["high"].shift(1)) & (df["low"] > df["low"].shift(1))).astype(int)
+    df["outside_bar"] = ((df["high"] > df["high"].shift(1)) & (df["low"] < df["low"].shift(1))).astype(int)
+    
+    # Z-scores for mean reversion
+    for period in [10, 20, 50]:
+        df[f"close_z{period}"] = (df["close"] - df["close"].rolling(period).mean()) / (df["close"].rolling(period).std() + 1e-9)
+        df[f"volume_z{period}"] = (df.get("volume", 0) - df.get("volume", pd.Series([0]*len(df))).rolling(period).mean()) / (df.get("volume", pd.Series([0]*len(df))).rolling(period).std() + 1e-9)
+    
+    # Bollinger Band position
+    df["bb_position"] = (df["close"] - df["bb_lower"]) / (df["bb_upper"] - df["bb_lower"])
+    df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_basis"]
+    
+    # RSI divergence (simple approximation)
+    df["rsi_divergence"] = df["rsi_14"].diff(5) - (df["close"].pct_change(5) * 100)
+    
+    # Create slopes for all key indicators
+    slope_indicators = [
+        "rsi_14", "rsi_7", "rsi_21", "macd_line", "macd_signal", "macd_hist",
+        "bb_basis", "bb_upper", "bb_lower", "close", "adx_14", "stoch_k", "stoch_d",
+        "williams_r", "cci_20", "atr_14", "atr_7"
+    ]
+    
+    for col in slope_indicators:
+        if col in df.columns:
+            df[f"{col}_slope3"] = df[col].diff(3)
+            df[f"{col}_slope5"] = df[col].diff(5)
+    
     return df
 
 
