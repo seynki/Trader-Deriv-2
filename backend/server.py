@@ -427,6 +427,53 @@ async def shutdown_db_client():
 async def root():
     return {"message": "Hello World"}
 
+# ------------------- Online Learning Helper Functions -----------------------------
+
+async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_data: Dict[str, Any]):
+    """
+    Adapt online learning models with trade outcome data.
+    This function updates active online models with the trade result for continuous learning.
+    """
+    try:
+        # Check if we have any active online models
+        if not hasattr(_online_manager, 'active_models') or not _online_manager.active_models:
+            return
+        
+        # Extract relevant features from the trade outcome
+        trade_features = {
+            'contract_id': contract_id,
+            'profit': profit,
+            'underlying': poc_data.get('underlying'),
+            'entry_spot': poc_data.get('entry_spot'),
+            'current_spot': poc_data.get('current_spot'),
+            'buy_price': poc_data.get('buy_price'),
+            'bid_price': poc_data.get('bid_price'),
+            'payout': poc_data.get('payout'),
+            'date_start': poc_data.get('date_start'),
+            'date_expiry': poc_data.get('date_expiry'),
+        }
+        
+        # Determine trade outcome (binary classification)
+        trade_outcome = 1 if profit > 0 else 0
+        
+        # Update each active online model
+        for model_id, model in _online_manager.active_models.items():
+            try:
+                # Create a simple feature vector for online learning
+                # In a real implementation, you'd want to extract proper market features
+                # that match the model's training features
+                if hasattr(model, 'partial_fit'):
+                    # For now, we'll skip the actual update since we need proper feature alignment
+                    # This is a placeholder for the online learning integration
+                    logger.info(f"Online model {model_id} would be updated with trade outcome: {trade_outcome}")
+                    
+            except Exception as model_error:
+                logger.warning(f"Failed to update online model {model_id}: {model_error}")
+                
+    except Exception as e:
+        logger.error(f"Error in online learning adaptation: {e}")
+        raise
+
 # ------------------- Online Learning API -----------------------------
 
 @api_router.post("/ml/online/create")
