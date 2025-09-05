@@ -372,6 +372,57 @@ def select_features(df: pd.DataFrame):
     return feats
 
 
+def remove_correlated_features(df: pd.DataFrame, features: List[str], threshold: float = 0.95) -> List[str]:
+    """Remove highly correlated features to reduce multicollinearity"""
+    if len(features) <= 1:
+        return features
+        
+    # Calculate correlation matrix for selected features
+    feature_data = df[features].fillna(method='ffill').fillna(0)
+    corr_matrix = feature_data.corr().abs()
+    
+    # Find highly correlated pairs
+    upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    
+    # Identify features to drop
+    to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > threshold)]
+    
+    # Keep features that aren't highly correlated
+    final_features = [f for f in features if f not in to_drop]
+    
+    return final_features
+
+
+def add_feature_interactions(df: pd.DataFrame, max_interactions: int = 10) -> pd.DataFrame:
+    """Add feature interactions for key indicators"""
+    df = df.copy()
+    
+    # Key feature pairs for interactions
+    interaction_pairs = [
+        ("rsi_14", "bb_position"),
+        ("macd_hist", "adx_14"), 
+        ("stoch_k", "williams_r"),
+        ("atr_14", "close_z20"),
+        ("ema_9_slope", "ema_21_slope"),
+        ("returns_3", "price_volatility_10"),
+        ("bb_width", "atr_14"),
+        ("rsi_14", "stoch_k"),
+        ("macd_line", "cci_20"),
+        ("adx_14", "atr_14")
+    ]
+    
+    count = 0
+    for feat1, feat2 in interaction_pairs:
+        if count >= max_interactions:
+            break
+        if feat1 in df.columns and feat2 in df.columns:
+            # Multiplicative interaction
+            df[f"{feat1}_x_{feat2}"] = df[feat1] * df[feat2]
+            count += 1
+    
+    return df
+
+
 def compute_metrics(y_true, y_pred, y_proba=None) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
