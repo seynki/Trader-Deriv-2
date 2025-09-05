@@ -427,6 +427,142 @@ async def shutdown_db_client():
 async def root():
     return {"message": "Hello World"}
 
+# ------------------- Online Learning API -----------------------------
+
+@api_router.post("/ml/online/create")
+async def create_online_model(
+    model_id: str,
+    source: str = "deriv",
+    symbol: str = "R_100",
+    timeframe: str = "3m",
+    count: int = 1000,
+    horizon: int = 3,
+    threshold: float = 0.003,
+    model_type: str = "sgd"
+):
+    """Create an online learning model based on existing data"""
+    try:
+        # Get initial training data (reuse existing logic)
+        if source == "deriv":
+            granularity = {"1m": 60, "3m": 180, "5m": 300}.get(timeframe, 180)
+            df = await fetch_candles(symbol, granularity, count)
+        else:
+            raise HTTPException(status_code=400, detail="Only 'deriv' source supported for online models")
+        
+        if len(df) < 500:
+            raise HTTPException(status_code=400, detail="Dados insuficientes para criar modelo online")
+        
+        # Build features using existing feature engineering
+        features_df = ml_utils.build_features(df)
+        features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
+        
+        # Get features and target
+        features = ml_utils.select_features(features_df)
+        features = ml_utils.remove_correlated_features(features_df, features, threshold=0.95)
+        
+        y = ml_utils.make_target(df, horizon=horizon, threshold=threshold)
+        
+        # Prepare data for online model
+        X = features_df[features].replace([np.inf, -np.inf], np.nan)
+        mask = X.notna().all(axis=1) & y.notna()
+        X, y = X[mask], y[mask]
+        
+        if len(X) < 200:
+            raise HTTPException(status_code=400, detail="Dados insuficientes após limpeza")
+        
+        # Create online model
+        training_data = X.copy()
+        training_data['target'] = y
+        
+        online_model = _online_manager.create_online_model(
+            model_id=model_id,
+            initial_data=training_data,
+            features=features,
+            target_col='target',
+            model_type=model_type
+        )
+        
+        return {
+            "message": "Online model created successfully",
+            "model_id": model_id,
+            "features_count": len(features),
+            "training_samples": len(X),
+            "model_info": online_model.get_model_info()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to create online model: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar modelo online: {e}")
+
+@api_router.get("/ml/online/status/{model_id}")
+async def get_online_model_status(model_id: str):
+    """Get status and performance metrics of online model"""
+    status = _online_manager.get_model_status(model_id)
+    if status['status'] == 'not_found':
+        raise HTTPException(status_code=404, detail="Modelo online não encontrado")
+    
+    return status
+
+@api_router.get("/ml/online/list")
+async def list_online_models():
+    """List all active online learning models"""
+    models = _online_manager.list_online_models()
+    statuses = {}
+    for model_id in models:
+        statuses[model_id] = _online_manager.get_model_status(model_id)
+    
+    return {
+        "models": models,
+        "count": len(models),
+        "statuses": statuses
+    }
+
+@api_router.post("/ml/online/predict/{model_id}")
+async def predict_with_online_model(
+    model_id: str,
+    symbol: str = "R_100",
+    timeframe: str = "3m",
+    count: int = 50
+):
+    """Make prediction with online model using current market data"""
+    if model_id not in _online_manager.active_models:
+        raise HTTPException(status_code=404, detail="Modelo online não encontrado")
+    
+    try:
+        # Get recent market data
+        granularity = {"1m": 60, "3m": 180, "5m": 300}.get(timeframe, 180)
+        df = await fetch_candles(symbol, granularity, count)
+        
+        if len(df) < 10:
+            raise HTTPException(status_code=400, detail="Dados insuficientes para previsão")
+        
+        # Build features
+        features_df = ml_utils.build_features(df)
+        features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
+        
+        # Get prediction for latest data
+        model = _online_manager.active_models[model_id]
+        latest_data = features_df.iloc[-1:].copy()
+        
+        prediction = model.predict(latest_data)
+        probability = model.predict_proba(latest_data)
+        
+        return {
+            "model_id": model_id,
+            "symbol": symbol,
+            "prediction": int(prediction[0]),
+            "probability": {
+                "negative": float(probability[0][0]),
+                "positive": float(probability[0][1])
+            },
+            "timestamp": int(time.time()),
+            "model_info": model.get_model_info()
+        }
+        
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na previsão: {e}")
+
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
     status_dict = input.dict()
