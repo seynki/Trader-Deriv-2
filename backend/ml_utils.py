@@ -347,9 +347,28 @@ def make_target(df: pd.DataFrame, horizon: int, threshold: float) -> pd.Series:
 
 
 def select_features(df: pd.DataFrame):
-    cands = [c for c in df.columns if any(k in c for k in ["rsi","macd","bb_","close","volume","slope","z"])]
-    blacklist = {"open","high","low"}
+    """Enhanced feature selection including all advanced technical indicators"""
+    # Keywords for feature selection (expanded)
+    feature_keywords = [
+        "rsi", "macd", "bb_", "close", "volume", "slope", "z",  # original
+        "adx", "stoch", "williams", "cci", "atr", "mfi", "vwap", "vol_",  # momentum & volume
+        "ichi_", "fib_", "sr_", "pattern_",  # patterns & levels  
+        "ema_", "returns_", "price_rank", "volatility", "divergence",  # price dynamics
+        "higher_high", "lower_low", "inside_bar", "outside_bar", "position", "width"  # market structure
+    ]
+    
+    # Get candidate features
+    cands = [c for c in df.columns if any(k in c for k in feature_keywords)]
+    
+    # Blacklist raw OHLC to avoid overfitting
+    blacklist = {"open", "high", "low", "time", "epoch", "timestamp"}
+    
+    # Select numeric features that aren't in blacklist
     feats = [c for c in cands if c not in blacklist and pd.api.types.is_numeric_dtype(df[c])]
+    
+    # Sort features for consistent ordering
+    feats = sorted(feats)
+    
     return feats
 
 
