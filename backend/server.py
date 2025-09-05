@@ -1115,6 +1115,7 @@ async def ml_train(
             "backtest": out.get("backtest"),
             "grid": [],
             "rows": int(len(df)),
+            "features_used": out.get("features_used", 0),
         }
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
