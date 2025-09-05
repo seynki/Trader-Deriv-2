@@ -580,6 +580,48 @@ async def list_online_models():
         "statuses": statuses
     }
 
+@api_router.get("/ml/online/progress")
+async def get_online_learning_progress():
+    """Get overall online learning progress and metrics"""
+    models = _online_manager.list_online_models()
+    
+    overall_stats = {
+        "active_models": len(models),
+        "total_updates": 0,
+        "models_detail": []
+    }
+    
+    for model_id in models:
+        status = _online_manager.get_model_status(model_id)
+        if status['status'] == 'active':
+            model_info = status.get('model_info', {})
+            performance_history = status.get('performance_history', [])
+            
+            # Calculate improvement metrics
+            improvement_trend = "stable"
+            if len(performance_history) >= 2:
+                recent_accuracy = performance_history[-1].get('accuracy', 0)
+                older_accuracy = performance_history[0].get('accuracy', 0)
+                if recent_accuracy > older_accuracy * 1.05:
+                    improvement_trend = "improving"
+                elif recent_accuracy < older_accuracy * 0.95:
+                    improvement_trend = "declining"
+            
+            model_detail = {
+                "model_id": model_id,
+                "update_count": model_info.get('update_count', 0),
+                "features_count": model_info.get('features_count', 0),
+                "current_accuracy": performance_history[-1].get('accuracy', 0) if performance_history else 0,
+                "current_precision": performance_history[-1].get('precision', 0) if performance_history else 0,
+                "improvement_trend": improvement_trend,
+                "performance_samples": len(performance_history)
+            }
+            
+            overall_stats["models_detail"].append(model_detail)
+            overall_stats["total_updates"] += model_info.get('update_count', 0)
+    
+    return overall_stats
+
 @api_router.post("/ml/online/predict/{model_id}")
 async def predict_with_online_model(
     model_id: str,
