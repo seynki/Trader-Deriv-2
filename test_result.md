@@ -116,6 +116,21 @@
 ##       -agent: "main"
 ##       -comment: "Atualizado /api/ml/train_async para status 'queued' inicial, progresso com 'stage', conclusão em 'done' com campo 'result' (best combo) e falhas como 'failed'. Corrige incompatibilidade anterior (backend retornava 'completed'/'error' enquanto o frontend esperava 'done'). Previna 'error: no found' intermitente do polling ao manter contrato consistente."
 
+##   - task: "ML Feature Engineering Improvements"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py, /app/backend/ml_utils.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementadas melhorias de feature engineering no ML com indicadores técnicos avançados (RSI múltiplos períodos, MACD fast/slow, Bollinger Bands múltiplos, ADX, Stochastic, Williams %R, CCI, ATR, MFI, VWAP, Ichimoku, Fibonacci, Support/Resistance, Price Patterns, EMAs múltiplos, interações de features). Sistema agora processa >70 features técnicas vs <20 anteriormente."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "TESTED ML FEATURE ENGINEERING IMPROVEMENTS: ✅ GET /api/deriv/status (connected=true, authenticated=true), ✅ GET /api/ml/status (returns 'no champion' initially), ✅ POST /api/ml/train source=deriv, symbol=R_100, timeframe=3m, count=1200, horizon=3, threshold=0.003, model_type=rf (returns 200 with features_used=77, model_id='R_100_3m_rf', metrics with precision=0.0 valid for no-signal conditions), ✅ Validation test with count=1500 (features_used=73 > 50 threshold, no 'dados insuficientes' errors, model saved successfully). CRITICAL SUCCESS: Feature engineering now processes 70+ advanced technical features vs previous basic implementation, all validation criteria met, models saved with enhanced technical information."
+
 ## backend:
 ##   - task: "Deriv: proposal/buy + WS track contract + fixes"
 ##     implemented: true
