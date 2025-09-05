@@ -49,6 +49,177 @@ def bollinger(series: pd.Series, length: int = 20, k: float = 2.0) -> Tuple[pd.S
     return mid, upper, lower
 
 
+def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Average Directional Index - measures trend strength"""
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    plus_dm = high.diff()
+    minus_dm = low.diff() * -1
+    
+    plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0)
+    minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0)
+    
+    tr_smooth = tr.rolling(period).mean()
+    plus_dm_smooth = pd.Series(plus_dm).rolling(period).mean()
+    minus_dm_smooth = pd.Series(minus_dm).rolling(period).mean()
+    
+    plus_di = 100 * (plus_dm_smooth / tr_smooth)
+    minus_di = 100 * (minus_dm_smooth / tr_smooth)
+    
+    dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+    return dx.rolling(period).mean()
+
+
+def stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 14, d_period: int = 3) -> Tuple[pd.Series, pd.Series]:
+    """Stochastic Oscillator"""
+    lowest_low = low.rolling(k_period).min()
+    highest_high = high.rolling(k_period).max()
+    k_percent = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+    d_percent = k_percent.rolling(d_period).mean()
+    return k_percent, d_percent
+
+
+def williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Williams %R indicator"""
+    highest_high = high.rolling(period).max()
+    lowest_low = low.rolling(period).min() 
+    wr = -100 * (highest_high - close) / (highest_high - lowest_low)
+    return wr
+
+
+def cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
+    """Commodity Channel Index"""
+    tp = (high + low + close) / 3
+    tp_sma = tp.rolling(period).mean()
+    mad = tp.rolling(period).apply(lambda x: abs(x - x.mean()).mean())
+    return (tp - tp_sma) / (0.015 * mad)
+
+
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Average True Range - volatility indicator"""
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.rolling(period).mean()
+
+
+def mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
+    """Money Flow Index"""
+    tp = (high + low + close) / 3
+    raw_mf = tp * volume
+    
+    positive_mf = raw_mf.where(tp > tp.shift(), 0).rolling(period).sum()
+    negative_mf = raw_mf.where(tp < tp.shift(), 0).rolling(period).sum()
+    
+    mf_ratio = positive_mf / negative_mf
+    return 100 - (100 / (1 + mf_ratio))
+
+
+def vwap(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
+    """Volume Weighted Average Price"""
+    tp = (high + low + close) / 3
+    return (tp * volume).cumsum() / volume.cumsum()
+
+
+def ichimoku(high: pd.Series, low: pd.Series, close: pd.Series, 
+            tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> Dict[str, pd.Series]:
+    """Ichimoku Cloud components"""
+    tenkan_sen = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
+    kijun_sen = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
+    senkou_span_a = ((tenkan_sen + kijun_sen) / 2).shift(kijun_period)
+    senkou_span_b = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).shift(kijun_period)
+    chikou_span = close.shift(-kijun_period)
+    
+    return {
+        'tenkan_sen': tenkan_sen,
+        'kijun_sen': kijun_sen, 
+        'senkou_span_a': senkou_span_a,
+        'senkou_span_b': senkou_span_b,
+        'chikou_span': chikou_span
+    }
+
+
+def fibonacci_levels(high: pd.Series, low: pd.Series, period: int = 20) -> Dict[str, pd.Series]:
+    """Fibonacci retracement levels"""
+    period_high = high.rolling(period).max()
+    period_low = low.rolling(period).min()
+    diff = period_high - period_low
+    
+    return {
+        'fib_236': period_high - 0.236 * diff,
+        'fib_382': period_high - 0.382 * diff,  
+        'fib_500': period_high - 0.500 * diff,
+        'fib_618': period_high - 0.618 * diff,
+        'fib_786': period_high - 0.786 * diff
+    }
+
+
+def support_resistance(close: pd.Series, period: int = 20, min_touches: int = 2) -> Dict[str, pd.Series]:
+    """Dynamic support and resistance levels"""
+    rolling_max = close.rolling(period).max()
+    rolling_min = close.rolling(period).min()
+    
+    # Distance to support/resistance
+    support_distance = (close - rolling_min) / rolling_min
+    resistance_distance = (rolling_max - close) / close
+    
+    return {
+        'support_distance': support_distance,
+        'resistance_distance': resistance_distance,
+        'support_level': rolling_min,
+        'resistance_level': rolling_max
+    }
+
+
+def price_patterns(open_series: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series) -> Dict[str, pd.Series]:
+    """Candlestick patterns"""
+    body = abs(close - open_series)
+    upper_shadow = high - pd.concat([open_series, close], axis=1).max(axis=1)
+    lower_shadow = pd.concat([open_series, close], axis=1).min(axis=1) - low
+    
+    # Doji pattern
+    doji = (body / (high - low) < 0.1).astype(int)
+    
+    # Hammer pattern
+    hammer = ((lower_shadow > 2 * body) & (upper_shadow < body)).astype(int)
+    
+    # Shooting star
+    shooting_star = ((upper_shadow > 2 * body) & (lower_shadow < body)).astype(int)
+    
+    return {
+        'doji': doji,
+        'hammer': hammer, 
+        'shooting_star': shooting_star,
+        'body_ratio': body / (high - low),
+        'upper_shadow_ratio': upper_shadow / (high - low),
+        'lower_shadow_ratio': lower_shadow / (high - low)
+    }
+
+
+def volume_indicators(close: pd.Series, volume: pd.Series) -> Dict[str, pd.Series]:
+    """Volume-based indicators"""
+    # On Balance Volume
+    obv = (volume * np.sign(close.diff())).cumsum()
+    
+    # Price Volume Trend  
+    pvt = (volume * (close.pct_change())).cumsum()
+    
+    # Volume Rate of Change
+    vroc = volume.pct_change(periods=10)
+    
+    return {
+        'obv': obv,
+        'pvt': pvt,
+        'vroc': vroc,
+        'volume_sma': volume.rolling(20).mean(),
+        'volume_ratio': volume / volume.rolling(20).mean()
+    }
+
+
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["rsi_14"] = rsi(df["close"], 14)
