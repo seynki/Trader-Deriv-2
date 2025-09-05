@@ -1007,6 +1007,54 @@ class MlTrainParams(BaseModel):
 
 _jobs: Dict[str, Dict[str, Any]] = {}
 
+async def fetch_candles(symbol: str, granularity: int, count: int) -> pd.DataFrame:
+    """Fetch candles from Deriv and return as DataFrame"""
+    if not _deriv.connected:
+        raise HTTPException(status_code=503, detail="Deriv desconectado")
+    
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    
+    await _deriv._send({
+        "ticks_history": symbol,
+        "adjust_start_time": 1,
+        "count": count,
+        "end": "latest",
+        "start": 1,
+        "style": "candles",
+        "granularity": granularity,
+        "req_id": req_id,
+    })
+    
+    try:
+        data = await asyncio.wait_for(fut, timeout=30)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout buscando dados da Deriv")
+    
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=f"Erro da Deriv: {data['error'].get('message', 'unknown')}")
+    
+    candles = data.get("candles") or []
+    if not candles:
+        raise HTTPException(status_code=400, detail="Nenhum candle recebido da Deriv")
+    
+    # Convert to DataFrame
+    records = []
+    for candle in candles:
+        records.append({
+            "open": float(candle["open"]),
+            "high": float(candle["high"]),
+            "low": float(candle["low"]),
+            "close": float(candle["close"]),
+            "volume": int(candle.get("volume", 0)),
+            "time": int(candle["epoch"])
+        })
+    
+    df = pd.DataFrame(records)
+    return df
+
 async def _fetch_deriv_data_for_ml(symbol: str, timeframe: str, count: int) -> pd.DataFrame:
     """Fetch candles from Deriv and format for ML training"""
     if not _deriv.connected:
