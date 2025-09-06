@@ -336,9 +336,9 @@ class DerivConnectivityTester:
             
             # Check if supervisor log files exist
             log_paths = [
-                "/var/log/supervisor/backend.log",
-                "/var/log/supervisor/backend-stdout.log", 
-                "/var/log/supervisor/backend-stderr.log"
+                "/var/log/supervisor/backend.err.log",
+                "/var/log/supervisor/backend.out.log", 
+                "/var/log/supervisor/supervisord.log"
             ]
             
             websocket_errors_found = []
