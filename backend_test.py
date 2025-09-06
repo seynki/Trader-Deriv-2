@@ -319,29 +319,114 @@ class DerivConnectivityTester:
     def check_backend_logs(self):
         """Test 4: Verificar se há erros nos logs do backend relacionados ao WebSocket"""
         self.log("\n" + "="*70)
-        self.log("TEST 4: VERIFICAR LOGS DO BACKEND")
+        self.log("TEST 4: VERIFICAR LOGS DO BACKEND PARA ERROS 'received 1000 (OK)'")
         self.log("="*70)
-        self.log("📋 Objetivo: Verificar se há erros nos logs relacionados ao WebSocket")
+        self.log("📋 Objetivo: Verificar se erros 'received 1000 (OK)' ainda aparecem nos logs")
+        self.log("📋 Monitorar logs do backend para detectar problemas de WebSocket")
         
-        # Note: In a containerized environment, we can't directly access log files
-        # But we can check if the services are running properly
-        self.log("⚠️  Nota: Em ambiente containerizado, verificação de logs limitada")
-        self.log("📋 Verificando se serviços estão executando corretamente...")
+        # Note: In a containerized environment, we can try to check supervisor logs
+        self.log("⚠️  Nota: Tentando verificar logs do supervisor para erros de WebSocket")
         
-        # Check if backend is responding
-        success, data, status_code = self.run_test(
-            "Backend Health Check",
-            "GET",
-            "",  # Root endpoint
-            200
-        )
+        import subprocess
+        import os
         
-        if success:
-            self.log("✅ Backend respondendo corretamente")
-            return True, {"backend_healthy": True}
-        else:
-            self.log("❌ Backend não está respondendo adequadamente")
-            return False, {"backend_healthy": False, "status_code": status_code}
+        try:
+            # Try to check supervisor backend logs
+            self.log("📋 Verificando logs do supervisor backend...")
+            
+            # Check if supervisor log files exist
+            log_paths = [
+                "/var/log/supervisor/backend.log",
+                "/var/log/supervisor/backend-stdout.log", 
+                "/var/log/supervisor/backend-stderr.log"
+            ]
+            
+            websocket_errors_found = []
+            
+            for log_path in log_paths:
+                if os.path.exists(log_path):
+                    try:
+                        # Get last 100 lines of log
+                        result = subprocess.run(['tail', '-n', '100', log_path], 
+                                              capture_output=True, text=True, timeout=10)
+                        
+                        if result.returncode == 0:
+                            log_content = result.stdout
+                            
+                            # Look for specific WebSocket errors
+                            error_patterns = [
+                                "received 1000 (OK)",
+                                "WebSocket message processing error",
+                                "Error sending tick message",
+                                "WebSocketDisconnect",
+                                "ConnectionClosed"
+                            ]
+                            
+                            for pattern in error_patterns:
+                                if pattern in log_content:
+                                    lines_with_error = [line.strip() for line in log_content.split('\n') 
+                                                      if pattern in line]
+                                    if lines_with_error:
+                                        websocket_errors_found.extend(lines_with_error[-3:])  # Last 3 occurrences
+                                        self.log(f"⚠️  Encontrado padrão '{pattern}' em {log_path}")
+                            
+                    except subprocess.TimeoutExpired:
+                        self.log(f"⚠️  Timeout ao ler {log_path}")
+                    except Exception as e:
+                        self.log(f"⚠️  Erro ao ler {log_path}: {e}")
+                else:
+                    self.log(f"📋 Log não encontrado: {log_path}")
+            
+            # Check if backend is responding
+            success, data, status_code = self.run_test(
+                "Backend Health Check",
+                "GET",
+                "",  # Root endpoint
+                200
+            )
+            
+            # Analysis
+            if websocket_errors_found:
+                self.log(f"❌ ERROS DE WEBSOCKET DETECTADOS ({len(websocket_errors_found)} ocorrências):")
+                for i, error in enumerate(websocket_errors_found[:5], 1):  # Show first 5
+                    self.log(f"   {i}. {error}")
+                
+                if len(websocket_errors_found) > 5:
+                    self.log(f"   ... e mais {len(websocket_errors_found) - 5} erros")
+                
+                return False, {
+                    "backend_healthy": success,
+                    "websocket_errors_found": len(websocket_errors_found),
+                    "error_samples": websocket_errors_found[:5],
+                    "status_code": status_code
+                }
+            else:
+                self.log("✅ Nenhum erro de WebSocket 'received 1000 (OK)' detectado nos logs recentes")
+                
+                if success:
+                    self.log("✅ Backend respondendo corretamente")
+                    return True, {"backend_healthy": True, "websocket_errors_found": 0}
+                else:
+                    self.log("❌ Backend não está respondendo adequadamente")
+                    return False, {"backend_healthy": False, "status_code": status_code}
+                    
+        except Exception as e:
+            self.log(f"❌ Erro ao verificar logs: {e}")
+            
+            # Fallback to basic health check
+            success, data, status_code = self.run_test(
+                "Backend Health Check (Fallback)",
+                "GET",
+                "",
+                200
+            )
+            
+            return success, {
+                "backend_healthy": success, 
+                "log_check_failed": True,
+                "error": str(e),
+                "status_code": status_code
+            }
 
     async def run_connectivity_tests(self):
         """Run all connectivity tests as requested in Portuguese review"""
