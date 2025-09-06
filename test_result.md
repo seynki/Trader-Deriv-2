@@ -102,7 +102,56 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-## user_problem_statement: "Integrar fluxo Deriv authorize → proposal → buy → track contract (Buy CALL/PUT) com backend seguro e painel de acompanhamento no frontend."
+## user_problem_statement: "Bot de trading Deriv com problemas: 1) WebSocket de ticks fechando constantemente, 2) Bot para após um contrato, 3) ML não retreina (updates sempre 0), 4) Não funciona infinitamente. Usuário quer correções para funcionar continuamente até ele parar manualmente, com retreinamento ML após cada trade."
+
+## backend:
+##   - task: "Correção WebSocket DerivWS: estabilidade e reconexão robusta"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "IMPLEMENTADAS CORREÇÕES CRÍTICAS: 1) Enhanced WebSocket stability com ping_interval=30s, ping_timeout=10s, max_size=8MB, max_queue=None 2) Robust reconnection logic com exponential backoff (max 30s), max 50 reconnects 3) Improved message processing com tratamento de erros individual, queue management melhorado, remoção automática de filas quebradas 4) Enhanced error handling em cada etapa do processamento de mensagens. Sistema agora deve manter WebSocket estável sem desconexões constantes."
+
+##   - task: "Strategy Runner: loop infinito com recuperação robusta"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "ESTRATÉGIA INFINITA IMPLEMENTADA: 1) Enhanced strategy loop com tracking de iterações, contador de erros consecutivos, max 5 erros consecutivos antes de wait 60s 2) Robust error recovery - continua executando após erros, log de progresso a cada 10 iterações 3) Graceful cancellation - resposta correta a CancelledError 4) Comprehensive logging - status detalhado de PnL, trades, iterações. Bot agora deve funcionar infinitamente até usuário parar manualmente."
+
+##   - task: "WebSocket /api/ws/ticks: endpoint melhorado com heartbeat"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "WEBSOCKET ENDPOINT RENOVADO: 1) Heartbeat mechanism - envia heartbeat a cada 30s com timestamp e símbolos ativos 2) Enhanced message processing - usa asyncio.wait com timeout 1s, proper task cancellation 3) Better queue management - dicionário ao invés de lista, cleanup automático 4) Structured responses - mensagens com 'type' para diferenciação 5) Graceful error handling - erros individuais não quebram conexão inteira. Cliente deve receber ticks consistentes sem desconexões."
+
+##   - task: "Online Learning: retreinamento ML após cada trade"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py, /app/backend/online_learning.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "ONLINE LEARNING COMPLETO: 1) Enhanced _adapt_online_models_with_trade - logs detalhados, fallback model creation, robust feature extraction, success tracking 2) Improved OnlineLearningManager.adapt_model - retorna bool success, immediate processing (sem batching delay), explicit trade_outcome parameter 3) Enhanced _process_adaptation_buffer - immediate updates por trade, comprehensive logging, success tracking 4) Model persistence - auto-save após updates. Sistema agora deve retreinar modelos ML após cada trade com logs detalhados 'ONLINE LEARNING SUCESSO' e counter de updates visível."
 ## backend:
 ##   - task: "ML async job status: align to 'queued/running/done/failed' and include result"
 ##     implemented: true
