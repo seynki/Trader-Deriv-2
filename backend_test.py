@@ -123,142 +123,55 @@ class OnlineLearningTester:
         
         return True, data
 
-    def test_online_learning_system(self):
-        """Test 2: Sistema de Aprendizado Online - Testar funcionalidades implementadas"""
+    def test_online_progress(self):
+        """Test 2: Mostrar estatísticas dos modelos - GET /api/ml/online/progress"""
         self.log("\n" + "="*70)
-        self.log("TEST 2: SISTEMA DE APRENDIZADO ONLINE")
+        self.log("TEST 2: ESTATÍSTICAS DOS MODELOS ONLINE")
         self.log("="*70)
-        self.log("📋 Objetivo: Testar GET /api/ml/online/list, /progress, /status")
-        self.log("📋 Confirmar que modelo 'online_model_demo' foi criado com sucesso")
+        self.log("📋 Objetivo: GET /api/ml/online/progress (mostrar estatísticas dos modelos)")
         
-        # Test 1: List online models
-        self.log("\n🔍 Testando GET /api/ml/online/list")
-        success_list, list_data, _ = self.run_test(
-            "Online Models List",
-            "GET",
-            "ml/online/list",
-            200
-        )
-        
-        if not success_list:
-            self.log("❌ CRITICAL: GET /api/ml/online/list falhou")
-            return False, {}
-        
-        models = list_data.get('models', [])
-        count = list_data.get('count', 0)
-        
-        self.log(f"   Modelos online ativos: {models}")
-        self.log(f"   Contagem: {count}")
-        
-        # Test 2: Get online learning progress
-        self.log("\n🔍 Testando GET /api/ml/online/progress")
-        success_progress, progress_data, _ = self.run_test(
+        success, data, status_code = self.run_test(
             "Online Learning Progress",
             "GET",
             "ml/online/progress",
             200
         )
         
-        if not success_progress:
-            self.log("❌ CRITICAL: GET /api/ml/online/progress falhou")
-            return False, {}
+        if not success:
+            self.log(f"❌ CRITICAL: GET /api/ml/online/progress falhou - Status: {status_code}")
+            return False, data
         
-        active_models = progress_data.get('active_models', 0)
-        total_updates = progress_data.get('total_updates', 0)
-        models_detail = progress_data.get('models_detail', [])
+        active_models = data.get('active_models', 0)
+        total_updates = data.get('total_updates', 0)
+        models_detail = data.get('models_detail', [])
         
+        self.log(f"📊 ESTATÍSTICAS GERAIS:")
         self.log(f"   Modelos ativos: {active_models}")
         self.log(f"   Total de updates: {total_updates}")
-        self.log(f"   Detalhes dos modelos: {len(models_detail)} modelos")
+        self.log(f"   Modelos com detalhes: {len(models_detail)}")
         
-        # Test 3: Create online model demo if it doesn't exist
-        demo_model_exists = 'online_model_demo' in models
-        
-        if not demo_model_exists:
-            self.log("\n🔍 Criando modelo 'online_model_demo'")
-            create_params = {
-                "model_id": "online_model_demo",
-                "source": "deriv",
-                "symbol": "R_100",
-                "timeframe": "3m",
-                "count": 1000,
-                "horizon": 3,
-                "threshold": 0.003,
-                "model_type": "sgd"
-            }
+        # Show details for each model
+        for i, model_detail in enumerate(models_detail):
+            model_id = model_detail.get('model_id', f'model_{i}')
+            update_count = model_detail.get('update_count', 0)
+            features_count = model_detail.get('features_count', 0)
+            current_accuracy = model_detail.get('current_accuracy', 0)
+            current_precision = model_detail.get('current_precision', 0)
+            improvement_trend = model_detail.get('improvement_trend', 'unknown')
             
-            query_string = "&".join([f"{k}={v}" for k, v in create_params.items()])
-            
-            success_create, create_data, status_code = self.run_test(
-                "Create Online Model Demo",
-                "POST",
-                f"ml/online/create?{query_string}",
-                200,
-                timeout=60
-            )
-            
-            if not success_create:
-                self.log(f"❌ FAILED: Criação do modelo demo falhou - Status: {status_code}")
-                if status_code == 400:
-                    error_detail = create_data.get('detail', '')
-                    self.log(f"   Erro: {error_detail}")
-                return False, create_data
-            
-            self.log("✅ Modelo 'online_model_demo' criado com sucesso!")
-            
-            # Wait a moment for the model to be registered
-            time.sleep(2)
-        else:
-            self.log("✅ Modelo 'online_model_demo' já existe")
+            self.log(f"   📋 Modelo {model_id}:")
+            self.log(f"      Updates: {update_count}")
+            self.log(f"      Features: {features_count}")
+            self.log(f"      Accuracy: {current_accuracy:.3f}")
+            self.log(f"      Precision: {current_precision:.3f}")
+            self.log(f"      Trend: {improvement_trend}")
         
-        # Test 4: Check status of online_model_demo
-        self.log("\n🔍 Testando GET /api/ml/online/status/online_model_demo")
-        success_status, status_data, status_code = self.run_test(
-            "Online Model Demo Status",
-            "GET",
-            "ml/online/status/online_model_demo",
-            200
-        )
+        if active_models == 0:
+            self.log("⚠️  Nenhum modelo ativo encontrado")
+            return False, {"message": "no_active_models", "data": data}
         
-        if not success_status:
-            if status_code == 404:
-                self.log("❌ CRITICAL: Modelo 'online_model_demo' não encontrado")
-                return False, {"error": "model_not_found"}
-            else:
-                self.log(f"❌ CRITICAL: Status check falhou - Status: {status_code}")
-                return False, status_data
-        
-        # Validate status response
-        model_status = status_data.get('status', '')
-        model_info = status_data.get('model_info', {})
-        performance_history = status_data.get('performance_history', [])
-        
-        self.log(f"   Status do modelo: {model_status}")
-        self.log(f"   Info do modelo: {json.dumps(model_info, indent=2)}")
-        self.log(f"   Histórico de performance: {len(performance_history)} entradas")
-        
-        # Validation checks
-        validation_errors = []
-        
-        if model_status not in ['active', 'training', 'ready']:
-            validation_errors.append(f"❌ Status inválido: {model_status}")
-        else:
-            self.log(f"✅ Status válido: {model_status}")
-        
-        if not model_info:
-            validation_errors.append("❌ Model info vazio")
-        else:
-            self.log("✅ Model info presente")
-        
-        if validation_errors:
-            self.log("\n❌ VALIDATION ERRORS:")
-            for error in validation_errors:
-                self.log(f"   {error}")
-            return False, status_data
-        
-        self.log("\n🎉 SISTEMA DE APRENDIZADO ONLINE: FUNCIONANDO!")
-        self.log("📋 Modelo 'online_model_demo' criado e funcionando com sucesso")
-        return True, {"list": list_data, "progress": progress_data, "status": status_data}
+        self.log(f"✅ Estatísticas obtidas para {active_models} modelo(s)")
+        return True, data
 
     def test_trade_integration(self):
         """Test 3: Integração com trades - Simular que modelo aprende com trades"""
