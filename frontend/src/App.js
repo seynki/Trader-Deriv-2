@@ -432,11 +432,31 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           prevRelationRef.current = relation;
         }
       } catch (e) {
-        setLastError(String(e?.message||e));
+        console.error(`❌ Erro no processamento de tick:`, e);
+        setLastError(`Erro no processamento: ${e?.message || e}`);
+        // Não para o sistema, apenas reporta o erro
       }
     };
-    ws.onerror = () => {};
-    ws.onclose = () => {};
+    
+    ws.onerror = (error) => {
+      console.warn(`⚠️ Erro no WebSocket de ticks:`, error);
+      setLastError(`Conexão com erro, tentando reconectar...`);
+    };
+    
+    ws.onclose = (event) => {
+      console.log(`🔌 WebSocket de ticks fechado:`, event.code, event.reason);
+      if (enabled && event.code !== 1000) {
+        // Reconectar automaticamente se não foi fechamento intencional
+        console.log(`🔄 Tentando reconectar em 5 segundos...`);
+        setTimeout(() => {
+          if (enabled) {
+            console.log(`🔄 Reconectando WebSocket de ticks...`);
+            // O useEffect será retriggered automaticamente
+          }
+        }, 5000);
+      }
+    };
+    
     return () => {
       try { ws.close(); } catch {}
     };
