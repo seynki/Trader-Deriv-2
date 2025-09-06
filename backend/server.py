@@ -1476,40 +1476,51 @@ async def deriv_sell(req: SellRequest):
 
 @api_router.websocket("/ws/ticks")
 async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
-    """Enhanced WebSocket endpoint for real-time tick data with improved stability"""
+    """Enhanced WebSocket endpoint for real-time tick data with improved stability and disconnection handling"""
     await websocket.accept()
     symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
     logger.info(f"WebSocket client connected, subscribing to: {symbol_list}")
     
     # Create queues for each symbol
     queues = {}
+    connection_active = True
+    
     try:
         for symbol in symbol_list:
             queue = await _deriv.add_queue(symbol)
             queues[symbol] = queue
         
         # Send initial confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "symbols": symbol_list,
-            "timestamp": int(time.time())
-        })
+        try:
+            await websocket.send_json({
+                "type": "connected",
+                "symbols": symbol_list,
+                "timestamp": int(time.time())
+            })
+        except Exception as e:
+            logger.warning(f"Failed to send initial confirmation: {e}")
+            connection_active = False
         
-        # Enhanced message processing with heartbeat
+        # Enhanced message processing with heartbeat and proper disconnection handling
         last_heartbeat = time.time()
         heartbeat_interval = 30  # Send heartbeat every 30 seconds
         
-        while True:
+        while connection_active:
             try:
                 # Check if we should send heartbeat
                 current_time = time.time()
                 if current_time - last_heartbeat >= heartbeat_interval:
-                    await websocket.send_json({
-                        "type": "heartbeat",
-                        "timestamp": int(current_time),
-                        "symbols_active": list(queues.keys())
-                    })
-                    last_heartbeat = current_time
+                    try:
+                        await websocket.send_json({
+                            "type": "heartbeat",
+                            "timestamp": int(current_time),
+                            "symbols_active": list(queues.keys())
+                        })
+                        last_heartbeat = current_time
+                    except Exception as e:
+                        logger.warning(f"Heartbeat failed, client likely disconnected: {e}")
+                        connection_active = False
+                        break
                 
                 # Process messages from all symbol queues with timeout
                 tasks = []
@@ -1537,9 +1548,19 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                     for task in done:
                         try:
                             message = await task
-                            await websocket.send_json(message)
+                            # Check if connection is still active before sending
+                            if connection_active:
+                                await websocket.send_json(message)
+                        except (websockets.exceptions.ConnectionClosed, 
+                               websockets.exceptions.ConnectionClosedOK,
+                               websockets.exceptions.ConnectionClosedError) as wse:
+                            logger.info(f"WebSocket connection properly closed by client: {wse}")
+                            connection_active = False
+                            break
                         except Exception as e:
-                            logger.warning(f"Error sending tick message: {e}")
+                            logger.warning(f"Error sending tick message, client may have disconnected: {e}")
+                            connection_active = False
+                            break
                 else:
                     # No queues available, wait a bit
                     await asyncio.sleep(1)
@@ -1548,10 +1569,25 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                 # Timeout is normal, continue loop
                 continue
                 
-            except Exception as e:
-                logger.warning(f"WebSocket message processing error: {e}")
+            except (WebSocketDisconnect, 
+                   websockets.exceptions.ConnectionClosed,
+                   websockets.exceptions.ConnectionClosedOK,
+                   websockets.exceptions.ConnectionClosedError) as wse:
+                logger.info(f"WebSocket client disconnected normally: {wse}")
+                connection_active = False
                 break
                 
+            except Exception as e:
+                logger.warning(f"WebSocket message processing error: {e}")
+                connection_active = False
+                break
+                
+    except (WebSocketDisconnect,
+           websockets.exceptions.ConnectionClosed,
+           websockets.exceptions.ConnectionClosedOK, 
+           websockets.exceptions.ConnectionClosedError) as wse:
+        logger.info(f"WebSocket connection closed during initialization: {wse}")
+        
     except Exception as e:
         logger.error(f"WebSocket connection error: {e}")
         
