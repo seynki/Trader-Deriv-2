@@ -252,25 +252,37 @@ class OnlineLearningManager:
     def adapt_model(self, 
                    model_id: str, 
                    trade_data: Dict[str, Any],
-                   market_data: pd.DataFrame):
-        """Adapt model based on trade outcome and current market data"""
+                   market_data: pd.DataFrame,
+                   trade_outcome: int = None) -> bool:
+        """
+        Enhanced adapt model with explicit trade outcome and return success status
+        """
         
         if model_id not in self.active_models:
             logger.warning(f"Model {model_id} not found for adaptation")
-            return
+            return False
         
         model = self.active_models[model_id]
         
-        # Add to buffer
-        self.adaptation_buffer[model_id].append({
+        # Determine outcome if not provided
+        if trade_outcome is None:
+            profit = trade_data.get('profit', 0)
+            trade_outcome = 1 if profit > 0 else 0
+        
+        # Add to buffer with enhanced data
+        adaptation_item = {
             'trade_data': trade_data,
             'market_data': market_data,
+            'trade_outcome': trade_outcome,
             'timestamp': datetime.utcnow().isoformat()
-        })
+        }
         
-        # Process buffer if enough samples
-        if len(self.adaptation_buffer[model_id]) >= 5:  # Batch of 5
-            self._process_adaptation_buffer(model_id)
+        self.adaptation_buffer[model_id].append(adaptation_item)
+        
+        # Process buffer immediately for each trade (no batching delay)
+        success = self._process_adaptation_buffer(model_id)
+        
+        return success
     
     def _process_adaptation_buffer(self, model_id: str):
         """Process buffered adaptation data"""
