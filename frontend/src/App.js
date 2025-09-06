@@ -411,14 +411,23 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             const side = relation === "above" ? "CALL" : "PUT";
             setLastSignal({ ts: now, side, price: last, avg: a });
             lastTradeAtRef.current = now;
+            
+            console.log(`🎯 Sinal detectado: ${side} - Preço: ${last.toFixed(4)}, Média: ${a.toFixed(4)}`);
+            
             // Verifica suporte
             if (!isTypeSupported(contractEngine)) {
               setLastError(`Tipo ${contractEngine} não suportado para ${symbol}.`);
+              console.warn(`❌ Tipo não suportado: ${contractEngine} para ${symbol}`);
               return;
             }
-            // Dispara compra via backend seguro
+            
+            // Dispara compra via backend seguro (não para o sistema em caso de erro)
             const payload = buildPayloadForSide(side);
-            buyAdvanced(payload, setLastError);
+            buyAdvanced(payload, (error) => {
+              setLastError(error);
+              console.error(`❌ Erro na compra automática: ${error}`);
+              // Continua funcionando mesmo com erro
+            });
           }
           prevRelationRef.current = relation;
         }
