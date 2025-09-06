@@ -81,132 +81,47 @@ class OnlineLearningTester:
             self.log(f"❌ FAILED - {name} - Error: {str(e)}")
             return False, {"error": str(e)}, 0
 
-    def test_ml_training_resolved(self):
-        """Test 1: ML Training - Verificar que problema 'promotion: false' foi resolvido"""
+    def test_online_models_list(self):
+        """Test 1: Verificar modelos online ativos - GET /api/ml/online/list"""
         self.log("\n" + "="*70)
-        self.log("TEST 1: ML TRAINING - PROBLEMA 'PROMOTION: FALSE' RESOLVIDO")
+        self.log("TEST 1: VERIFICAR MODELOS ONLINE ATIVOS")
         self.log("="*70)
-        self.log("📋 Objetivo: Confirmar que GET /api/ml/status retorna campeão válido com métricas reais")
-        self.log("📋 Verificar que temos dados reais no grid ao invés de traços vazios")
+        self.log("📋 Objetivo: GET /api/ml/online/list (deve mostrar pelo menos 1 modelo ativo)")
         
-        # First check current ML status
-        self.log("\n🔍 Verificando GET /api/ml/status (antes do treinamento)")
-        success_status_before, status_data_before, _ = self.run_test(
-            "ML Status Check (Before)",
+        success, data, status_code = self.run_test(
+            "Online Models List",
             "GET",
-            "ml/status", 
+            "ml/online/list",
             200
         )
         
-        if not success_status_before:
-            self.log("❌ CRITICAL: GET /api/ml/status falhou")
-            return False, {}
+        if not success:
+            self.log(f"❌ CRITICAL: GET /api/ml/online/list falhou - Status: {status_code}")
+            return False, data
         
-        self.log(f"   Status antes: {json.dumps(status_data_before, indent=2)}")
+        models = data.get('models', [])
+        count = data.get('count', 0)
+        statuses = data.get('statuses', {})
         
-        # Check Deriv connectivity first
-        self.log("\n🔍 Verificando conectividade Deriv")
-        success_deriv, deriv_data, _ = self.run_test(
-            "Deriv Status Check",
-            "GET",
-            "deriv/status", 
-            200
-        )
+        self.log(f"📊 RESULTADOS:")
+        self.log(f"   Modelos encontrados: {models}")
+        self.log(f"   Contagem: {count}")
+        self.log(f"   Statuses disponíveis: {len(statuses)} modelos")
         
-        if not success_deriv or not deriv_data.get('connected'):
-            self.log("❌ CRITICAL: Deriv não conectado")
-            return False, deriv_data
+        # Validation
+        if count == 0:
+            self.log("⚠️  Nenhum modelo online ativo encontrado")
+            return False, {"message": "no_active_models", "data": data}
         
-        self.log("✅ Deriv conectado")
+        self.log(f"✅ {count} modelo(s) online ativo(s) encontrado(s)")
         
-        # Train a model to verify the promotion system works
-        self.log("\n🔍 Executando treinamento ML para verificar sistema de promoção")
-        train_params = {
-            "source": "deriv",
-            "symbol": "R_100", 
-            "timeframe": "3m",
-            "count": 1200,
-            "horizon": 3,
-            "threshold": 0.003,
-            "model_type": "rf"
-        }
+        # Check each model status
+        for model_id in models:
+            model_status = statuses.get(model_id, {})
+            status = model_status.get('status', 'unknown')
+            self.log(f"   📋 Modelo {model_id}: status = {status}")
         
-        query_string = "&".join([f"{k}={v}" for k, v in train_params.items()])
-        
-        success_train, train_data, status_code = self.run_test(
-            "ML Training Test",
-            "POST",
-            f"ml/train?{query_string}",
-            200,
-            timeout=120
-        )
-        
-        if not success_train:
-            self.log(f"❌ CRITICAL: ML Training falhou - Status: {status_code}")
-            if status_code == 400:
-                error_detail = train_data.get('detail', '')
-                self.log(f"   Erro: {error_detail}")
-            return False, train_data
-        
-        # Validate training results
-        model_id = train_data.get('model_id', '')
-        metrics = train_data.get('metrics', {})
-        backtest = train_data.get('backtest', {})
-        features_used = train_data.get('features_used', 0)
-        
-        self.log(f"\n📊 RESULTADOS DO TREINAMENTO:")
-        self.log(f"   Model ID: {model_id}")
-        self.log(f"   Features Used: {features_used}")
-        self.log(f"   Metrics: {json.dumps(metrics, indent=2)}")
-        
-        # Check if we have real data instead of empty traces
-        validation_errors = []
-        
-        if not model_id:
-            validation_errors.append("❌ Model ID vazio")
-        else:
-            self.log(f"✅ Model ID gerado: {model_id}")
-        
-        if features_used <= 0:
-            validation_errors.append(f"❌ Features vazias: {features_used}")
-        else:
-            self.log(f"✅ Features reais: {features_used}")
-        
-        if not metrics or all(v in [None, 0, ""] for v in metrics.values()):
-            validation_errors.append("❌ Métricas vazias")
-        else:
-            self.log("✅ Métricas reais encontradas")
-        
-        # Check ML status after training
-        self.log("\n🔍 Verificando GET /api/ml/status (após treinamento)")
-        success_status_after, status_data_after, _ = self.run_test(
-            "ML Status Check (After)",
-            "GET",
-            "ml/status",
-            200
-        )
-        
-        if success_status_after:
-            self.log(f"   Status após: {json.dumps(status_data_after, indent=2)}")
-            
-            # Check if we now have a champion or valid status
-            if isinstance(status_data_after, dict):
-                if "message" in status_data_after and status_data_after["message"] == "no champion":
-                    self.log("⚠️  Ainda 'no champion' - pode ser normal se modelo não foi promovido")
-                elif "model_id" in status_data_after or any(key in status_data_after for key in ["accuracy", "precision", "f1"]):
-                    self.log("✅ Champion model encontrado com métricas reais!")
-                else:
-                    self.log("✅ Status válido retornado")
-        
-        if validation_errors:
-            self.log("\n❌ VALIDATION ERRORS:")
-            for error in validation_errors:
-                self.log(f"   {error}")
-            return False, train_data
-        
-        self.log("\n🎉 ML TRAINING: PROBLEMA 'PROMOTION: FALSE' RESOLVIDO!")
-        self.log("📋 Dados reais encontrados no grid ao invés de traços vazios")
-        return True, {"train": train_data, "status_after": status_data_after}
+        return True, data
 
     def test_online_learning_system(self):
         """Test 2: Sistema de Aprendizado Online - Testar funcionalidades implementadas"""
