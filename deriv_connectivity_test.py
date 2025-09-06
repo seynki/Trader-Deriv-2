@@ -380,10 +380,14 @@ class DerivConnectivityTester:
             accuracy = metrics.get('accuracy', 0)
             
             self.log(f"   Métricas:")
-            self.log(f"     Precision: {precision:.3f}")
-            self.log(f"     Recall: {recall:.3f}")
-            self.log(f"     F1-Score: {f1_score:.3f}")
-            self.log(f"     Accuracy: {accuracy:.3f}")
+            if precision is not None:
+                self.log(f"     Precision: {precision:.3f}")
+            if recall is not None:
+                self.log(f"     Recall: {recall:.3f}")
+            if f1_score is not None:
+                self.log(f"     F1-Score: {f1_score:.3f}")
+            if accuracy is not None:
+                self.log(f"     Accuracy: {accuracy:.3f}")
         
         # Validation
         if model_id:
