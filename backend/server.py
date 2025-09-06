@@ -400,123 +400,186 @@ class DerivWS:
         await self.ws.send(json.dumps(payload))
 
     async def _run(self):
+        """Enhanced WebSocket loop with better error handling and recovery"""
+        reconnect_count = 0
+        max_reconnects = 50  # Allow more reconnects
+        
         while True:
             try:
                 await self._connect()
+                reconnect_count = 0  # Reset on successful connection
+                
+                # Enhanced message processing loop
                 async for raw in self.ws:
-                    data = json.loads(raw)
-                    msg_type = data.get("msg_type")
-                    req_id = data.get("req_id")
-                    if req_id is not None and req_id in self.pending:
-                        fut = self.pending.pop(req_id)
-                        if not fut.done():
-                            fut.set_result(data)
-                            continue
-                    if msg_type == "authorize":
-                        self.authenticated = data.get("error") is None
-                        if self.authenticated:
-                            auth = data.get("authorize", {})
-                            self.last_authorize = auth
-                            self.landing_company_name = auth.get("landing_company_name") or auth.get("landing_company_fullname")
-                            self.currency = auth.get("currency")
-                        logger.info(f"Authorize status: {self.authenticated}")
-                    elif msg_type == "tick":
-                        tick = data.get("tick", {})
-                        symbol = tick.get("symbol")
-                        if symbol and symbol in self.queues:
-                            message = {
-                                "type": "tick",
-                                "symbol": symbol,
-                                "price": tick.get("quote"),
-                                "timestamp": tick.get("epoch"),
-                                "ask": tick.get("ask"),
-                                "bid": tick.get("bid"),
-                            }
-                            for q in list(self.queues.get(symbol, [])):
-                                if not q.full():
-                                    q.put_nowait(message)
-                    elif msg_type == "proposal_open_contract":
-                        poc = data.get("proposal_open_contract", {})
-                        cid = poc.get("contract_id")
-                        try:
-                            cid_int = int(cid) if cid is not None else None
-                        except Exception:
-                            cid_int = None
-                        if cid_int is not None:
-                            message = {
-                                "type": "contract",
-                                "contract_id": cid_int,
-                                "underlying": poc.get("underlying"),
-                                "tick_count": poc.get("current_spot_time"),
-                                "entry_spot": poc.get("entry_spot"),
-                                "current_spot": poc.get("current_spot"),
-                                "buy_price": poc.get("buy_price"),
-                                "bid_price": poc.get("bid_price"),
-                                "profit": poc.get("profit"),
-                                "payout": poc.get("payout"),
-                                "status": poc.get("status"),
-                                "is_expired": poc.get("is_expired"),
-                                "date_start": poc.get("date_start"),
-                                "date_expiry": poc.get("date_expiry"),
-                            }
-
-                            # Update global stats when contract expires and persist to Mongo
-                            if poc.get("is_expired"):
-                                try:
-                                    profit = float(poc.get("profit") or 0.0)
-                                    accounted = _global_stats.add_trade_result(cid_int, profit)
-                                    if accounted:
-                                        try:
-                                            _global_pnl.add(profit)
-                                        except Exception:
-                                            pass
-                                        logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
+                    try:
+                        data = json.loads(raw)
+                        msg_type = data.get("msg_type")
+                        req_id = data.get("req_id")
+                        
+                        if req_id is not None and req_id in self.pending:
+                            fut = self.pending.pop(req_id)
+                            if not fut.done():
+                                fut.set_result(data)
+                                continue
+                                
+                        if msg_type == "authorize":
+                            self.authenticated = data.get("error") is None
+                            if self.authenticated:
+                                auth = data.get("authorize", {})
+                                self.last_authorize = auth
+                                self.landing_company_name = auth.get("landing_company_name") or auth.get("landing_company_fullname")
+                                self.currency = auth.get("currency")
+                            logger.info(f"Authorize status: {self.authenticated}")
+                            
+                        elif msg_type == "tick":
+                            tick = data.get("tick", {})
+                            symbol = tick.get("symbol")
+                            if symbol and symbol in self.queues:
+                                message = {
+                                    "type": "tick",
+                                    "symbol": symbol,
+                                    "price": tick.get("quote"),
+                                    "timestamp": tick.get("epoch"),
+                                    "ask": tick.get("ask"),
+                                    "bid": tick.get("bid"),
+                                }
+                                # Improved queue management - remove full/broken queues
+                                queues_to_remove = []
+                                for q in list(self.queues.get(symbol, [])):
+                                    try:
+                                        if not q.full():
+                                            q.put_nowait(message)
+                                        else:
+                                            logger.warning(f"Queue full for symbol {symbol}, removing")
+                                            queues_to_remove.append(q)
+                                    except Exception as qe:
+                                        logger.warning(f"Queue error for {symbol}: {qe}")
+                                        queues_to_remove.append(q)
                                         
-                                        # Online Learning: Adapt models with trade outcome
-                                        try:
-                                            await _adapt_online_models_with_trade(cid_int, profit, poc)
-                                        except Exception as e:
-                                            logger.warning(f"Online learning adaptation failed: {e}")
-                                            
-                                except Exception as e:
-                                    logger.warning(f"Failed to update global stats: {e}")
-                                # Persist contract closing to Mongo
-                                try:
-                                    if db is not None:
-                                        res_str = "win" if (float(poc.get("profit") or 0.0) > 0) else ("breakeven" if float(poc.get("profit") or 0.0) == 0 else "lose")
-                                        await db.contracts.update_one(
-                                            {"deriv_contract_id": cid_int},
-                                            {"$set": {
-                                                "exit_price": float(poc.get("bid_price") or 0.0),
-                                                "pnl": float(poc.get("profit") or 0.0),
-                                                "result": res_str,
-                                                "status": "closed",
-                                                "updated_at": int(time.time()),
-                                            }}
-                                        )
-                                except Exception as e:
-                                    logger.warning(f"Mongo update (contract close) failed: {e}")
+                                for q in queues_to_remove:
+                                    try:
+                                        self.queues[symbol].remove(q)
+                                    except ValueError:
+                                        pass
+                                        
+                        elif msg_type == "proposal_open_contract":
+                            poc = data.get("proposal_open_contract", {})
+                            cid = poc.get("contract_id")
+                            try:
+                                cid_int = int(cid) if cid is not None else None
+                            except Exception:
+                                cid_int = None
+                            if cid_int is not None:
+                                message = {
+                                    "type": "contract",
+                                    "contract_id": cid_int,
+                                    "underlying": poc.get("underlying"),
+                                    "tick_count": poc.get("current_spot_time"),
+                                    "entry_spot": poc.get("entry_spot"),
+                                    "current_spot": poc.get("current_spot"),
+                                    "buy_price": poc.get("buy_price"),
+                                    "bid_price": poc.get("bid_price"),
+                                    "profit": poc.get("profit"),
+                                    "payout": poc.get("payout"),
+                                    "status": poc.get("status"),
+                                    "is_expired": poc.get("is_expired"),
+                                    "date_start": poc.get("date_start"),
+                                    "date_expiry": poc.get("date_expiry"),
+                                }
 
-                            # Send to contract listeners
-                            if cid_int in self.contract_queues:
-                                for q in list(self.contract_queues.get(cid_int, [])):
-                                    if not q.full():
-                                        q.put_nowait(message)
-                    elif msg_type == "heartbeat":
-                        self.last_heartbeat = int(time.time())
-                    elif msg_type == "error":
-                        logger.warning(f"Deriv error: {data}")
+                                # Update global stats when contract expires and persist to Mongo
+                                if poc.get("is_expired"):
+                                    try:
+                                        profit = float(poc.get("profit") or 0.0)
+                                        accounted = _global_stats.add_trade_result(cid_int, profit)
+                                        if accounted:
+                                            try:
+                                                _global_pnl.add(profit)
+                                            except Exception:
+                                                pass
+                                            logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
+                                            
+                                            # Online Learning: Adapt models with trade outcome
+                                            try:
+                                                await _adapt_online_models_with_trade(cid_int, profit, poc)
+                                            except Exception as e:
+                                                logger.warning(f"Online learning adaptation failed: {e}")
+                                                
+                                    except Exception as e:
+                                        logger.warning(f"Failed to update global stats: {e}")
+                                    # Persist contract closing to Mongo
+                                    try:
+                                        if db is not None:
+                                            res_str = "win" if (float(poc.get("profit") or 0.0) > 0) else ("breakeven" if float(poc.get("profit") or 0.0) == 0 else "lose")
+                                            await db.contracts.update_one(
+                                                {"deriv_contract_id": cid_int},
+                                                {"$set": {
+                                                    "exit_price": float(poc.get("bid_price") or 0.0),
+                                                    "pnl": float(poc.get("profit") or 0.0),
+                                                    "result": res_str,
+                                                    "status": "closed",
+                                                    "updated_at": int(time.time()),
+                                                }}
+                                            )
+                                    except Exception as e:
+                                        logger.warning(f"Mongo update (contract close) failed: {e}")
+
+                                # Send to contract listeners with improved queue management
+                                if cid_int in self.contract_queues:
+                                    queues_to_remove = []
+                                    for q in list(self.contract_queues.get(cid_int, [])):
+                                        try:
+                                            if not q.full():
+                                                q.put_nowait(message)
+                                            else:
+                                                queues_to_remove.append(q)
+                                        except Exception:
+                                            queues_to_remove.append(q)
+                                    
+                                    for q in queues_to_remove:
+                                        try:
+                                            self.contract_queues[cid_int].remove(q)
+                                        except ValueError:
+                                            pass
+                                            
+                        elif msg_type == "heartbeat":
+                            self.last_heartbeat = int(time.time())
+                            
+                        elif msg_type == "error":
+                            logger.warning(f"Deriv error: {data}")
+                            
+                    except json.JSONDecodeError as je:
+                        logger.warning(f"Failed to decode JSON: {je}")
+                    except Exception as me:
+                        logger.warning(f"Message processing error: {me}")
+                        
+            except websockets.exceptions.ConnectionClosed as cc:
+                logger.warning(f"WebSocket closed: {cc.code} - {cc.reason}")
+                self.connected = False
+                self.authenticated = False
+                reconnect_count += 1
+                
             except Exception as e:
                 logger.warning(f"WS loop error, will reconnect: {e}")
                 self.connected = False
                 self.authenticated = False
-                await asyncio.sleep(2)
+                reconnect_count += 1
+                
             finally:
                 try:
                     if self.ws:
                         await self.ws.close()
                 except Exception:
                     pass
+
+            # Enhanced reconnection logic
+            if reconnect_count >= max_reconnects:
+                logger.error(f"Max reconnection attempts ({max_reconnects}) reached. Stopping.")
+                break
+                
+            wait_time = min(2 ** min(reconnect_count, 6), 30)  # Exponential backoff, max 30s
+            logger.info(f"Reconnecting in {wait_time}s (attempt {reconnect_count}/{max_reconnects})")
+            await asyncio.sleep(wait_time)
 
     async def ensure_subscribed(self, symbol: str):
         if symbol not in SUPPORTED_SYMBOLS:
