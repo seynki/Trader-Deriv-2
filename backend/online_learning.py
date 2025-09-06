@@ -415,8 +415,32 @@ class OnlineLearningManager:
             'buffer_size': len(self.adaptation_buffer.get(model_id, []))
         }
     
+    def save_online_model(self, model_id: str) -> bool:
+        """Public method to save online model"""
+        if model_id not in self.active_models:
+            return False
+        
+        try:
+            self._save_online_model(model_id, self.active_models[model_id])
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save model {model_id}: {e}")
+            return False
+
     def list_online_models(self) -> List[str]:
         """List all available online models"""
+        return list(self.active_models.keys())
+    
+    def get_all_models_status(self) -> Dict[str, Dict[str, Any]]:
+        """Get status of all online models"""
+        return {model_id: self.get_model_status(model_id) for model_id in self.active_models}
+    
+    def force_process_all_buffers(self):
+        """Force process all adaptation buffers (for debugging)"""
+        for model_id in self.active_models:
+            if self.adaptation_buffer.get(model_id):
+                logger.info(f"Force processing buffer for {model_id}")
+                self._process_adaptation_buffer(model_id)
         return list(self.active_models.keys())
 
 
