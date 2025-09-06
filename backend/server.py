@@ -748,7 +748,7 @@ async def predict_with_online_model(
 async def create_status_check(input: StatusCheckCreate):
     status_dict = input.dict()
     status_obj = StatusCheck(**status_dict)
-    if db:
+    if db is not None:
         _ = await db.status_checks.insert_one(status_obj.dict())
     return status_obj
 
