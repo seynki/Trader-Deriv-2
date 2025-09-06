@@ -246,6 +246,92 @@ _global_pnl = GlobalPnL()
 # Online Learning Manager - initialize global instance
 _online_manager = online_learning.OnlineLearningManager()
 
+# Auto-initialize online learning models
+async def ensure_online_models_active():
+    """
+    Ensure we have active online learning models for continuous improvement.
+    Creates default models if none exist.
+    """
+    try:
+        if not _online_manager.active_models:
+            logger.info("🧠 Iniciando sistema de Online Learning automático...")
+            
+            # Try to load existing online models first
+            models_dir = Path("/app/backend/ml_models")
+            if models_dir.exists():
+                for model_file in models_dir.glob("*_online.joblib"):
+                    model_id = model_file.stem.replace("_online", "")
+                    loaded_model = _online_manager.load_online_model(model_id)
+                    if loaded_model:
+                        logger.info(f"✅ Modelo online carregado: {model_id}")
+            
+            # If still no models, create a default one with sample data
+            if not _online_manager.active_models:
+                await create_default_online_model()
+                
+    except Exception as e:
+        logger.error(f"Erro ao inicializar modelos online: {e}")
+
+async def create_default_online_model():
+    """Create a default online learning model with initial market data"""
+    try:
+        logger.info("📚 Criando modelo online padrão com dados de mercado...")
+        
+        # Fetch initial training data
+        symbol = "R_100"
+        granularity = 180  # 3m
+        count = 500  # Initial training data
+        
+        df = await fetch_candles(symbol, granularity, count)
+        
+        if len(df) < 100:
+            logger.warning("Poucos dados disponíveis para treinar modelo online")
+            return
+            
+        # Build features
+        features_df = ml_utils.build_features(df)
+        features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
+        
+        # Create simple target based on price movement
+        features_df['future_return'] = features_df['close'].pct_change().shift(-1)
+        features_df['target'] = (features_df['future_return'] > 0.001).astype(int)
+        
+        # Remove rows with NaN target
+        features_df = features_df.dropna(subset=['target'])
+        
+        if len(features_df) < 50:
+            logger.warning("Dados insuficientes após processamento para modelo online")
+            return
+            
+        # Get feature columns (exclude target and price columns)
+        exclude_cols = ['target', 'open', 'high', 'low', 'close', 'volume', 'future_return', 'timestamp']
+        feature_cols = [col for col in features_df.columns if col not in exclude_cols and not col.endswith('_shift')]
+        
+        if len(feature_cols) < 10:
+            logger.warning("Poucas features disponíveis para modelo online")
+            return
+        
+        # Limit features to prevent overfitting
+        feature_cols = feature_cols[:50]  # Max 50 features
+        
+        model_id = f"online_model_{symbol}_auto"
+        
+        # Create online model
+        online_model = _online_manager.create_online_model(
+            model_id=model_id,
+            initial_data=features_df,
+            features=feature_cols,
+            target_col='target',
+            model_type='sgd'  # SGD is best for online learning
+        )
+        
+        logger.info(f"✅ Modelo online criado: {model_id} com {len(feature_cols)} features, {len(features_df)} amostras iniciais")
+        return model_id
+        
+    except Exception as e:
+        logger.error(f"Erro ao criar modelo online padrão: {e}")
+        return None
+
 class DerivWS:
     """Minimal Deriv WS manager with auto reconnect, dispatcher, tick and contract broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
