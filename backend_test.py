@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Bug Fixes Validation
+Backend API Testing for Online Learning System
 Tests as requested in Portuguese review:
-🔧 TESTE DE VALIDAÇÃO DAS CORREÇÕES IMPLEMENTADAS
-
-BUGS REPORTADOS:
-1. ❌ Strategy para após uma trade - Sistema executa 1 trade e para de funcionar  
-2. ❌ Não há upgrades automáticos - Modelo ML não faz updates (mostrava 0 Updates)
-
-CORREÇÕES IMPLEMENTADAS:
-1. ✅ Strategy Runner: Corrigido loop que parava permanentemente após erro
-2. ✅ Online Learning: Criado modelo online ativo 'online_model_R100_auto' com 78 features
+🧠 TESTE DO SISTEMA DE ONLINE LEARNING
 
 TESTE SOLICITADO:
-1. Verificar estratégia funcionando continuamente
-2. Verificar sistema de Online Learning ativo  
-3. Teste de resistência a erros
+1. **Verificar modelos online ativos:**
+   - GET /api/ml/online/list (deve mostrar pelo menos 1 modelo ativo)
+   - GET /api/ml/online/progress (mostrar estatísticas dos modelos)
+
+2. **Testar novo endpoint de inicialização:**
+   - POST /api/ml/online/initialize (forçar criação de modelos online)
+
+3. **Verificar status dos modelos:**
+   - GET /api/ml/online/status/{model_id} para cada modelo listado
+
+4. **Testar simulação de trade (para verificar se online learning funciona):**
+   - Simular um trade fictício para ver se o sistema faria update dos modelos online
+   - IMPORTANTE: NÃO executar /api/deriv/buy real, apenas testar se os endpoints estão funcionando
 """
 
 import requests
