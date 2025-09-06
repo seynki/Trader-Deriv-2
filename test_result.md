@@ -450,10 +450,13 @@
 ##     implemented: true
 ##     working: false
 ##     file: "/app/backend/server.py"
-##     stuck_count: 0
+##     stuck_count: 1
 ##     priority: "high"
 ##     needs_retesting: false
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "testing"
 ##       -comment: "DERIV CONNECTIVITY TESTING COMPLETED (2025-01-28): ✅ CRITICAL APIS WORKING, ❌ WEBSOCKET INSTABILITY DETECTED - Executado conforme review request português: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO (conta DEMO confirmada) 2) GET /api/strategy/status ✅ running=false inicialmente, total_trades=0, métricas globais zeradas, sistema operacional 3) WebSocket /api/ws/ticks ❌ PROBLEMA CRÍTICO DETECTADO: conecta com sucesso mas perde estabilidade após ~10s, recebeu apenas 9 mensagens em 10s (taxa baixa 0.9 msg/s), símbolos R_100 e R_10 detectados mas conexão instável 4) GET /api/ml/status ✅ modelo campeão R_100_3m_rf ativo com 72 features, precision=1.0, sistema ML funcionando. DIAGNÓSTICO: WebSocket instabilidade confirma problemas reportados pelo usuário de 'WebSocket fechando constantemente'. APIs principais funcionais mas WebSocket precisa correção para estabilidade."
+##       -working: false
+##       -agent: "testing"
+##       -comment: "WEBSOCKET INSTABILITY CONFIRMED (2025-01-28): ❌ CRITICAL WEBSOCKET ISSUE DETECTED - Executado teste de conectividade conforme review request: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO 2) GET /api/strategy/status ✅ running=false, total_trades=0, sistema operacional 3) WebSocket /api/ws/ticks ❌ INSTABILIDADE CONFIRMADA: conectou com sucesso mas apresentou 5 timeouts consecutivos em 21s, recebeu 21 mensagens (1.0 msg/s), símbolos R_100 e R_10 detectados, mas teste terminou prematuramente devido à instabilidade. LOGS DO BACKEND: Detectados múltiplos erros 'Error sending tick message: received 1000 (OK); then sent 1000 (OK)' e 'WebSocket message processing error: received 1000 (OK)' confirmando que WebSocket está fechando constantemente como reportado pelo usuário. DIAGNÓSTICO FINAL: O problema reportado pelo usuário de 'WebSocket fechando constantemente' e 'sistema para de detectar sinais' está confirmado. WebSocket conecta mas não mantém estabilidade, causando perda de coordenadas dos ticks."
