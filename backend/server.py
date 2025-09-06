@@ -567,18 +567,20 @@ class DerivWS:
                 
             finally:
                 try:
-                    if self.ws:
+                    if self.ws and not self.ws.closed:
                         await self.ws.close()
-                except Exception:
-                    pass
+                        logger.info("WebSocket connection properly closed")
+                except Exception as e:
+                    logger.warning(f"Error closing WebSocket: {e}")
+                self.ws = None
 
-            # Enhanced reconnection logic
+            # Enhanced reconnection logic with more aggressive reconnect
             if reconnect_count >= max_reconnects:
                 logger.error(f"Max reconnection attempts ({max_reconnects}) reached. Stopping.")
                 break
                 
-            wait_time = min(2 ** min(reconnect_count, 6), 30)  # Exponential backoff, max 30s
-            logger.info(f"Reconnecting in {wait_time}s (attempt {reconnect_count}/{max_reconnects})")
+            wait_time = min(2 ** min(reconnect_count, 4), 15)  # Exponential backoff, max 15s (faster reconnect)
+            logger.info(f"🔄 DerivWS Reconnecting in {wait_time}s (attempt {reconnect_count}/{max_reconnects})")
             await asyncio.sleep(wait_time)
 
     async def ensure_subscribed(self, symbol: str):
