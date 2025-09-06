@@ -351,7 +351,7 @@ class DerivConnectivityTester:
         self.log("📋 Conforme solicitado na review request em português:")
         self.log("   1. GET /api/deriv/status - verificar conectividade com Deriv")
         self.log("   2. GET /api/strategy/status - verificar estado da estratégia")
-        self.log("   3. WebSocket /api/ws/ticks - testar por 30s para verificar estabilidade")
+        self.log("   3. WebSocket /api/ws/ticks - testar por 60s para verificar estabilidade após correções")
         self.log("   4. Verificar logs do backend para erros de WebSocket")
         self.log("   ⚠️  IMPORTANTE: Conta DEMO, NÃO executar /api/deriv/buy")
         self.log(f"   🌐 Base URL: {self.base_url}")
