@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Online Learning System
+Backend API Testing for Deriv Trading Bot Connectivity
 Tests as requested in Portuguese review:
-🧠 TESTE DO SISTEMA DE ONLINE LEARNING
+🤖 TESTE DE CONECTIVIDADE BÁSICA DO BOT DE TRADING DERIV
 
-TESTE SOLICITADO:
-1. **Verificar modelos online ativos:**
-   - GET /api/ml/online/list (deve mostrar pelo menos 1 modelo ativo)
-   - GET /api/ml/online/progress (mostrar estatísticas dos modelos)
+CONTEXTO: Bot de trading com problemas de WebSocket fechando constantemente, 
+bot parando após contratos, e sistema ML não retreinando. Usuario usando conta DEMO, símbolo R_100.
 
-2. **Testar novo endpoint de inicialização:**
-   - POST /api/ml/online/initialize (forçar criação de modelos online)
+TESTES SOLICITADOS:
+1. GET /api/deriv/status - verificar conectividade com Deriv
+2. GET /api/strategy/status - verificar estado do strategy runner  
+3. WebSocket /api/ws/ticks - testar conexão de ticks (conectar por 30s, verificar se recebe ticks consistentes)
+4. GET /api/ml/status - verificar estado dos modelos ML
 
-3. **Verificar status dos modelos:**
-   - GET /api/ml/online/status/{model_id} para cada modelo listado
-
-4. **Testar simulação de trade (para verificar se online learning funciona):**
-   - Simular um trade fictício para ver se o sistema faria update dos modelos online
-   - IMPORTANTE: NÃO executar /api/deriv/buy real, apenas testar se os endpoints estão funcionando
+IMPORTANTE: 
+- Conta DEMO da Deriv
+- NÃO executar trades reais (/api/deriv/buy)
+- Focar em identificar problemas de conectividade e estabilidade
+- Verificar se WebSocket fica estável ou fica desconectando
+- Reportar qualquer erro ou instabilidade observada
 """
 
 import requests
