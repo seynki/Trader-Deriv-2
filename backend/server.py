@@ -577,6 +577,8 @@ async def _wait_deriv_ready(max_wait: float = 20.0, require_auth: bool = True) -
 @app.on_event("startup")
 async def _startup():
     await _deriv.start()
+    # Initialize online learning models automatically
+    asyncio.create_task(ensure_online_models_active())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
