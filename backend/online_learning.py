@@ -284,55 +284,62 @@ class OnlineLearningManager:
         
         return success
     
-    def _process_adaptation_buffer(self, model_id: str):
-        """Process buffered adaptation data"""
+    def _process_adaptation_buffer(self, model_id: str) -> bool:
+        """Enhanced process buffered adaptation data with immediate updates"""
         if model_id not in self.active_models:
-            return
+            return False
             
         model = self.active_models[model_id]
         buffer = self.adaptation_buffer[model_id]
         
         if not buffer:
-            return
+            return False
         
-        # Combine all market data and trade outcomes
-        all_market_data = []
-        all_targets = []
+        # Process each item in buffer immediately (no batching)
+        success_count = 0
         
         for item in buffer:
-            trade_data = item['trade_data']
-            market_data = item['market_data']
-            
-            if isinstance(market_data, pd.DataFrame) and len(market_data) > 0:
-                # Use the latest market state
-                latest_market = market_data.iloc[-1:].copy()
-                
-                # Create target based on trade outcome
-                profit = trade_data.get('profit', 0)
-                target = 1 if profit > 0 else 0
-                
-                latest_market['target'] = target
-                all_market_data.append(latest_market)
-                all_targets.append(target)
-        
-        if all_market_data:
-            # Combine all data
-            combined_data = pd.concat(all_market_data, ignore_index=True)
-            combined_targets = pd.Series(all_targets)
-            
-            # Update model
             try:
-                model.partial_fit(combined_data, combined_targets)
-                logger.info(f"Adapted model {model_id} with {len(combined_data)} samples")
+                trade_data = item['trade_data']
+                market_data = item['market_data']
+                trade_outcome = item.get('trade_outcome')
                 
+                if isinstance(market_data, pd.DataFrame) and len(market_data) > 0:
+                    # Use the latest market state
+                    latest_market = market_data.iloc[-1:].copy()
+                    
+                    # Use explicit trade outcome if provided
+                    if trade_outcome is not None:
+                        target = trade_outcome
+                    else:
+                        # Fallback to profit-based outcome
+                        profit = trade_data.get('profit', 0)
+                        target = 1 if profit > 0 else 0
+                    
+                    latest_market['target'] = target
+                    target_series = pd.Series([target])
+                    
+                    # Update model immediately
+                    model.partial_fit(latest_market, target_series)
+                    success_count += 1
+                    
+                    logger.info(f"✅ Model {model_id} updated with trade outcome: {target} (profit: {trade_data.get('profit', 0):.2f})")
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to process adaptation item for model {model_id}: {e}")
+        
+        if success_count > 0:
+            try:
                 # Save updated model
                 self._save_online_model(model_id, model)
-                
+                logger.info(f"💾 Model {model_id} saved after {success_count} updates")
             except Exception as e:
-                logger.error(f"Failed to adapt model {model_id}: {e}")
+                logger.warning(f"⚠️ Failed to save model {model_id}: {e}")
         
         # Clear buffer
         self.adaptation_buffer[model_id] = []
+        
+        return success_count > 0
     
     def _save_online_model(self, model_id: str, model: OnlineLearningModel):
         """Save online model to disk"""
