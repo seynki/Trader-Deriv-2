@@ -11,7 +11,7 @@ TESTES SOLICITADOS:
 1. GET /api/deriv/status - verificar conectividade com Deriv
 2. GET /api/strategy/status - verificar estado do strategy runner  
 3. WebSocket /api/ws/ticks - testar conexão de ticks (conectar por 30s, verificar se recebe ticks consistentes)
-4. GET /api/ml/status - verificar estado dos modelos ML
+4. Verificar se há erros nos logs do backend relacionados ao WebSocket
 
 IMPORTANTE: 
 - Conta DEMO da Deriv
@@ -25,6 +25,8 @@ import requests
 import json
 import sys
 import time
+import asyncio
+import websockets
 from datetime import datetime
 
 class OnlineLearningTester:
