@@ -308,6 +308,149 @@ class OnlineLearningTester:
         self.log(f"\n✅ Status obtido com sucesso para {len(status_results)} modelo(s)")
         return True, status_results
 
+    def test_trade_simulation_endpoints(self):
+        """Test 5: Testar simulação de trade (verificar se endpoints funcionam)"""
+        self.log("\n" + "="*70)
+        self.log("TEST 5: SIMULAÇÃO DE TRADE - ENDPOINTS FUNCIONAIS")
+        self.log("="*70)
+        self.log("📋 Objetivo: Verificar se endpoints estão funcionando (NÃO executar trades reais)")
+        self.log("⚠️  IMPORTANTE: Apenas testar conectividade, não executar /api/deriv/buy")
+        
+        # Test 1: Check Deriv connectivity
+        self.log("\n🔍 Verificando conectividade com Deriv")
+        success_deriv, deriv_data, _ = self.run_test(
+            "Deriv Connectivity Check",
+            "GET",
+            "deriv/status",
+            200
+        )
+        
+        if not success_deriv:
+            self.log("❌ CRITICAL: Deriv não conectado")
+            return False, deriv_data
+        
+        connected = deriv_data.get('connected', False)
+        authenticated = deriv_data.get('authenticated', False)
+        
+        self.log(f"   📊 Conectado: {connected}")
+        self.log(f"   📊 Autenticado: {authenticated}")
+        
+        if not connected:
+            self.log("❌ Deriv não está conectado - trades não funcionarão")
+            return False, {"message": "deriv_not_connected", "data": deriv_data}
+        
+        # Test 2: Check if we can get proposal (without buying)
+        self.log("\n🔍 Testando endpoint de proposta (sem comprar)")
+        
+        proposal_data = {
+            "symbol": "R_100",
+            "type": "CALLPUT",
+            "contract_type": "CALL",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "currency": "USD"
+        }
+        
+        success_proposal, proposal_response, status_code = self.run_test(
+            "Test Proposal Endpoint",
+            "POST",
+            "deriv/proposal",
+            200,
+            data=proposal_data,
+            timeout=15
+        )
+        
+        if success_proposal:
+            proposal_id = proposal_response.get('id')
+            ask_price = proposal_response.get('ask_price', 0)
+            payout = proposal_response.get('payout', 0)
+            
+            self.log(f"   ✅ Proposta obtida com sucesso!")
+            self.log(f"   📋 ID: {proposal_id}")
+            self.log(f"   📋 Preço: {ask_price}")
+            self.log(f"   📋 Payout: {payout}")
+        else:
+            self.log(f"   ⚠️  Endpoint de proposta falhou - Status: {status_code}")
+            if status_code == 400:
+                error_detail = proposal_response.get('detail', '')
+                self.log(f"   Erro: {error_detail}")
+        
+        # Test 3: Verify online learning would be triggered (check current state)
+        self.log("\n🔍 Verificando estado atual do sistema de aprendizado online")
+        
+        success_progress, progress_data, _ = self.run_test(
+            "Check Online Learning State",
+            "GET",
+            "ml/online/progress",
+            200
+        )
+        
+        if success_progress:
+            active_models = progress_data.get('active_models', 0)
+            total_updates = progress_data.get('total_updates', 0)
+            
+            self.log(f"   📊 Modelos ativos: {active_models}")
+            self.log(f"   📊 Total updates: {total_updates}")
+            
+            if active_models > 0:
+                self.log("   ✅ Sistema de aprendizado online está ativo")
+                self.log("   📋 Modelos estariam prontos para aprender com trades")
+            else:
+                self.log("   ⚠️  Nenhum modelo online ativo")
+                self.log("   📋 Sistema não aprenderia com trades no estado atual")
+        
+        # Test 4: Check if system has the necessary endpoints for trade learning
+        endpoints_to_check = [
+            ("ml/online/list", "Lista de modelos"),
+            ("ml/online/progress", "Progresso do aprendizado"),
+            ("deriv/status", "Status da Deriv")
+        ]
+        
+        self.log("\n🔍 Verificando endpoints necessários para aprendizado com trades")
+        
+        endpoints_working = 0
+        for endpoint, description in endpoints_to_check:
+            success, _, _ = self.run_test(
+                f"Check {description}",
+                "GET",
+                endpoint,
+                200
+            )
+            
+            if success:
+                endpoints_working += 1
+                self.log(f"   ✅ {description}: OK")
+            else:
+                self.log(f"   ❌ {description}: FALHOU")
+        
+        # Summary
+        all_endpoints_working = endpoints_working == len(endpoints_to_check)
+        deriv_ready = connected
+        proposal_working = success_proposal
+        online_learning_ready = success_progress and progress_data.get('active_models', 0) > 0
+        
+        self.log(f"\n📊 RESUMO DA SIMULAÇÃO:")
+        self.log(f"   Endpoints funcionais: {endpoints_working}/{len(endpoints_to_check)}")
+        self.log(f"   Deriv conectado: {deriv_ready}")
+        self.log(f"   Propostas funcionando: {proposal_working}")
+        self.log(f"   Aprendizado online pronto: {online_learning_ready}")
+        
+        if all_endpoints_working and deriv_ready:
+            self.log("✅ Sistema pronto para trades com aprendizado online!")
+            if not online_learning_ready:
+                self.log("⚠️  Mas nenhum modelo online ativo no momento")
+        else:
+            self.log("❌ Sistema não está completamente pronto para trades")
+        
+        return all_endpoints_working and deriv_ready, {
+            "deriv_connected": deriv_ready,
+            "proposal_working": proposal_working,
+            "online_learning_ready": online_learning_ready,
+            "endpoints_working": endpoints_working,
+            "total_endpoints": len(endpoints_to_check)
+        }
+
     def run_comprehensive_tests(self):
         """Run all tests as requested in Portuguese review"""
         self.log("\n" + "🚀" + "="*68)
