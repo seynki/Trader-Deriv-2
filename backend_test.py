@@ -212,19 +212,17 @@ class OnlineLearningTester:
         self.log(f"✅ Inicialização executada - {models_created} modelo(s) processado(s)")
         return True, data
 
-    def test_functional_validations(self):
-        """Test 4: Validações funcionais - Confirmar métricas, contadores e precisão"""
+    def test_model_status_endpoints(self):
+        """Test 4: Verificar status dos modelos - GET /api/ml/online/status/{model_id}"""
         self.log("\n" + "="*70)
-        self.log("TEST 4: VALIDAÇÕES FUNCIONAIS")
+        self.log("TEST 4: STATUS DOS MODELOS ONLINE")
         self.log("="*70)
-        self.log("📋 Objetivo: Confirmar que métricas não estão vazias/nulas")
-        self.log("📋 Verificar contadores de updates e precisão atual")
-        self.log("📋 Testar que sistema está preparado para aprender automaticamente")
+        self.log("📋 Objetivo: GET /api/ml/online/status/{model_id} para cada modelo listado")
         
-        # Test 1: Validate online models have non-empty metrics
-        self.log("\n🔍 Validando métricas dos modelos online")
+        # First get the list of models
+        self.log("\n🔍 Obtendo lista de modelos para testar status")
         success_list, list_data, _ = self.run_test(
-            "Online Models Metrics Validation",
+            "Get Models List for Status Test",
             "GET",
             "ml/online/list",
             200
@@ -235,152 +233,80 @@ class OnlineLearningTester:
             return False, {}
         
         models = list_data.get('models', [])
-        statuses = list_data.get('statuses', {})
+        self.log(f"   Modelos encontrados: {models}")
         
-        self.log(f"   Modelos encontrados: {len(models)}")
+        if not models:
+            self.log("⚠️  Nenhum modelo encontrado para testar status")
+            return False, {"message": "no_models_found"}
         
+        # Test status endpoint for each model
+        status_results = {}
         validation_errors = []
-        valid_models = 0
         
         for model_id in models:
-            model_status = statuses.get(model_id, {})
-            model_info = model_status.get('model_info', {})
-            performance_history = model_status.get('performance_history', [])
+            self.log(f"\n🔍 Testando status do modelo: {model_id}")
             
-            self.log(f"\n   📊 Validando modelo: {model_id}")
-            self.log(f"      Status: {model_status.get('status', 'unknown')}")
-            self.log(f"      Update count: {model_info.get('update_count', 0)}")
-            self.log(f"      Features count: {model_info.get('features_count', 0)}")
-            self.log(f"      Performance history: {len(performance_history)} entradas")
-            
-            # Validate model has proper structure
-            if not model_info:
-                validation_errors.append(f"❌ Modelo {model_id}: model_info vazio")
-                continue
-            
-            # Check for required fields
-            required_fields = ['update_count', 'features_count']
-            missing_fields = [field for field in required_fields if field not in model_info]
-            
-            if missing_fields:
-                validation_errors.append(f"❌ Modelo {model_id}: campos ausentes: {missing_fields}")
-                continue
-            
-            # Validate non-negative values
-            update_count = model_info.get('update_count', 0)
-            features_count = model_info.get('features_count', 0)
-            
-            if update_count < 0:
-                validation_errors.append(f"❌ Modelo {model_id}: update_count inválido: {update_count}")
-                continue
-            
-            if features_count <= 0:
-                validation_errors.append(f"❌ Modelo {model_id}: features_count inválido: {features_count}")
-                continue
-            
-            self.log(f"      ✅ Modelo {model_id}: métricas válidas")
-            valid_models += 1
-        
-        # Test 2: Validate overall progress metrics
-        self.log(f"\n🔍 Validando métricas gerais de progresso")
-        success_progress, progress_data, _ = self.run_test(
-            "Overall Progress Metrics Validation",
-            "GET",
-            "ml/online/progress",
-            200
-        )
-        
-        if not success_progress:
-            validation_errors.append("❌ Não foi possível obter métricas de progresso")
-        else:
-            active_models = progress_data.get('active_models', 0)
-            total_updates = progress_data.get('total_updates', 0)
-            models_detail = progress_data.get('models_detail', [])
-            
-            self.log(f"   Modelos ativos: {active_models}")
-            self.log(f"   Total de updates: {total_updates}")
-            self.log(f"   Modelos com detalhes: {len(models_detail)}")
-            
-            # Validate consistency
-            if active_models != len(models):
-                validation_errors.append(f"❌ Inconsistência: active_models ({active_models}) != models count ({len(models)})")
-            
-            if len(models_detail) != len(models):
-                validation_errors.append(f"❌ Inconsistência: models_detail ({len(models_detail)}) != models count ({len(models)})")
-            
-            # Validate each model detail
-            for detail in models_detail:
-                model_id = detail.get('model_id', '')
-                current_accuracy = detail.get('current_accuracy', 0)
-                current_precision = detail.get('current_precision', 0)
-                improvement_trend = detail.get('improvement_trend', '')
-                
-                if not model_id:
-                    validation_errors.append("❌ Model detail sem model_id")
-                    continue
-                
-                if current_accuracy < 0 or current_accuracy > 1:
-                    validation_errors.append(f"❌ Modelo {model_id}: accuracy inválida: {current_accuracy}")
-                
-                if current_precision < 0 or current_precision > 1:
-                    validation_errors.append(f"❌ Modelo {model_id}: precision inválida: {current_precision}")
-                
-                if improvement_trend not in ['improving', 'declining', 'stable']:
-                    validation_errors.append(f"❌ Modelo {model_id}: trend inválido: {improvement_trend}")
-        
-        # Test 3: Test system readiness for automatic learning
-        self.log(f"\n🔍 Testando preparação do sistema para aprendizado automático")
-        
-        # Check if we can make predictions (system should be ready)
-        if models:
-            test_model = models[0]
-            self.log(f"   Testando predição com modelo: {test_model}")
-            
-            predict_params = {
-                "symbol": "R_100",
-                "timeframe": "3m",
-                "count": 50
-            }
-            
-            query_string = "&".join([f"{k}={v}" for k, v in predict_params.items()])
-            
-            success_predict, predict_data, status_code = self.run_test(
-                f"Prediction Test - {test_model}",
-                "POST",
-                f"ml/online/predict/{test_model}?{query_string}",
-                200,
-                timeout=30
+            success, data, status_code = self.run_test(
+                f"Model Status - {model_id}",
+                "GET",
+                f"ml/online/status/{model_id}",
+                200
             )
             
-            if success_predict:
-                prediction = predict_data.get('prediction')
-                probability = predict_data.get('probability', {})
-                
-                self.log(f"   ✅ Predição funcionando: {prediction}")
-                self.log(f"   Probabilidades: {probability}")
-            else:
+            if not success:
                 if status_code == 404:
-                    self.log(f"   ⚠️  Modelo {test_model} não encontrado para predição")
+                    validation_errors.append(f"❌ Modelo {model_id} não encontrado (404)")
                 else:
-                    validation_errors.append(f"❌ Predição falhou para {test_model}: status {status_code}")
-        else:
-            self.log("   ⚠️  Nenhum modelo disponível para teste de predição")
+                    validation_errors.append(f"❌ Erro ao obter status do modelo {model_id}: {status_code}")
+                continue
+            
+            # Validate status response structure
+            status = data.get('status', '')
+            model_info = data.get('model_info', {})
+            performance_history = data.get('performance_history', [])
+            
+            self.log(f"   📊 Status: {status}")
+            self.log(f"   Model Info: {json.dumps(model_info, indent=2)}")
+            self.log(f"   Performance History: {len(performance_history)} entradas")
+            
+            # Validate required fields
+            if not status:
+                validation_errors.append(f"❌ Modelo {model_id}: status vazio")
+            elif status not in ['active', 'training', 'ready', 'inactive']:
+                validation_errors.append(f"❌ Modelo {model_id}: status inválido: {status}")
+            else:
+                self.log(f"   ✅ Status válido: {status}")
+            
+            if not model_info:
+                validation_errors.append(f"❌ Modelo {model_id}: model_info vazio")
+            else:
+                # Check key model info fields
+                update_count = model_info.get('update_count', 0)
+                features_count = model_info.get('features_count', 0)
+                
+                self.log(f"   📋 Update Count: {update_count}")
+                self.log(f"   📋 Features Count: {features_count}")
+                
+                if features_count <= 0:
+                    validation_errors.append(f"❌ Modelo {model_id}: features_count inválido: {features_count}")
+                else:
+                    self.log(f"   ✅ Features válidas: {features_count}")
+            
+            status_results[model_id] = {
+                "status": status,
+                "model_info": model_info,
+                "performance_history_count": len(performance_history)
+            }
         
         # Final validation
         if validation_errors:
             self.log("\n❌ VALIDATION ERRORS:")
             for error in validation_errors:
                 self.log(f"   {error}")
-            return False, {"errors": validation_errors}
+            return False, {"errors": validation_errors, "results": status_results}
         
-        self.log("\n🎉 VALIDAÇÕES FUNCIONAIS: TODAS PASSARAM!")
-        self.log(f"📋 {valid_models} modelos com métricas válidas")
-        self.log("📋 Sistema preparado para aprendizado automático")
-        return True, {
-            "valid_models": valid_models,
-            "total_models": len(models),
-            "progress_metrics": progress_data if success_progress else {}
-        }
+        self.log(f"\n✅ Status obtido com sucesso para {len(status_results)} modelo(s)")
+        return True, status_results
 
     def run_comprehensive_tests(self):
         """Run all tests as requested in Portuguese review"""
