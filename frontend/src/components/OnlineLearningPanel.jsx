@@ -103,6 +103,28 @@ export default function OnlineLearningPanel() {
     }
   };
 
+  const initializeOnlineModels = async () => {
+    setCreatingModel(true);
+    try {
+      const { data } = await axios.post(`${API}/ml/online/initialize`);
+      
+      // Refresh models list
+      await fetchOnlineModels();
+      await fetchOnlineProgress();
+      
+      if (data.models_created > 0) {
+        alert(`${data.models_created} modelo(s) online inicializado(s) automaticamente!\nModelos: ${data.models.join(', ')}`);
+      } else {
+        alert("Nenhum modelo foi criado (pode precisar de mais dados históricos)");
+      }
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message;
+      alert(`Erro na inicialização automática: ${errorMsg}`);
+    } finally {
+      setCreatingModel(false);
+    }
+  };
+
   const getTrendIcon = (trend) => {
     switch (trend) {
       case "improving": return "📈";
