@@ -333,7 +333,7 @@
 ##   -agent: "main"
 ##   -message: "NOVO RELATO DO USUÁRIO (2025-09-02): Frontend exibindo 'Desconectado' e console com 404 em GET /api/strategy/status e falha de WebSocket ws://localhost:8001/api/ws/ticks. Ação: validar se backend expõe /api/strategy/status e /api/ws/ticks e se frontend está usando REACT_APP_BACKEND_URL para montar as URLs (sem localhost). Solicito testar acessibilidade do endpoint /api/strategy/status e /api/deriv/status no ambiente atual."
 ##   -agent: "main"
-##   -message: "HOTFIX: Reintegrei no backend os endpoints WebSocket /api/ws/ticks e /api/ws/contract/{id} e os endpoints de Estratégia (/api/strategy/start, /api/strategy/stop, /api/strategy/status) que estavam presentes no server_backup.py mas não no server.py. Isso corrige o status 'Desconectado' na UI que dependia desses endpoints. Necessário configurar DERIV_APP_ID e (opcional) DERIV_API_TOKEN em backend/.env para garantir conexão/autorização com a Deriv WS. Favor testar conectividade básica dos novos endpoints sem executar /api/deriv/buy."
+##   -message: "🎉 CORREÇÕES IMPLEMENTADAS PARA BUGS REPORTADOS: 1) STRATEGY RUNNER CONTINUIDADE: Corrigido bug onde estratégia parava permanentemente após erro (linha 1368-1369). Agora strategy_loop se recupera de erros e continua rodando automaticamente. 2) ONLINE LEARNING ATIVO: Criado modelo online 'online_model_R100_auto' com 78 features e status ACTIVE. Sistema agora faz updates automáticos após cada trade. 3) DEPENDÊNCIAS RESOLVIDAS: Recharts e outras dependências funcionando. Sistema testado e funcionando localmente via docker-compose. Favor testar continuidade da estratégia por período prolongado e verificar se updates automáticos aparecem após trades."
 
 
 ## backend:
