@@ -1478,7 +1478,7 @@ async def deriv_sell(req: SellRequest):
 
 @api_router.websocket("/ws/ticks")
 async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
-    """Enhanced WebSocket endpoint for real-time tick data with improved stability and disconnection handling"""
+    """Enhanced WebSocket endpoint for real-time tick data with ping/pong keepalive mechanism"""
     await websocket.accept()
     symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
     logger.info(f"WebSocket client connected, subscribing to: {symbol_list}")
@@ -1503,38 +1503,47 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
             logger.warning(f"Failed to send initial confirmation: {e}")
             connection_active = False
         
-        # Enhanced message processing with heartbeat and proper disconnection handling
-        last_heartbeat = time.time()
-        heartbeat_interval = 30  # Send heartbeat every 30 seconds
+        # Enhanced message processing with robust ping/pong keepalive
+        last_ping = time.time()
+        ping_interval = 20  # Send ping every 20 seconds for more aggressive keepalive
+        ping_timeout = 5    # Wait 5 seconds for pong response
+        pending_pong = False
         
         while connection_active:
             try:
-                # Check if we should send heartbeat
                 current_time = time.time()
-                if current_time - last_heartbeat >= heartbeat_interval:
-                    try:
-                        await websocket.send_json({
-                            "type": "heartbeat",
-                            "timestamp": int(current_time),
-                            "symbols_active": list(queues.keys())
-                        })
-                        last_heartbeat = current_time
-                    except Exception as e:
-                        logger.warning(f"Heartbeat failed, client likely disconnected: {e}")
+                
+                # Check if we need to send ping to keep connection alive
+                if current_time - last_ping >= ping_interval:
+                    if not pending_pong:  # Only send ping if not waiting for pong
+                        try:
+                            await websocket.send_json({
+                                "type": "ping",
+                                "timestamp": int(current_time)
+                            })
+                            last_ping = current_time
+                            pending_pong = True
+                            logger.debug("Sent ping to keep WebSocket connection alive")
+                        except Exception as e:
+                            logger.warning(f"Failed to send ping: {e}")
+                            connection_active = False
+                            break
+                    elif current_time - last_ping > ping_timeout:
+                        logger.warning("No pong received within timeout, closing connection")
                         connection_active = False
                         break
                 
-                # Process messages from all symbol queues with timeout
+                # Process messages from all symbol queues with shorter timeout
                 tasks = []
                 for symbol, queue in queues.items():
                     task = asyncio.create_task(queue.get())
                     tasks.append((symbol, task))
                 
                 if tasks:
-                    # Wait for any queue to have data, with timeout
+                    # Wait for any queue to have data, with shorter timeout for more responsive ping/pong
                     done, pending = await asyncio.wait(
                         [task for _, task in tasks], 
-                        timeout=1.0,  # 1 second timeout
+                        timeout=0.5,  # Shorter timeout for more responsive connection monitoring
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
@@ -1550,22 +1559,43 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                     for task in done:
                         try:
                             message = await task
-                            # Check if connection is still active before sending
                             if connection_active:
                                 await websocket.send_json(message)
                         except (websockets.exceptions.ConnectionClosed, 
                                websockets.exceptions.ConnectionClosedOK,
                                websockets.exceptions.ConnectionClosedError) as wse:
-                            logger.info(f"WebSocket connection properly closed by client: {wse}")
+                            logger.info(f"WebSocket connection closed during tick send: {wse}")
                             connection_active = False
                             break
                         except Exception as e:
-                            logger.warning(f"Error sending tick message, client may have disconnected: {e}")
-                            connection_active = False
-                            break
+                            logger.warning(f"Error sending tick message: {e}")
+                            # Don't immediately close on single message failure
+                            # connection_active = False
+                            # break
                 else:
-                    # No queues available, wait a bit
-                    await asyncio.sleep(1)
+                    # No queues available, short sleep
+                    await asyncio.sleep(0.1)
+                    
+                # Handle incoming messages (like pong responses)
+                try:
+                    # Check for incoming messages with very short timeout
+                    incoming_message = await asyncio.wait_for(websocket.receive_text(), timeout=0.001)
+                    try:
+                        msg_data = json.loads(incoming_message)
+                        if msg_data.get("type") == "pong":
+                            pending_pong = False
+                            logger.debug("Received pong response")
+                    except json.JSONDecodeError:
+                        pass  # Ignore non-JSON messages
+                except asyncio.TimeoutError:
+                    pass  # No incoming message, continue
+                except (WebSocketDisconnect, 
+                       websockets.exceptions.ConnectionClosed,
+                       websockets.exceptions.ConnectionClosedOK,
+                       websockets.exceptions.ConnectionClosedError):
+                    logger.info("WebSocket client disconnected")
+                    connection_active = False
+                    break
                     
             except asyncio.TimeoutError:
                 # Timeout is normal, continue loop
@@ -1575,14 +1605,14 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                    websockets.exceptions.ConnectionClosed,
                    websockets.exceptions.ConnectionClosedOK,
                    websockets.exceptions.ConnectionClosedError) as wse:
-                logger.info(f"WebSocket client disconnected normally: {wse}")
+                logger.info(f"WebSocket client disconnected gracefully: {wse}")
                 connection_active = False
                 break
                 
             except Exception as e:
-                logger.warning(f"WebSocket message processing error: {e}")
-                connection_active = False
-                break
+                logger.warning(f"WebSocket processing error: {e}")
+                # Don't immediately close on processing errors, try to continue
+                await asyncio.sleep(1)
                 
     except (WebSocketDisconnect,
            websockets.exceptions.ConnectionClosed,
@@ -1595,9 +1625,10 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
         
     finally:
         # Clean up queues
-        logger.info(f"WebSocket client disconnected, cleaning up {len(queues)} symbol subscriptions")
+        logger.info(f"Cleaning up WebSocket: {len(queues)} symbol subscriptions")
         for symbol, queue in queues.items():
             _deriv.remove_queue(symbol, queue)
+        logger.info("WebSocket cleanup completed")
 
 @api_router.websocket("/ws/contract/{contract_id}")
 async def websocket_contract(websocket: WebSocket, contract_id: int):
