@@ -111,6 +111,9 @@ services:
       - backend
     restart: unless-stopped
 
+volumes:
+  frontend_node_modules:
+
 networks:
   default:
     name: app-net
