@@ -597,9 +597,14 @@ async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_d
     This function updates active online models with the trade result for continuous learning.
     """
     try:
-        # Check if we have any active online models
+        # Ensure we have online models active - create if none exist
         if not hasattr(_online_manager, 'active_models') or not _online_manager.active_models:
-            logger.info(f"Modelo online aprendeu com trade #{contract_id}: {'Lucro' if profit > 0 else 'Perda'} = {profit:.2f}")
+            logger.info("🔄 Nenhum modelo online ativo, criando automaticamente...")
+            await ensure_online_models_active()
+            
+        # If still no models after creation attempt, just log
+        if not _online_manager.active_models:
+            logger.warning(f"Não foi possível criar modelos online para trade #{contract_id}")
             return
         
         # Extract relevant features from the trade outcome
