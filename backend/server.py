@@ -1442,6 +1442,7 @@ class StrategyRunner:
 
         except Exception as e:
             logger.error(f"Strategy execution error: {e}")
+            # Don't stop the strategy, just log and continue
 
     async def _execute_trade(self, signal: str):
         if not self.config:
