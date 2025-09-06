@@ -467,7 +467,7 @@ async def main():
     print("📋 Testing as requested in Portuguese review:")
     print("   1. GET /api/deriv/status - verificar conectividade")
     print("   2. GET /api/strategy/status - verificar estado da estratégia")
-    print("   3. WebSocket /api/ws/ticks - testar estabilidade por 30s")
+    print("   3. WebSocket /api/ws/ticks - testar estabilidade por 60s após correções")
     print("   4. Verificar logs do backend")
     print("   ⚠️  IMPORTANTE: Conta DEMO, não executar trades reais")
     
