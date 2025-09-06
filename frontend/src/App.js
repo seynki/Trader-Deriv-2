@@ -575,6 +575,29 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <span>{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side}` : "-"}</span>
           </div>
         </div>
+        
+        {/* Status detalhado quando ativo */}
+        {enabled && (
+          <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
+            <div className="flex items-center gap-2 text-emerald-300">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Sistema Automático Ativo</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs opacity-70">
+              <div>Símbolo: {symbol}</div>
+              <div>Período: {period} preços</div>
+              <div>Cooldown: {cooldown}s</div>
+              <div>Tipo: {contractEngine}</div>
+              <div>Dados: {pricesRef.current?.length || 0}/{period}</div>
+              <div>Status: {avg ? "Detectando sinais" : "Aguardando dados"}</div>
+            </div>
+            {lastSignal && (
+              <div className="mt-2 text-xs opacity-70">
+                Próximo trade possível em: {Math.max(0, Math.ceil((cooldown * 1000 - (Date.now() - lastSignal.ts)) / 1000))}s
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
