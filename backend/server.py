@@ -31,6 +31,9 @@ load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection (MUST use env)
 mongo_url = os.environ.get('MONGO_URL')
+client = None
+db = None
+
 if mongo_url:
     try:
         if mongo_url.startswith("mongodb+srv://"):
@@ -42,18 +45,20 @@ if mongo_url:
                 tlsAllowInvalidCertificates=False,
                 tlsAllowInvalidHostnames=False,
                 maxPoolSize=10,
-                retryWrites=True
+                retryWrites=True,
+                serverSelectionTimeoutMS=5000  # Timeout rápido para evitar travamento
             )
         else:
-            client = AsyncIOMotorClient(mongo_url)
+            client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+        
+        # Não testar a conexão durante inicialização - apenas configurar
         db = client[os.environ.get('DB_NAME', 'test_database')]
+        logging.info("MongoDB client configured (connection will be tested on demand)")
     except Exception as e:
         client = None
         db = None
         logging.warning(f"Mongo connection init failed: {e}")
 else:
-    client = None
-    db = None
     logging.warning("MONGO_URL not set; database features disabled. Set backend/.env with MONGO_URL or inject env.")
 
 # Create the main app without a prefix
