@@ -380,9 +380,17 @@ class DerivWS:
     async def _connect(self):
         uri = self._build_uri()
         logger.info(f"Connecting to Deriv WS: {uri}")
-        self.ws = await websockets.connect(uri, ping_interval=20, ping_timeout=10)
+        # Enhanced WebSocket stability with better ping/pong settings
+        self.ws = await websockets.connect(
+            uri, 
+            ping_interval=30,  # Send ping every 30 seconds
+            ping_timeout=10,   # Wait 10 seconds for pong
+            close_timeout=10,  # Close timeout
+            max_size=2**23,    # 8MB max message size
+            max_queue=None     # Unlimited queue size
+        )
         self.connected = True
-        logger.info("Connected to Deriv WS")
+        logger.info(f"Connected to Deriv WS with enhanced stability settings")
         if self.token:
             await self._send({"authorize": self.token})
 
