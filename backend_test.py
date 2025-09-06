@@ -190,9 +190,11 @@ class DerivConnectivityTester:
         try:
             self.log("🔌 Conectando ao WebSocket...")
             
-            async with websockets.connect(ws_url, timeout=10) as websocket:
-                self.log("✅ WebSocket conectado com sucesso")
-                
+            # Use websockets.connect without timeout parameter for compatibility
+            websocket = await websockets.connect(ws_url)
+            self.log("✅ WebSocket conectado com sucesso")
+            
+            try:
                 # Send initial payload if needed
                 initial_payload = {"symbols": ["R_100", "R_10"]}
                 await websocket.send(json.dumps(initial_payload))
@@ -243,7 +245,8 @@ class DerivConnectivityTester:
                         self.log(f"❌ Erro durante recepção: {e}")
                         connection_errors += 1
                         
-                elapsed_time = time.time() - start_time
+            finally:
+                await websocket.close()
                 
         except websockets.exceptions.InvalidURI:
             self.log(f"❌ URL WebSocket inválida: {ws_url}")
