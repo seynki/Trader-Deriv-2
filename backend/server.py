@@ -1433,37 +1433,89 @@ async def deriv_sell(req: SellRequest):
 
 @api_router.websocket("/ws/ticks")
 async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
-    """WebSocket endpoint for real-time tick data from multiple symbols"""
+    """Enhanced WebSocket endpoint for real-time tick data with improved stability"""
     await websocket.accept()
     symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
-    queues = []
+    logger.info(f"WebSocket client connected, subscribing to: {symbol_list}")
     
+    # Create queues for each symbol
+    queues = {}
     try:
-        # Create queues for each symbol
         for symbol in symbol_list:
             queue = await _deriv.add_queue(symbol)
-            queues.append((symbol, queue))
+            queues[symbol] = queue
         
-        # Send initial message
-        await websocket.send_json({"symbols": symbol_list})
+        # Send initial confirmation
+        await websocket.send_json({
+            "type": "connected",
+            "symbols": symbol_list,
+            "timestamp": int(time.time())
+        })
         
-        # Relay messages
+        # Enhanced message processing with heartbeat
+        last_heartbeat = time.time()
+        heartbeat_interval = 30  # Send heartbeat every 30 seconds
+        
         while True:
-            for symbol, queue in queues:
-                try:
-                    message = queue.get_nowait()
-                    await websocket.send_json(message)
-                except asyncio.QueueEmpty:
-                    continue
-            await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
-            
-    except WebSocketDisconnect:
-        pass
+            try:
+                # Check if we should send heartbeat
+                current_time = time.time()
+                if current_time - last_heartbeat >= heartbeat_interval:
+                    await websocket.send_json({
+                        "type": "heartbeat",
+                        "timestamp": int(current_time),
+                        "symbols_active": list(queues.keys())
+                    })
+                    last_heartbeat = current_time
+                
+                # Process messages from all symbol queues with timeout
+                tasks = []
+                for symbol, queue in queues.items():
+                    task = asyncio.create_task(queue.get())
+                    tasks.append((symbol, task))
+                
+                if tasks:
+                    # Wait for any queue to have data, with timeout
+                    done, pending = await asyncio.wait(
+                        [task for _, task in tasks], 
+                        timeout=1.0,  # 1 second timeout
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # Cancel pending tasks
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+                    
+                    # Process completed tasks
+                    for task in done:
+                        try:
+                            message = await task
+                            await websocket.send_json(message)
+                        except Exception as e:
+                            logger.warning(f"Error sending tick message: {e}")
+                else:
+                    # No queues available, wait a bit
+                    await asyncio.sleep(1)
+                    
+            except asyncio.TimeoutError:
+                # Timeout is normal, continue loop
+                continue
+                
+            except Exception as e:
+                logger.warning(f"WebSocket message processing error: {e}")
+                break
+                
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket connection error: {e}")
+        
     finally:
         # Clean up queues
-        for symbol, queue in queues:
+        logger.info(f"WebSocket client disconnected, cleaning up {len(queues)} symbol subscriptions")
+        for symbol, queue in queues.items():
             _deriv.remove_queue(symbol, queue)
 
 @api_router.websocket("/ws/contract/{contract_id}")
