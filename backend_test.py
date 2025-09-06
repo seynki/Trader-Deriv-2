@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime
 
-class MLOnlineLearningTester:
+class OnlineLearningTester:
     def __init__(self, base_url="https://candles-ml-finance.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
