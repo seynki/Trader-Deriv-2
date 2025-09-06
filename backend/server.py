@@ -666,72 +666,115 @@ async def root():
 
 async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_data: Dict[str, Any]):
     """
-    Adapt online learning models with trade outcome data.
-    This function updates active online models with the trade result for continuous learning.
+    Enhanced online learning with robust model adaptation and logging.
+    Updates ML models with trade outcome data for continuous learning.
     """
     try:
+        logger.info(f"🧠 INICIANDO Online Learning para trade #{contract_id} (profit: {profit:.2f})")
+        
         # Ensure we have online models active - create if none exist
         if not hasattr(_online_manager, 'active_models') or not _online_manager.active_models:
             logger.info("🔄 Nenhum modelo online ativo, criando automaticamente...")
             await ensure_online_models_active()
             
-        # If still no models after creation attempt, just log
+        # If still no models after creation attempt, try creating a simple one
         if not _online_manager.active_models:
-            logger.warning(f"Não foi possível criar modelos online para trade #{contract_id}")
-            return
+            logger.warning(f"❌ Não foi possível criar modelos online para trade #{contract_id}")
+            # Try to create a basic online model as fallback
+            try:
+                model_id = await create_default_online_model()
+                if model_id:
+                    logger.info(f"✅ Modelo online de fallback criado: {model_id}")
+                else:
+                    logger.error("❌ Falha ao criar modelo online de fallback")
+                    return
+            except Exception as fallback_e:
+                logger.error(f"❌ Erro ao criar modelo online de fallback: {fallback_e}")
+                return
         
         # Extract relevant features from the trade outcome
         trade_features = {
             'contract_id': contract_id,
             'profit': profit,
-            'underlying': poc_data.get('underlying'),
-            'entry_spot': poc_data.get('entry_spot'),
-            'current_spot': poc_data.get('current_spot'),
-            'buy_price': poc_data.get('buy_price'),
-            'bid_price': poc_data.get('bid_price'),
-            'payout': poc_data.get('payout'),
+            'underlying': poc_data.get('underlying', 'R_100'),
+            'entry_spot': float(poc_data.get('entry_spot', 0)),
+            'current_spot': float(poc_data.get('current_spot', 0)),
+            'buy_price': float(poc_data.get('buy_price', 0)),
+            'bid_price': float(poc_data.get('bid_price', 0)),
+            'payout': float(poc_data.get('payout', 0)),
             'date_start': poc_data.get('date_start'),
             'date_expiry': poc_data.get('date_expiry'),
+            'profit_pct': (profit / float(poc_data.get('buy_price', 1))) * 100 if poc_data.get('buy_price') else 0,
         }
         
         # Determine trade outcome (binary classification)
         trade_outcome = 1 if profit > 0 else 0
+        outcome_text = "LUCRO" if profit > 0 else "PERDA"
+        
+        logger.info(f"📊 Trade features extraídas: {outcome_text} ({profit:.2f}), entrada: {trade_features['entry_spot']}, saída: {trade_features['current_spot']}")
         
         # Update each active online model
         adaptation_count = 0
+        models_updated = []
+        
         for model_id, model in _online_manager.active_models.items():
             try:
                 # Get current market data for adaptation
                 symbol = poc_data.get('underlying', 'R_100')
                 granularity = 180  # 3m default
                 
+                logger.info(f"🔄 Adaptando modelo {model_id} com dados de {symbol}...")
+                
                 # Fetch recent candles for feature extraction
                 try:
-                    df = await fetch_candles(symbol, granularity, 50)
-                    if len(df) >= 10:
+                    df = await fetch_candles(symbol, granularity, 100)  # Get more data for better features
+                    if len(df) >= 20:
                         # Build features using the same process as training
                         features_df = ml_utils.build_features(df)
                         features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
                         
                         # Adapt the model with the latest market state and trade outcome
-                        _online_manager.adapt_model(model_id, trade_features, features_df)
-                        adaptation_count += 1
+                        success = _online_manager.adapt_model(model_id, trade_features, features_df, trade_outcome)
+                        
+                        if success:
+                            adaptation_count += 1
+                            models_updated.append(model_id)
+                            logger.info(f"✅ Modelo {model_id} atualizado com sucesso")
+                        else:
+                            logger.warning(f"⚠️ Falha na adaptação do modelo {model_id}")
+                        
+                    else:
+                        logger.warning(f"⚠️ Poucos dados de mercado para {symbol} ({len(df)} candles)")
                         
                 except Exception as feature_error:
-                    logger.warning(f"Failed to get market data for adaptation: {feature_error}")
+                    logger.warning(f"❌ Failed to get market data for adaptation: {feature_error}")
                     
             except Exception as model_error:
-                logger.warning(f"Failed to update online model {model_id}: {model_error}")
+                logger.warning(f"❌ Failed to update online model {model_id}: {model_error}")
                 
+        # Final logging
         if adaptation_count > 0:
-            outcome_text = "Lucro" if profit > 0 else "Perda"
-            logger.info(f"🧠 Aprendizado Online: {adaptation_count} modelo(s) aprendeu(ram) com trade #{contract_id} ({outcome_text}: {profit:.2f})")
+            logger.info(f"🎯 ONLINE LEARNING SUCESSO: {adaptation_count} modelo(s) aprendeu(ram) com trade #{contract_id}")
+            logger.info(f"   Resultado: {outcome_text} (${profit:.2f})")
+            logger.info(f"   Modelos atualizados: {', '.join(models_updated)}")
+            
+            # Try to save updated models
+            try:
+                for model_id in models_updated:
+                    _online_manager.save_online_model(model_id)
+                logger.info(f"💾 Modelos salvos: {len(models_updated)}")
+            except Exception as save_error:
+                logger.warning(f"⚠️ Erro ao salvar modelos: {save_error}")
+                
         else:
-            logger.info(f"Modelo online aprendeu com trade #{contract_id}: {'Lucro' if profit > 0 else 'Perda'} = {profit:.2f}")
+            logger.warning(f"❌ NENHUM modelo foi atualizado para trade #{contract_id}")
+            logger.info(f"   Debug: {len(_online_manager.active_models)} modelos ativos disponíveis")
                 
     except Exception as e:
-        logger.error(f"Error in online learning adaptation: {e}")
-        raise
+        logger.error(f"❌ ERRO CRÍTICO no Online Learning para trade #{contract_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Don't raise - let the main flow continue
 
 # ------------------- Online Learning API -----------------------------
 
