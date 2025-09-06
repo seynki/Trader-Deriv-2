@@ -638,9 +638,12 @@ export default function App() {
 
   const buyAdvanced = async (payload, setErr) => {
     try {
+      console.log(`🚀 Tentando compra automática:`, payload);
       const res = await axios.post(`${API}/deriv/buy`, payload);
       const cid = res.data.contract_id;
+      console.log(`✅ Compra realizada com sucesso: Contrato #${cid}`);
       toast({ title: "Compra enviada (auto)", description: `Contrato #${cid || "-"}` });
+      
       if (cid) {
         try { if (contractWsRef.current) contractWsRef.current.close(); } catch {}
         const url = wsContractUrl(cid);
@@ -654,11 +657,26 @@ export default function App() {
             }
           } catch {}
         };
+        ws.onerror = (err) => {
+          console.warn(`⚠️ Erro no WebSocket do contrato ${cid}:`, err);
+        };
       }
+      
+      // Limpar erro anterior se compra foi bem-sucedida
+      if (setErr) setErr(null);
+      
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Erro desconhecido";
       const more = e?.response?.data ? JSON.stringify(e.response.data) : "";
       const msg = `Falha na compra (auto): ${detail}\n${more}`;
+      
+      console.error(`❌ Erro na compra automática:`, {
+        detail,
+        payload,
+        response: e?.response?.data
+      });
+      
+      // Reportar erro mas não para o sistema
       if (setErr) setErr(msg);
       toast({ title: "Falha na compra (auto)", description: String(detail), variant: "destructive" });
     }
