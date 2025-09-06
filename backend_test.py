@@ -173,152 +173,44 @@ class OnlineLearningTester:
         self.log(f"✅ Estatísticas obtidas para {active_models} modelo(s)")
         return True, data
 
-    def test_trade_integration(self):
-        """Test 3: Integração com trades - Simular que modelo aprende com trades"""
+    def test_initialize_online_models(self):
+        """Test 3: Testar novo endpoint de inicialização - POST /api/ml/online/initialize"""
         self.log("\n" + "="*70)
-        self.log("TEST 3: INTEGRAÇÃO COM TRADES - APRENDIZADO ONLINE")
+        self.log("TEST 3: INICIALIZAÇÃO DE MODELOS ONLINE")
         self.log("="*70)
-        self.log("📋 Objetivo: Executar POST /api/deriv/buy para gerar trade de teste")
-        self.log("📋 Aguardar contrato expirar para ver se sistema de aprendizado é acionado")
-        self.log("⚠️  MODO DEMO/PAPER APENAS - NÃO EXECUTAR TRADES REAIS")
+        self.log("📋 Objetivo: POST /api/ml/online/initialize (forçar criação de modelos online)")
         
-        # Check if we have online models first
-        self.log("\n🔍 Verificando modelos online ativos antes do trade")
-        success_list, list_data, _ = self.run_test(
-            "Check Online Models Before Trade",
-            "GET",
-            "ml/online/list",
-            200
-        )
-        
-        if not success_list:
-            self.log("❌ CRITICAL: Não foi possível verificar modelos online")
-            return False, {}
-        
-        models_before = list_data.get('models', [])
-        self.log(f"   Modelos online ativos: {models_before}")
-        
-        # Get initial progress metrics
-        success_progress_before, progress_before, _ = self.run_test(
-            "Online Progress Before Trade",
-            "GET",
-            "ml/online/progress",
-            200
-        )
-        
-        initial_updates = 0
-        if success_progress_before:
-            initial_updates = progress_before.get('total_updates', 0)
-            self.log(f"   Total updates inicial: {initial_updates}")
-        
-        # Execute a demo trade (CALL/PUT with short duration)
-        self.log("\n🔍 Executando POST /api/deriv/buy (trade de teste em modo DEMO)")
-        
-        trade_data = {
-            "symbol": "R_100",
-            "type": "CALLPUT",
-            "contract_type": "CALL",
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1.0,
-            "currency": "USD"
-        }
-        
-        success_trade, trade_response, status_code = self.run_test(
-            "Execute Demo Trade",
+        success, data, status_code = self.run_test(
+            "Initialize Online Models",
             "POST",
-            "deriv/buy",
+            "ml/online/initialize",
             200,
-            data=trade_data,
-            timeout=30
+            timeout=60
         )
         
-        if not success_trade:
-            self.log(f"❌ CRITICAL: Trade execution falhou - Status: {status_code}")
-            if status_code == 400:
-                error_detail = trade_response.get('detail', '')
-                self.log(f"   Erro: {error_detail}")
-            elif status_code == 503:
-                self.log("   Deriv não conectado")
-            return False, trade_response
+        if not success:
+            self.log(f"❌ CRITICAL: POST /api/ml/online/initialize falhou - Status: {status_code}")
+            return False, data
         
-        contract_id = trade_response.get('contract_id')
-        buy_price = trade_response.get('buy_price', 0)
-        payout = trade_response.get('payout', 0)
+        message = data.get('message', '')
+        models_created = data.get('models_created', 0)
+        models = data.get('models', [])
         
-        self.log(f"✅ Trade executado com sucesso!")
-        self.log(f"   Contract ID: {contract_id}")
-        self.log(f"   Buy Price: {buy_price}")
-        self.log(f"   Payout: {payout}")
+        self.log(f"📊 RESULTADO DA INICIALIZAÇÃO:")
+        self.log(f"   Mensagem: {message}")
+        self.log(f"   Modelos criados: {models_created}")
+        self.log(f"   Modelos: {models}")
         
-        if not contract_id:
-            self.log("❌ CRITICAL: Contract ID não retornado")
-            return False, trade_response
-        
-        # Wait for contract to expire (5 ticks should be quick)
-        self.log(f"\n⏳ Aguardando contrato {contract_id} expirar (5 ticks)...")
-        self.log("   Verificando se sistema de aprendizado online é acionado...")
-        
-        # Wait up to 60 seconds for contract expiration
-        max_wait = 60
-        wait_interval = 5
-        waited = 0
-        
-        while waited < max_wait:
-            time.sleep(wait_interval)
-            waited += wait_interval
-            
-            self.log(f"   Aguardando... {waited}s/{max_wait}s")
-            
-            # Check if online learning was triggered by checking progress
-            success_progress_after, progress_after, _ = self.run_test(
-                f"Online Progress Check ({waited}s)",
-                "GET",
-                "ml/online/progress",
-                200
-            )
-            
-            if success_progress_after:
-                current_updates = progress_after.get('total_updates', 0)
-                if current_updates > initial_updates:
-                    self.log(f"🧠 APRENDIZADO ONLINE DETECTADO!")
-                    self.log(f"   Updates: {initial_updates} → {current_updates}")
-                    break
-        
-        # Final check of online learning progress
-        self.log(f"\n🔍 Verificação final do progresso de aprendizado online")
-        success_final, final_progress, _ = self.run_test(
-            "Final Online Progress Check",
-            "GET",
-            "ml/online/progress",
-            200
-        )
-        
-        if success_final:
-            final_updates = final_progress.get('total_updates', 0)
-            models_detail = final_progress.get('models_detail', [])
-            
-            self.log(f"   Updates finais: {final_updates}")
-            self.log(f"   Modelos com detalhes: {len(models_detail)}")
-            
-            # Check if any model learned from the trade
-            learning_detected = final_updates > initial_updates
-            
-            if learning_detected:
-                self.log("✅ APRENDIZADO ONLINE FUNCIONANDO!")
-                self.log(f"   Sistema aprendeu com o trade (updates: {initial_updates} → {final_updates})")
+        if models_created == 0:
+            self.log("⚠️  Nenhum modelo foi criado")
+            if "dados insuficientes" in message.lower() or "erro" in message.lower():
+                self.log("   Motivo: Dados insuficientes ou erro durante criação")
+                return False, {"message": "insufficient_data", "data": data}
             else:
-                self.log("⚠️  Aprendizado online não detectado neste teste")
-                self.log("   Isso pode ser normal se o modelo não estava ativo ou condições não foram atendidas")
+                self.log("   Modelos podem já existir")
         
-        self.log("\n🎉 INTEGRAÇÃO COM TRADES: TESTADA!")
-        self.log("📋 Trade executado e sistema de aprendizado verificado")
-        return True, {
-            "trade": trade_response, 
-            "initial_updates": initial_updates,
-            "final_updates": final_progress.get('total_updates', 0) if success_final else initial_updates,
-            "learning_detected": final_progress.get('total_updates', 0) > initial_updates if success_final else False
-        }
+        self.log(f"✅ Inicialização executada - {models_created} modelo(s) processado(s)")
+        return True, data
 
     def test_functional_validations(self):
         """Test 4: Validações funcionais - Confirmar métricas, contadores e precisão"""
