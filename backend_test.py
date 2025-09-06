@@ -454,105 +454,119 @@ class OnlineLearningTester:
     def run_comprehensive_tests(self):
         """Run all tests as requested in Portuguese review"""
         self.log("\n" + "🚀" + "="*68)
-        self.log("TESTES DO SISTEMA ML E APRENDIZADO ONLINE")
+        self.log("TESTES DO SISTEMA DE ONLINE LEARNING")
         self.log("🚀" + "="*68)
         self.log("📋 Conforme solicitado na review request em português:")
-        self.log("   1. ML Training (problema 'promotion: false' resolvido)")
-        self.log("   2. Sistema de Aprendizado Online (endpoints funcionais)")
-        self.log("   3. Integração com trades (modelo aprende com trades)")
-        self.log("   4. Validações funcionais (métricas, contadores, precisão)")
-        self.log("   ⚠️  IMPORTANTE: Apenas trades DEMO/PAPER")
+        self.log("   1. Verificar modelos online ativos (GET /api/ml/online/list)")
+        self.log("   2. Mostrar estatísticas dos modelos (GET /api/ml/online/progress)")
+        self.log("   3. Testar inicialização (POST /api/ml/online/initialize)")
+        self.log("   4. Verificar status dos modelos (GET /api/ml/online/status/{model_id})")
+        self.log("   5. Testar simulação de trade (verificar endpoints funcionais)")
+        self.log("   ⚠️  IMPORTANTE: NÃO executar /api/deriv/buy real")
         self.log(f"   🌐 Base URL: {self.base_url}")
         
         results = {}
         
-        # Test 1: ML Training Resolution
-        self.log("\n🔍 EXECUTANDO TESTE 1: ML Training - Problema Resolvido")
-        ml_training_ok, ml_training_data = self.test_ml_training_resolved()
-        results['ml_training'] = ml_training_ok
+        # Test 1: Online Models List
+        self.log("\n🔍 EXECUTANDO TESTE 1: Verificar Modelos Online Ativos")
+        models_list_ok, models_list_data = self.test_online_models_list()
+        results['models_list'] = models_list_ok
         
-        # Test 2: Online Learning System
-        self.log("\n🔍 EXECUTANDO TESTE 2: Sistema de Aprendizado Online")
-        online_system_ok, online_system_data = self.test_online_learning_system()
-        results['online_system'] = online_system_ok
+        # Test 2: Online Progress
+        self.log("\n🔍 EXECUTANDO TESTE 2: Estatísticas dos Modelos")
+        progress_ok, progress_data = self.test_online_progress()
+        results['progress'] = progress_ok
         
-        # Test 3: Trade Integration (only if previous tests passed)
-        if ml_training_ok and online_system_ok:
-            self.log("\n🔍 EXECUTANDO TESTE 3: Integração com Trades")
-            trade_integration_ok, trade_integration_data = self.test_trade_integration()
-            results['trade_integration'] = trade_integration_ok
+        # Test 3: Initialize Online Models
+        self.log("\n🔍 EXECUTANDO TESTE 3: Inicialização de Modelos")
+        initialize_ok, initialize_data = self.test_initialize_online_models()
+        results['initialize'] = initialize_ok
+        
+        # Test 4: Model Status (only if we have models)
+        if models_list_ok or initialize_ok:
+            self.log("\n🔍 EXECUTANDO TESTE 4: Status dos Modelos")
+            status_ok, status_data = self.test_model_status_endpoints()
+            results['model_status'] = status_ok
         else:
-            self.log("\n⚠️  PULANDO TESTE 3: Testes anteriores falharam")
-            trade_integration_ok = False
-            results['trade_integration'] = False
+            self.log("\n⚠️  PULANDO TESTE 4: Nenhum modelo encontrado")
+            status_ok = False
+            results['model_status'] = False
         
-        # Test 4: Functional Validations
-        self.log("\n🔍 EXECUTANDO TESTE 4: Validações Funcionais")
-        functional_ok, functional_data = self.test_functional_validations()
-        results['functional'] = functional_ok
+        # Test 5: Trade Simulation Endpoints
+        self.log("\n🔍 EXECUTANDO TESTE 5: Simulação de Trade (Endpoints)")
+        trade_sim_ok, trade_sim_data = self.test_trade_simulation_endpoints()
+        results['trade_simulation'] = trade_sim_ok
         
         # Final Summary
         self.log("\n" + "🏁" + "="*68)
-        self.log("RESUMO FINAL DOS TESTES")
+        self.log("RESUMO FINAL DOS TESTES DE ONLINE LEARNING")
         self.log("🏁" + "="*68)
         
-        if ml_training_ok:
-            self.log("✅ 1. ML Training: Problema 'promotion: false' resolvido ✓")
-            self.log("✅    Dados reais no grid ao invés de traços vazios ✓")
+        if models_list_ok:
+            models_count = models_list_data.get('count', 0) if isinstance(models_list_data, dict) else 0
+            self.log(f"✅ 1. Modelos Online: {models_count} modelo(s) ativo(s) encontrado(s) ✓")
         else:
-            self.log("❌ 1. ML Training: FAILED")
+            self.log("❌ 1. Modelos Online: FAILED")
         
-        if online_system_ok:
-            self.log("✅ 2. Sistema Online: Endpoints funcionais ✓")
-            self.log("✅    Modelo 'online_model_demo' criado com sucesso ✓")
+        if progress_ok:
+            active_models = progress_data.get('active_models', 0) if isinstance(progress_data, dict) else 0
+            total_updates = progress_data.get('total_updates', 0) if isinstance(progress_data, dict) else 0
+            self.log(f"✅ 2. Estatísticas: {active_models} modelo(s), {total_updates} updates ✓")
         else:
-            self.log("❌ 2. Sistema Online: FAILED")
+            self.log("❌ 2. Estatísticas: FAILED")
         
-        if trade_integration_ok:
-            learning_detected = trade_integration_data.get('learning_detected', False) if isinstance(trade_integration_data, dict) else False
-            if learning_detected:
-                self.log("✅ 3. Integração Trades: Sistema aprendeu com trade ✓")
-            else:
-                self.log("⚠️  3. Integração Trades: Trade executado, aprendizado não detectado")
+        if initialize_ok:
+            models_created = initialize_data.get('models_created', 0) if isinstance(initialize_data, dict) else 0
+            self.log(f"✅ 3. Inicialização: {models_created} modelo(s) processado(s) ✓")
         else:
-            self.log("❌ 3. Integração Trades: FAILED")
+            self.log("❌ 3. Inicialização: FAILED")
         
-        if functional_ok:
-            valid_models = functional_data.get('valid_models', 0) if isinstance(functional_data, dict) else 0
-            self.log(f"✅ 4. Validações: {valid_models} modelos com métricas válidas ✓")
-            self.log("✅    Sistema preparado para aprendizado automático ✓")
+        if status_ok:
+            status_count = len(status_data) if isinstance(status_data, dict) else 0
+            self.log(f"✅ 4. Status dos Modelos: {status_count} modelo(s) verificado(s) ✓")
         else:
-            self.log("❌ 4. Validações Funcionais: FAILED")
+            self.log("❌ 4. Status dos Modelos: FAILED")
+        
+        if trade_sim_ok:
+            deriv_connected = trade_sim_data.get('deriv_connected', False) if isinstance(trade_sim_data, dict) else False
+            online_ready = trade_sim_data.get('online_learning_ready', False) if isinstance(trade_sim_data, dict) else False
+            self.log(f"✅ 5. Simulação Trade: Deriv={deriv_connected}, Online={online_ready} ✓")
+        else:
+            self.log("❌ 5. Simulação Trade: FAILED")
         
         # Overall success criteria
-        critical_tests_passed = ml_training_ok and online_system_ok and functional_ok
-        all_tests_passed = critical_tests_passed and trade_integration_ok
+        core_tests_passed = models_list_ok and progress_ok and initialize_ok
+        all_tests_passed = core_tests_passed and status_ok and trade_sim_ok
         
         if all_tests_passed:
-            self.log("\n🎉 TODOS OS TESTES PASSARAM COM SUCESSO!")
-            self.log("📋 Sistema ML e Aprendizado Online funcionando perfeitamente:")
-            self.log("   ✅ Problema 'promotion: false' resolvido")
-            self.log("   ✅ Sistema de aprendizado online implementado")
-            self.log("   ✅ Integração com trades funcionando")
-            self.log("   ✅ Métricas e validações corretas")
-        elif critical_tests_passed:
-            self.log("\n🎉 TESTES CRÍTICOS PASSARAM!")
-            self.log("📋 Sistema ML e Aprendizado Online funcionando:")
+            self.log("\n🎉 TODOS OS TESTES DE ONLINE LEARNING PASSARAM!")
+            self.log("📋 Sistema de Online Learning funcionando perfeitamente:")
+            self.log("   ✅ Modelos online ativos detectados")
+            self.log("   ✅ Estatísticas e progresso funcionais")
+            self.log("   ✅ Inicialização de modelos operacional")
+            self.log("   ✅ Status dos modelos acessível")
+            self.log("   ✅ Endpoints prontos para integração com trades")
+        elif core_tests_passed:
+            self.log("\n🎉 TESTES PRINCIPAIS PASSARAM!")
+            self.log("📋 Sistema de Online Learning funcionando:")
             self.log("   ✅ Funcionalidades principais implementadas")
-            self.log("   ⚠️  Integração com trades precisa de verificação")
+            if not status_ok:
+                self.log("   ⚠️  Status dos modelos precisa de verificação")
+            if not trade_sim_ok:
+                self.log("   ⚠️  Integração com trades precisa de verificação")
         else:
             failed_tests = []
-            if not ml_training_ok:
-                failed_tests.append("ML Training")
-            if not online_system_ok:
-                failed_tests.append("Sistema Online")
-            if not functional_ok:
-                failed_tests.append("Validações Funcionais")
+            if not models_list_ok:
+                failed_tests.append("Modelos Online")
+            if not progress_ok:
+                failed_tests.append("Estatísticas")
+            if not initialize_ok:
+                failed_tests.append("Inicialização")
             
-            self.log(f"\n⚠️  {len(failed_tests)} TESTE(S) CRÍTICO(S) FALHARAM: {', '.join(failed_tests)}")
+            self.log(f"\n⚠️  {len(failed_tests)} TESTE(S) PRINCIPAL(IS) FALHARAM: {', '.join(failed_tests)}")
             self.log("📋 Verificar logs detalhados acima para diagnóstico")
         
-        return critical_tests_passed, results
+        return core_tests_passed, results
 
     def print_summary(self):
         """Print test summary"""
