@@ -205,13 +205,22 @@ export default function OnlineLearningPanel() {
                 </SelectContent>
               </Select>
             </div>
-            <Button 
-              onClick={createOnlineModel} 
-              disabled={creatingModel}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {creatingModel ? "Criando..." : "Criar Modelo"}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={createOnlineModel} 
+                disabled={creatingModel}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {creatingModel ? "Criando..." : "Criar Modelo"}
+              </Button>
+              <Button 
+                onClick={initializeOnlineModels} 
+                disabled={creatingModel}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {creatingModel ? "Inicializando..." : "🚀 Auto-Inicializar"}
+              </Button>
+            </div>
           </div>
         </div>
 
