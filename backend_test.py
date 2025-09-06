@@ -368,8 +368,8 @@ class DerivConnectivityTester:
         strategy_ok, strategy_data = self.test_strategy_status()
         results['strategy_status'] = strategy_ok
         
-        # Test 3: WebSocket Ticks (30 seconds)
-        self.log("\n🔍 EXECUTANDO TESTE 3: WebSocket de Ticks (30s)")
+        # Test 3: WebSocket Ticks (60 seconds)
+        self.log("\n🔍 EXECUTANDO TESTE 3: WebSocket de Ticks (60s)")
         websocket_ok, websocket_data = await self.test_websocket_ticks()
         results['websocket_ticks'] = websocket_ok
         
