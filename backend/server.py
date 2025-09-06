@@ -1366,7 +1366,11 @@ class StrategyRunner:
             pass
         except Exception as e:
             logger.error(f"Strategy loop error: {e}")
-            self.running = False
+            # DON'T stop running - let strategy continue after errors
+            logger.info("Strategy loop continuing despite error...")
+            await asyncio.sleep(30)  # Wait longer after error before retrying
+            if self.running:  # If still running, restart the loop
+                asyncio.create_task(self._strategy_loop())
 
     async def _run_strategy_once(self):
         if not self.config or not self.running:
