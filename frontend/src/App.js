@@ -92,8 +92,20 @@ function useDerivTicks(symbols) {
           const msg = JSON.parse(ev.data);
           if (msg.type === "tick") {
             setTicks((prev) => ({ ...prev, [msg.symbol]: msg }));
+          } else if (msg.type === "ping") {
+            // Respond to ping with pong to keep connection alive
+            try {
+              ws.send(JSON.stringify({ type: "pong", timestamp: msg.timestamp }));
+            } catch (e) {
+              console.warn("Failed to send pong response:", e);
+            }
+          } else if (msg.type === "connected" || msg.type === "heartbeat") {
+            // Handle connection confirmation and heartbeats silently
+            console.log(`WebSocket ${msg.type}:`, msg);
           }
-        } catch {}
+        } catch (e) {
+          console.warn("Failed to process WebSocket message:", e);
+        }
       };
       const scheduleRetry = () => {
         setConnected(false);
