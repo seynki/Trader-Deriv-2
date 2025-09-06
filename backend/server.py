@@ -1548,19 +1548,53 @@ class StrategyRunner:
         return True
 
     async def _strategy_loop(self):
+        """Enhanced strategy loop with robust error recovery and infinite execution"""
+        loop_iteration = 0
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
+        logger.info("🚀 Iniciando Strategy Loop Infinito com recuperação automática...")
+        
         try:
             while self.running:
-                await self._run_strategy_once()
-                await asyncio.sleep(10)  # Run every 10 seconds
+                loop_iteration += 1
+                try:
+                    await self._run_strategy_once()
+                    consecutive_errors = 0  # Reset error counter on success
+                    
+                    # Log progress every 10 iterations
+                    if loop_iteration % 10 == 0:
+                        logger.info(f"Strategy Loop: Iteração #{loop_iteration}, PnL hoje: {self.today_pnl:.2f}, Trades: {self.today_trades}")
+                    
+                    await asyncio.sleep(10)  # Run every 10 seconds
+                    
+                except asyncio.CancelledError:
+                    logger.info("Strategy loop cancelled by user")
+                    break
+                    
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Strategy loop error #{consecutive_errors}: {e}")
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.warning(f"Too many consecutive errors ({consecutive_errors}), waiting longer...")
+                        await asyncio.sleep(60)  # Wait 1 minute after many errors
+                        consecutive_errors = 0   # Reset counter
+                    else:
+                        await asyncio.sleep(30)  # Wait 30s after single error
+                    
+                    # CRITICAL: Continue running despite errors
+                    if self.running:
+                        logger.info(f"Strategy continuando após erro... (iteração #{loop_iteration})")
+                        
         except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error(f"Strategy loop error: {e}")
-            # DON'T stop running - let strategy continue after errors
-            logger.info("Strategy loop continuing despite error...")
-            await asyncio.sleep(30)  # Wait longer after error before retrying
-            if self.running:  # If still running, restart the loop
-                asyncio.create_task(self._strategy_loop())
+            logger.info("Strategy loop finalmente cancelado")
+            
+        except Exception as fatal_e:
+            logger.error(f"FATAL Strategy error: {fatal_e}")
+            
+        finally:
+            logger.info(f"Strategy loop finalizado após {loop_iteration} iterações")
 
     async def _run_strategy_once(self):
         if not self.config or not self.running:
