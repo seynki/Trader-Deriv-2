@@ -796,6 +796,32 @@ async def get_online_learning_progress():
     
     return overall_stats
 
+@api_router.post("/ml/online/initialize")
+async def initialize_online_models():
+    """Force initialization of online learning models"""
+    try:
+        await ensure_online_models_active()
+        
+        models = _online_manager.list_online_models()
+        model_count = len(models)
+        
+        if model_count > 0:
+            return {
+                "message": f"Modelos online inicializados com sucesso",
+                "models_created": model_count,
+                "models": models
+            }
+        else:
+            return {
+                "message": "Nenhum modelo online foi criado (dados insuficientes ou erro)",
+                "models_created": 0,
+                "models": []
+            }
+            
+    except Exception as e:
+        logger.error(f"Erro na inicialização forçada de modelos online: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na inicialização: {str(e)}")
+
 @api_router.post("/ml/online/predict/{model_id}")
 async def predict_with_online_model(
     model_id: str,
