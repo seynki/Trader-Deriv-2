@@ -213,7 +213,7 @@ class DerivConnectivityTester:
         try:
             self.log("🔌 Conectando ao WebSocket...")
             
-            async with websockets.connect(ws_url, timeout=10) as websocket:
+            async with websockets.connect(ws_url) as websocket:
                 self.log("✅ WebSocket conectado com sucesso!")
                 
                 # Track received messages
