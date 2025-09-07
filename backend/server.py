@@ -425,8 +425,6 @@ class DerivWS:
                 max_queue=500,       # Reasonable queue limit
                 compression=None,    # Disable compression for performance
                 close_timeout=10,    # Timeout for close handshake
-                # Additional connection options for stability
-                extra_headers={"User-Agent": "DerivBot/1.0"},
             )
             self.connected = True
             self.subscribed_symbols.clear()
