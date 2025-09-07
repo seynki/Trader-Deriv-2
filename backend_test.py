@@ -256,8 +256,8 @@ class DerivConnectivityTester:
             self.log("✅ WebSocket conectado com sucesso")
             
             try:
-                # Send initial payload if needed
-                initial_payload = {"symbols": ["R_100", "R_10"]}
+                # Send initial payload for R_100,R_75,R_50
+                initial_payload = {"symbols": ["R_100", "R_75", "R_50"]}
                 await websocket.send(json.dumps(initial_payload))
                 self.log(f"📤 Payload inicial enviado: {initial_payload}")
                 
@@ -266,7 +266,7 @@ class DerivConnectivityTester:
                 while time.time() - start_time < test_duration:
                     try:
                         # Wait for message with timeout
-                        message = await asyncio.wait_for(websocket.recv(), timeout=2.0)
+                        message = await asyncio.wait_for(websocket.recv(), timeout=3.0)
                         
                         try:
                             data = json.loads(message)
@@ -277,23 +277,32 @@ class DerivConnectivityTester:
                             price = data.get('price', 0)
                             timestamp = data.get('timestamp', 0)
                             
-                            if symbol != 'unknown':
-                                symbols_detected.add(symbol)
+                            # Count different message types
+                            if msg_type == 'tick':
+                                tick_messages += 1
+                                if symbol != 'unknown':
+                                    symbols_detected.add(symbol)
+                            elif msg_type == 'heartbeat':
+                                heartbeat_messages += 1
                             
-                            # Log every 10th message to avoid spam
-                            if messages_received % 10 == 0 or messages_received <= 5:
-                                self.log(f"📨 Mensagem #{messages_received}: type={msg_type}, symbol={symbol}, price={price}")
+                            # Log every 50th message to avoid spam but show progress
+                            if messages_received % 50 == 0 or messages_received <= 10:
+                                elapsed = time.time() - start_time
+                                rate = messages_received / elapsed if elapsed > 0 else 0
+                                self.log(f"📊 Progresso: {messages_received} msgs ({tick_messages} ticks, {heartbeat_messages} heartbeats) em {elapsed:.1f}s - {rate:.2f} msg/s")
+                                if symbol != 'unknown':
+                                    self.log(f"   Último tick: {symbol} = {price}")
                             
                         except json.JSONDecodeError:
                             self.log(f"⚠️  Mensagem não-JSON recebida: {message[:100]}...")
                             
                     except asyncio.TimeoutError:
-                        # No message received in 2 seconds - this might indicate instability
+                        # No message received in 3 seconds - this might indicate instability
                         elapsed = time.time() - start_time
-                        self.log(f"⚠️  Timeout aguardando mensagem (elapsed: {elapsed:.1f}s)")
+                        self.log(f"⚠️  Timeout aguardando mensagem (elapsed: {elapsed:.1f}s, timeouts: {connection_errors + 1})")
                         connection_errors += 1
                         
-                        if connection_errors >= 5:
+                        if connection_errors >= 10:
                             self.log("❌ Muitos timeouts consecutivos - conexão instável")
                             break
                             
