@@ -152,7 +152,7 @@ export default function OnlineLearningPanel() {
           <div className="flex items-center gap-3">
             {onlineProgress && (
               <Badge variant="secondary">
-                {onlineProgress.active_models} modelo(s) ativo(s)
+                {String(onlineProgress.active_models || 0)} modelo(s) ativo(s)
               </Badge>
             )}
             <Badge variant={onlineProgress?.total_updates > 0 ? "default" : "outline"}>
