@@ -1629,77 +1629,94 @@ async def deriv_sell(req: SellRequest):
 # ------------------- WebSocket API Endpoints -------------------
 
 @api_router.websocket("/ws/ticks")
-async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
-    """Enhanced WebSocket endpoint for real-time tick data with ping/pong keepalive mechanism"""
+async def websocket_ticks(websocket: WebSocket, symbols: str = "R_100,R_75,R_50"):
+    """Ultra-stable WebSocket endpoint for real-time tick data optimized for R_100, R_75, R_50"""
     await websocket.accept()
     symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
-    logger.info(f"WebSocket client connected, subscribing to: {symbol_list}")
+    logger.info(f"🔌 WebSocket client connected for symbols: {symbol_list}")
     
     # Create queues for each symbol
     queues = {}
     connection_active = True
+    message_count = 0
+    connection_start = int(time.time())
     
     try:
+        # Subscribe to all requested symbols
         for symbol in symbol_list:
             queue = await _deriv.add_queue(symbol)
             queues[symbol] = queue
+            logger.info(f"📡 Subscribed to {symbol}")
         
-        # Send initial confirmation
+        # Send initial confirmation with symbol status
         try:
             await websocket.send_json({
                 "type": "connected",
                 "symbols": symbol_list,
-                "timestamp": int(time.time())
+                "timestamp": int(time.time()),
+                "message": f"Successfully subscribed to {len(symbol_list)} symbols"
             })
         except Exception as e:
             logger.warning(f"Failed to send initial confirmation: {e}")
             connection_active = False
         
-        # Enhanced message processing with robust ping/pong keepalive
-        last_ping = time.time()
-        ping_interval = 30  # Send ping every 30 seconds - mais conservador
-        ping_timeout = 10   # Wait 10 seconds for pong response - mais tempo
-        pending_pong = False
+        # Ultra-stable message processing loop
+        last_heartbeat = time.time()
+        heartbeat_interval = 25  # Send heartbeat every 25 seconds
+        no_data_threshold = 60   # Alert if no data for 60 seconds
+        last_tick_time = time.time()
         
         while connection_active:
             try:
                 current_time = time.time()
                 
-                # Check if we need to send ping to keep connection alive
-                if current_time - last_ping >= ping_interval:
-                    if not pending_pong:  # Only send ping if not waiting for pong
-                        try:
-                            await websocket.send_json({
-                                "type": "ping",
-                                "timestamp": int(current_time)
-                            })
-                            last_ping = current_time
-                            pending_pong = True
-                            logger.debug("Sent ping to keep WebSocket connection alive")
-                        except Exception as e:
-                            logger.warning(f"Failed to send ping: {e}")
-                            connection_active = False
-                            break
-                    elif current_time - last_ping > ping_timeout:
-                        logger.warning("No pong received within timeout, closing connection")
+                # Send periodic heartbeat to keep connection alive
+                if current_time - last_heartbeat >= heartbeat_interval:
+                    try:
+                        deriv_status = "connected" if _deriv.connected else "disconnected"
+                        await websocket.send_json({
+                            "type": "heartbeat",
+                            "timestamp": int(current_time),
+                            "symbols": symbol_list,
+                            "deriv_status": deriv_status,
+                            "messages_processed": message_count,
+                            "uptime": int(current_time - connection_start)
+                        })
+                        last_heartbeat = current_time
+                        logger.debug(f"💓 Heartbeat sent: {message_count} messages, uptime: {int(current_time - connection_start)}s")
+                    except Exception as e:
+                        logger.warning(f"Failed to send heartbeat: {e}")
                         connection_active = False
                         break
                 
-                # Process messages from all symbol queues with optimal timeout
+                # Check for data starvation
+                if current_time - last_tick_time > no_data_threshold:
+                    logger.warning(f"⚠️ No tick data received for {current_time - last_tick_time:.1f}s - potential Deriv connection issue")
+                    try:
+                        await websocket.send_json({
+                            "type": "warning",
+                            "message": f"No tick data for {current_time - last_tick_time:.1f}s",
+                            "timestamp": int(current_time)
+                        })
+                    except:
+                        pass
+                    last_tick_time = current_time  # Reset to avoid spam
+                
+                # Process messages from symbol queues with optimized timeout
                 tasks = []
                 for symbol, queue in queues.items():
                     task = asyncio.create_task(queue.get())
                     tasks.append((symbol, task))
                 
                 if tasks:
-                    # Wait for any queue to have data, with balanced timeout
+                    # Wait for any queue to have data
                     done, pending = await asyncio.wait(
                         [task for _, task in tasks], 
-                        timeout=2.0,  # Timeout mais generoso para reduzir overhead
+                        timeout=3.0,  # 3-second timeout for responsiveness
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
-                    # Cancel pending tasks
+                    # Cancel pending tasks to avoid resource leaks
                     for task in pending:
                         task.cancel()
                         try:
@@ -1711,75 +1728,82 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                     for task in done:
                         try:
                             message = await task
-                            if connection_active:
+                            if connection_active and message:
                                 await websocket.send_json(message)
+                                message_count += 1
+                                last_tick_time = current_time
+                                
+                                # Log progress every 50 messages
+                                if message_count % 50 == 0:
+                                    uptime = int(current_time - connection_start)
+                                    logger.info(f"📊 Processed {message_count} tick messages, uptime: {uptime}s")
+                                    
                         except (websockets.exceptions.ConnectionClosed, 
                                websockets.exceptions.ConnectionClosedOK,
                                websockets.exceptions.ConnectionClosedError) as wse:
-                            logger.info(f"WebSocket connection closed during tick send: {wse}")
+                            logger.info(f"🔚 WebSocket connection closed by client: {wse}")
                             connection_active = False
                             break
                         except Exception as e:
-                            logger.warning(f"Error sending tick message: {e}")
-                            # Continue processing mesmo com erros individuais
+                            logger.warning(f"⚠️ Error sending tick message: {e}")
+                            # Continue processing - don't break on individual errors
                             continue
                 else:
-                    # No queues available, short sleep
+                    # No queues available, brief sleep
                     await asyncio.sleep(0.1)
                     
                 # Handle incoming messages (like pong responses)
                 try:
-                    # Check for incoming messages with very short timeout
-                    incoming_message = await asyncio.wait_for(websocket.receive_text(), timeout=0.001)
+                    incoming = await asyncio.wait_for(websocket.receive_text(), timeout=0.001)
                     try:
-                        msg_data = json.loads(incoming_message)
+                        msg_data = json.loads(incoming)
                         if msg_data.get("type") == "pong":
-                            pending_pong = False
-                            logger.debug("Received pong response")
+                            logger.debug("🏓 Received pong response")
                     except json.JSONDecodeError:
-                        pass  # Ignore non-JSON messages
+                        pass  # Ignore malformed messages
                 except asyncio.TimeoutError:
-                    pass  # No incoming message, continue
+                    pass  # Normal - no incoming message
                 except (WebSocketDisconnect, 
                        websockets.exceptions.ConnectionClosed,
                        websockets.exceptions.ConnectionClosedOK,
                        websockets.exceptions.ConnectionClosedError):
-                    logger.info("WebSocket client disconnected")
+                    logger.info("🔚 WebSocket client disconnected")
                     connection_active = False
                     break
                     
             except asyncio.TimeoutError:
-                # Timeout is normal, continue loop
+                # Normal timeout, continue
                 continue
                 
             except (WebSocketDisconnect, 
                    websockets.exceptions.ConnectionClosed,
                    websockets.exceptions.ConnectionClosedOK,
                    websockets.exceptions.ConnectionClosedError) as wse:
-                logger.info(f"WebSocket client disconnected gracefully: {wse}")
+                logger.info(f"🔚 WebSocket disconnected: {wse}")
                 connection_active = False
                 break
                 
             except Exception as e:
-                logger.warning(f"WebSocket processing error: {e}")
-                # Don't immediately close on processing errors, try to continue
+                logger.warning(f"⚠️ WebSocket processing error: {e}")
+                # Brief pause before continuing
                 await asyncio.sleep(1)
                 
-    except (WebSocketDisconnect,
-           websockets.exceptions.ConnectionClosed,
-           websockets.exceptions.ConnectionClosedOK, 
-           websockets.exceptions.ConnectionClosedError) as wse:
-        logger.info(f"WebSocket connection closed during initialization: {wse}")
-        
     except Exception as e:
-        logger.error(f"WebSocket connection error: {e}")
+        logger.error(f"💥 WebSocket initialization error: {e}")
         
     finally:
-        # Clean up queues
-        logger.info(f"Cleaning up WebSocket: {len(queues)} symbol subscriptions")
+        # Comprehensive cleanup
+        uptime = int(time.time() - connection_start)
+        logger.info(f"🧹 Cleaning up WebSocket: {len(queues)} subscriptions, {message_count} messages processed, {uptime}s uptime")
+        
         for symbol, queue in queues.items():
-            _deriv.remove_queue(symbol, queue)
-        logger.info("WebSocket cleanup completed")
+            try:
+                _deriv.remove_queue(symbol, queue)
+                logger.debug(f"📡 Unsubscribed from {symbol}")
+            except Exception as e:
+                logger.warning(f"Error removing queue for {symbol}: {e}")
+                
+        logger.info("✅ WebSocket cleanup completed")
 
 @api_router.websocket("/ws/contract/{contract_id}")
 async def websocket_contract(websocket: WebSocket, contract_id: int):
