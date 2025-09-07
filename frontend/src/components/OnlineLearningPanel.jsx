@@ -336,7 +336,7 @@ export default function OnlineLearningPanel() {
                   </div>
                   <div className="flex items-center gap-4 text-sm">
                     <div className="text-center">
-                      <div className="font-bold text-green-600">{model.update_count}</div>
+                      <div className="font-bold text-green-600">{String(model.update_count || 0)}</div>
                       <div className="opacity-70">Updates</div>
                     </div>
                     <div className="text-center">
