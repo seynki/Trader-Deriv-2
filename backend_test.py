@@ -127,10 +127,65 @@ class DerivConnectivityTester:
         self.log(f"✅ Deriv conectado com sucesso (ambiente: {environment})")
         return True, data
 
-    def test_strategy_status(self):
-        """Test 2: GET /api/strategy/status - verificar estado da estratégia"""
+    def test_online_learning_progress(self):
+        """Test 2: GET /api/ml/online/progress - verificar se há modelos ativos e updates > 0"""
         self.log("\n" + "="*70)
-        self.log("TEST 2: VERIFICAR ESTADO DA ESTRATÉGIA")
+        self.log("TEST 2: VERIFICAR ONLINE LEARNING PROGRESS")
+        self.log("="*70)
+        self.log("📋 Objetivo: GET /api/ml/online/progress (verificar se há modelos ativos e updates > 0)")
+        
+        success, data, status_code = self.run_test(
+            "Online Learning Progress Check",
+            "GET",
+            "ml/online/progress",
+            200
+        )
+        
+        if not success:
+            self.log(f"❌ CRITICAL: GET /api/ml/online/progress falhou - Status: {status_code}")
+            return False, data
+        
+        active_models = data.get('active_models', 0)
+        total_updates = data.get('total_updates', 0)
+        models_detail = data.get('models_detail', [])
+        
+        self.log(f"📊 RESULTADOS:")
+        self.log(f"   Modelos ativos: {active_models}")
+        self.log(f"   Total de updates: {total_updates}")
+        self.log(f"   Detalhes dos modelos: {len(models_detail)}")
+        
+        for i, model in enumerate(models_detail[:3], 1):  # Show first 3 models
+            model_id = model.get('model_id', 'unknown')
+            update_count = model.get('update_count', 0)
+            features_count = model.get('features_count', 0)
+            accuracy = model.get('current_accuracy', 0)
+            trend = model.get('improvement_trend', 'unknown')
+            
+            self.log(f"   Modelo {i}: {model_id}")
+            self.log(f"     Updates: {update_count}")
+            self.log(f"     Features: {features_count}")
+            self.log(f"     Accuracy: {accuracy:.3f}")
+            self.log(f"     Trend: {trend}")
+        
+        # Validation - check if online learning is working
+        has_active_models = active_models > 0
+        has_updates = total_updates > 0
+        
+        if not has_active_models:
+            self.log("❌ CRITICAL: Nenhum modelo online ativo encontrado")
+            return False, {"message": "no_active_models", "data": data}
+        
+        if not has_updates:
+            self.log("⚠️  WARNING: Modelos ativos mas sem updates (total_updates = 0)")
+            self.log("   Isso pode indicar que o sistema ainda não processou trades")
+        
+        self.log(f"✅ Online Learning funcionando: {active_models} modelo(s) ativo(s), {total_updates} update(s)")
+        return True, data
+
+    def test_strategy_status(self):
+        """Test 3: GET /api/strategy/status - verificar estado da estratégia"""
+        self.log("\n" + "="*70)
+        self.log("TEST 3: VERIFICAR ESTADO DA ESTRATÉGIA")
         self.log("="*70)
         self.log("📋 Objetivo: GET /api/strategy/status (verificar estado do strategy runner)")
         
