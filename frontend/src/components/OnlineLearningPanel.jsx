@@ -94,7 +94,7 @@ export default function OnlineLearningPanel() {
         setSelectedModel(newModelParams.model_id);
       }
       
-      alert(`Modelo online criado com sucesso!\nFeatures: ${data.features_count}\nSamples: ${data.training_samples}`);
+      alert(`Modelo online criado com sucesso!\nFeatures: ${String(data.features_count || 0)}\nSamples: ${String(data.training_samples || 0)}`);
     } catch (error) {
       const errorMsg = error.response?.data?.detail || error.message;
       alert(`Erro ao criar modelo online: ${errorMsg}`);
