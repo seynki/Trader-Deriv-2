@@ -525,123 +525,120 @@ class DerivConnectivityTester:
             }
 
     async def run_connectivity_tests(self):
-        """Run all connectivity tests as requested in Portuguese review"""
+        """Run WebSocket stability tests as requested in Portuguese review"""
         self.log("\n" + "🚀" + "="*68)
-        self.log("TESTES DE CONECTIVIDADE BÁSICA DO SISTEMA DE TRADING")
+        self.log("TESTE CRÍTICO: WebSocket Stability após Correções para R_100, R_75, R_50")
         self.log("🚀" + "="*68)
-        self.log("📋 Conforme solicitado na review request em português:")
-        self.log("   1. GET /api/deriv/status - verificar conectividade com Deriv")
-        self.log("   2. GET /api/ml/online/progress - verificar se há modelos ativos e updates > 0")
-        self.log("   3. GET /api/strategy/status - verificar estado da estratégia")
-        self.log("   4. WebSocket /api/ws/ticks - testar por 30s para verificar estabilidade (> 0.52 ticks/s)")
-        self.log("   5. Verificar logs do backend para erros de WebSocket")
-        self.log("   ⚠️  IMPORTANTE: Conta DEMO, NÃO executar /api/deriv/buy")
+        self.log("📋 Conforme solicitado na review request:")
+        self.log("   1. GET /api/deriv/status - verificar conectividade Deriv (connected=true, authenticated=true)")
+        self.log("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - conectar e monitorar por 60+ segundos")
+        self.log("   3. Verificar se recebe ticks consistentemente sem desconexões (erro 1006)")
+        self.log("   4. Contar mensagens e calcular taxa (deve ser >0.5 msg/s)")
+        self.log("   5. Verificar heartbeat messages e uptime tracking")
+        self.log("   6. Validar que não há mais erros 'received 1000 (OK)' nos logs")
+        self.log("   ⚠️  CORREÇÕES IMPLEMENTADAS A VALIDAR:")
+        self.log("      - Ultra-stable WebSocket settings (ping_interval=20s, ping_timeout=15s)")
+        self.log("      - Enhanced connection stability tracking com consecutive_reconnects")
+        self.log("      - Smart reconnection logic com progressive backoff")
+        self.log("      - Improved error handling para código 1000 (normal closure)")
+        self.log("      - Data starvation detection (alerta se sem dados por 60s)")
+        self.log("      - Heartbeat a cada 25s com status detalhado")
+        self.log("      - Message processing statistics com logs a cada 50 mensagens")
         self.log(f"   🌐 Base URL: {self.base_url}")
         
         results = {}
         
-        # Test 1: Deriv Status
-        self.log("\n🔍 EXECUTANDO TESTE 1: Conectividade com Deriv")
+        # Test 1: Deriv Status - OBRIGATÓRIO
+        self.log("\n🔍 EXECUTANDO TESTE 1: GET /api/deriv/status")
         deriv_ok, deriv_data = self.test_deriv_status()
         results['deriv_status'] = deriv_ok
         
-        # Test 2: Online Learning Progress
-        self.log("\n🔍 EXECUTANDO TESTE 2: Online Learning Progress")
-        online_learning_ok, online_learning_data = self.test_online_learning_progress()
-        results['online_learning'] = online_learning_ok
+        if not deriv_ok:
+            self.log("❌ CRITICAL: Deriv não conectado - não é possível testar WebSocket")
+            return False, results
         
-        # Test 3: Strategy Status
-        self.log("\n🔍 EXECUTANDO TESTE 3: Estado da Estratégia")
-        strategy_ok, strategy_data = self.test_strategy_status()
-        results['strategy_status'] = strategy_ok
-        
-        # Test 4: WebSocket Ticks (30 seconds)
-        self.log("\n🔍 EXECUTANDO TESTE 4: WebSocket de Ticks (30s)")
+        # Test 2: WebSocket Stability - TESTE PRINCIPAL
+        self.log("\n🔍 EXECUTANDO TESTE PRINCIPAL: WebSocket Stability (60s)")
         websocket_ok, websocket_data = await self.test_websocket_ticks()
         results['websocket_ticks'] = websocket_ok
         
-        # Test 5: Backend Logs Check
-        self.log("\n🔍 EXECUTANDO TESTE 5: Verificação de Logs")
+        # Test 3: Backend Logs Check - Verificar se erros 'received 1000 (OK)' ainda aparecem
+        self.log("\n🔍 EXECUTANDO TESTE 3: Verificação de Logs para erros 'received 1000 (OK)'")
         logs_ok, logs_data = self.check_backend_logs()
         results['backend_logs'] = logs_ok
         
         # Final Summary
         self.log("\n" + "🏁" + "="*68)
-        self.log("RESUMO FINAL DOS TESTES DE CONECTIVIDADE")
+        self.log("RESULTADO FINAL: WebSocket Stability após Correções")
         self.log("🏁" + "="*68)
         
         if deriv_ok:
             connected = deriv_data.get('connected', False) if isinstance(deriv_data, dict) else False
             authenticated = deriv_data.get('authenticated', False) if isinstance(deriv_data, dict) else False
             environment = deriv_data.get('environment', 'UNKNOWN') if isinstance(deriv_data, dict) else 'UNKNOWN'
-            self.log(f"✅ 1. Deriv Status: connected={connected}, authenticated={authenticated}, env={environment} ✓")
+            self.log(f"✅ 1. GET /api/deriv/status: connected={connected}, authenticated={authenticated} ✓")
         else:
-            self.log("❌ 1. Deriv Status: FAILED")
-        
-        if online_learning_ok:
-            active_models = online_learning_data.get('active_models', 0) if isinstance(online_learning_data, dict) else 0
-            total_updates = online_learning_data.get('total_updates', 0) if isinstance(online_learning_data, dict) else 0
-            self.log(f"✅ 2. Online Learning: {active_models} modelo(s) ativo(s), {total_updates} update(s) ✓")
-        else:
-            self.log("❌ 2. Online Learning: FAILED")
-        
-        if strategy_ok:
-            running = strategy_data.get('running', False) if isinstance(strategy_data, dict) else False
-            total_trades = strategy_data.get('total_trades', 0) if isinstance(strategy_data, dict) else 0
-            self.log(f"✅ 3. Strategy Status: running={running}, total_trades={total_trades} ✓")
-        else:
-            self.log("❌ 3. Strategy Status: FAILED")
+            self.log("❌ 1. GET /api/deriv/status: FAILED")
         
         if websocket_ok:
             messages = websocket_data.get('messages_received', 0) if isinstance(websocket_data, dict) else 0
+            ticks = websocket_data.get('tick_messages', 0) if isinstance(websocket_data, dict) else 0
             rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
-            self.log(f"✅ 4. WebSocket Ticks: {messages} mensagens, {rate:.2f} msg/s ✓")
+            elapsed = websocket_data.get('elapsed_time', 0) if isinstance(websocket_data, dict) else 0
+            symbols = websocket_data.get('symbols_detected', []) if isinstance(websocket_data, dict) else []
+            heartbeats = websocket_data.get('heartbeat_messages', 0) if isinstance(websocket_data, dict) else 0
+            
+            self.log(f"✅ 2. WebSocket /api/ws/ticks: ESTÁVEL por {elapsed:.1f}s ✓")
+            self.log(f"   📊 {messages} mensagens ({ticks} ticks, {heartbeats} heartbeats)")
+            self.log(f"   📈 Taxa: {rate:.2f} msg/s (> 0.5 msg/s ✓)")
+            self.log(f"   🎯 Símbolos: {symbols}")
         else:
             issues = websocket_data.get('issues', []) if isinstance(websocket_data, dict) else []
-            self.log(f"❌ 4. WebSocket Ticks: INSTÁVEL - {len(issues)} problema(s)")
+            elapsed = websocket_data.get('elapsed_time', 0) if isinstance(websocket_data, dict) else 0
+            rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
+            
+            self.log(f"❌ 2. WebSocket /api/ws/ticks: AINDA INSTÁVEL após {elapsed:.1f}s")
+            self.log(f"   📉 Taxa: {rate:.2f} msg/s (< 0.5 msg/s)")
+            self.log(f"   🚨 Problemas detectados: {len(issues)}")
             for issue in issues[:3]:  # Show first 3 issues
-                self.log(f"   - {issue}")
+                self.log(f"      - {issue}")
         
         if logs_ok:
-            self.log("✅ 5. Backend Logs: Sem problemas detectados ✓")
+            self.log("✅ 3. Backend Logs: Sem erros 'received 1000 (OK)' detectados ✓")
         else:
-            self.log("❌ 5. Backend Logs: Problemas detectados")
+            errors_found = logs_data.get('websocket_errors_found', 0) if isinstance(logs_data, dict) else 0
+            self.log(f"❌ 3. Backend Logs: {errors_found} erro(s) 'received 1000 (OK)' ainda detectados")
         
-        # Overall assessment
-        critical_tests_passed = deriv_ok and online_learning_ok and strategy_ok
-        all_tests_passed = critical_tests_passed and websocket_ok and logs_ok
+        # Overall assessment based on review requirements
+        websocket_stable = websocket_ok
+        no_websocket_errors = logs_ok
+        deriv_connected = deriv_ok
         
-        if all_tests_passed:
-            self.log("\n🎉 TODOS OS TESTES DE CONECTIVIDADE PASSARAM!")
-            self.log("📋 Sistema de trading funcionando perfeitamente:")
-            self.log("   ✅ Deriv conectado e funcionando")
-            self.log("   ✅ Online Learning com modelos ativos")
-            self.log("   ✅ Strategy runner operacional")
-            self.log("   ✅ WebSocket estável e recebendo ticks")
-            self.log("   ✅ Backend sem erros detectados")
-        elif critical_tests_passed:
-            self.log("\n🎉 TESTES CRÍTICOS PASSARAM!")
-            self.log("📋 Funcionalidades principais funcionando:")
-            self.log("   ✅ Conectividade básica operacional")
-            self.log("   ✅ Online Learning funcionando")
-            if not websocket_ok:
-                self.log("   ❌ WebSocket com problemas de estabilidade")
-                self.log("   📋 RECOMENDAÇÃO: Investigar instabilidade do WebSocket")
-            if not logs_ok:
-                self.log("   ⚠️  Verificação de logs limitada")
+        if websocket_stable and no_websocket_errors and deriv_connected:
+            self.log("\n🎉 CORREÇÕES FUNCIONARAM! WebSocket estável para R_100,R_75,R_50")
+            self.log("📋 Validações bem-sucedidas:")
+            self.log("   ✅ Deriv conectado e autenticado")
+            self.log("   ✅ WebSocket mantém conexão estável por 60+ segundos")
+            self.log("   ✅ Taxa de mensagens > 0.5 msg/s")
+            self.log("   ✅ Ticks recebidos consistentemente de R_100,R_75,R_50")
+            self.log("   ✅ Heartbeats funcionando")
+            self.log("   ✅ Sem erros 'received 1000 (OK)' nos logs")
+            self.log("📈 RESULTADO: Taxa melhorou significativamente vs. versão anterior (0.03 msg/s)")
+        elif deriv_connected and websocket_stable:
+            self.log("\n🎯 CORREÇÕES PARCIALMENTE FUNCIONARAM")
+            self.log("   ✅ WebSocket estável e funcionando")
+            if not no_websocket_errors:
+                self.log("   ⚠️  Ainda há alguns erros 'received 1000 (OK)' nos logs")
+                self.log("   📋 RECOMENDAÇÃO: Monitorar logs para verificar se erros persistem")
         else:
-            failed_tests = []
-            if not deriv_ok:
-                failed_tests.append("Deriv Status")
-            if not online_learning_ok:
-                failed_tests.append("Online Learning")
-            if not strategy_ok:
-                failed_tests.append("Strategy Status")
-            
-            self.log(f"\n⚠️  {len(failed_tests)} TESTE(S) CRÍTICO(S) FALHARAM: {', '.join(failed_tests)}")
-            self.log("📋 Sistema não está operacional - verificar configuração")
+            self.log("\n❌ CORREÇÕES NÃO RESOLVERAM PROBLEMAS FUNDAMENTAIS")
+            if not deriv_connected:
+                self.log("   ❌ Deriv não conectado")
+            if not websocket_stable:
+                self.log("   ❌ WebSocket ainda instável")
+                self.log("   📋 RECOMENDAÇÃO CRÍTICA: Usar WEBSEARCH TOOL para investigar causa raiz")
         
-        return critical_tests_passed, results
+        return websocket_stable and deriv_connected, results
 
     def print_summary(self):
         """Print test summary"""
