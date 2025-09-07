@@ -356,6 +356,11 @@ class DerivWS:
         self.last_authorize: Dict[str, Any] = {}
         self.landing_company_name: Optional[str] = None
         self.currency: Optional[str] = None
+        # Enhanced stability tracking
+        self.consecutive_reconnects = 0
+        self.last_successful_connection = 0
+        self.connection_stability_threshold = 30  # seconds
+        self.max_reconnect_delay = 30  # max delay between reconnects
 
     def _build_uri(self) -> str:
         if not self.app_id:
