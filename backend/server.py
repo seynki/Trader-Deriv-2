@@ -674,25 +674,46 @@ async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_d
     try:
         logger.info(f"🧠 INICIANDO Online Learning para trade #{contract_id} (profit: {profit:.2f})")
         
-        # Ensure we have online models active - create if none exist
+        # Ensure we have online models active - FORÇA criação se necessário
         if not hasattr(_online_manager, 'active_models') or not _online_manager.active_models:
-            logger.info("🔄 Nenhum modelo online ativo, criando automaticamente...")
+            logger.info("🔄 FORÇA inicialização do Online Learning...")
             await ensure_online_models_active()
             
-        # If still no models after creation attempt, try creating a simple one
-        if not _online_manager.active_models:
-            logger.warning(f"❌ Não foi possível criar modelos online para trade #{contract_id}")
-            # Try to create a basic online model as fallback
-            try:
+            # FORÇA criação de modelo se ainda não existe
+            if not _online_manager.active_models:
+                logger.info(f"🔧 CRIANDO modelo online obrigatório para trade #{contract_id}")
                 model_id = await create_default_online_model()
-                if model_id:
-                    logger.info(f"✅ Modelo online de fallback criado: {model_id}")
-                else:
-                    logger.error("❌ Falha ao criar modelo online de fallback")
-                    return
-            except Exception as fallback_e:
-                logger.error(f"❌ Erro ao criar modelo online de fallback: {fallback_e}")
-                return
+                if not model_id:
+                    # Última tentativa com configuração mínima
+                    logger.warning("⚠️ Criando modelo mínimo de emergência...")
+                    try:
+                        minimal_model_id = f"emergency_online_model_{int(time.time())}"
+                        # Criar com dados sintéticos mínimos se necessário
+                        import pandas as pd
+                        import numpy as np
+                        
+                        minimal_df = pd.DataFrame({
+                            'close': np.random.normal(100, 5, 100),
+                            'volume': np.random.normal(1000, 100, 100),
+                            'target': np.random.choice([0, 1], 100)
+                        })
+                        
+                        online_model = _online_manager.create_online_model(
+                            model_id=minimal_model_id,
+                            initial_data=minimal_df,
+                            features=['volume'],  # Minimal feature set
+                            target_col='target',
+                            model_type='sgd'
+                        )
+                        
+                        if online_model:
+                            logger.info(f"🆘 Modelo de emergência criado: {minimal_model_id}")
+                        else:
+                            logger.error("❌ FALHA TOTAL na criação de modelo online")
+                            return
+                    except Exception as emergency_e:
+                        logger.error(f"❌ FALHA CRÍTICA em modelo de emergência: {emergency_e}")
+                        return
         
         # Extract relevant features from the trade outcome
         trade_features = {
