@@ -575,6 +575,7 @@ class DerivConnectivityTester:
             self.log("\n🎉 TODOS OS TESTES DE CONECTIVIDADE PASSARAM!")
             self.log("📋 Sistema de trading funcionando perfeitamente:")
             self.log("   ✅ Deriv conectado e funcionando")
+            self.log("   ✅ Online Learning com modelos ativos")
             self.log("   ✅ Strategy runner operacional")
             self.log("   ✅ WebSocket estável e recebendo ticks")
             self.log("   ✅ Backend sem erros detectados")
@@ -582,6 +583,7 @@ class DerivConnectivityTester:
             self.log("\n🎉 TESTES CRÍTICOS PASSARAM!")
             self.log("📋 Funcionalidades principais funcionando:")
             self.log("   ✅ Conectividade básica operacional")
+            self.log("   ✅ Online Learning funcionando")
             if not websocket_ok:
                 self.log("   ❌ WebSocket com problemas de estabilidade")
                 self.log("   📋 RECOMENDAÇÃO: Investigar instabilidade do WebSocket")
@@ -591,6 +593,8 @@ class DerivConnectivityTester:
             failed_tests = []
             if not deriv_ok:
                 failed_tests.append("Deriv Status")
+            if not online_learning_ok:
+                failed_tests.append("Online Learning")
             if not strategy_ok:
                 failed_tests.append("Strategy Status")
             
