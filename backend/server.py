@@ -560,6 +560,121 @@ class DerivWS:
             
         logger.info("🏁 DerivWS main loop finished")
 
+    async def _process_tick_message(self, data: Dict[str, Any]):
+        """Process tick messages with enhanced queue management"""
+        tick = data.get("tick", {})
+        symbol = tick.get("symbol")
+        if symbol and symbol in self.queues:
+            message = {
+                "type": "tick",
+                "symbol": symbol,
+                "price": tick.get("quote"),
+                "timestamp": tick.get("epoch"),
+                "ask": tick.get("ask"),
+                "bid": tick.get("bid"),
+            }
+            # Improved queue management - remove full/broken queues
+            queues_to_remove = []
+            for q in list(self.queues.get(symbol, [])):
+                try:
+                    if not q.full():
+                        q.put_nowait(message)
+                    else:
+                        logger.warning(f"📦 Queue full for symbol {symbol}, removing")
+                        queues_to_remove.append(q)
+                except Exception as qe:
+                    logger.warning(f"⚠️ Queue error for {symbol}: {qe}")
+                    queues_to_remove.append(q)
+                    
+            for q in queues_to_remove:
+                try:
+                    self.queues[symbol].remove(q)
+                except ValueError:
+                    pass
+
+    async def _process_contract_message(self, data: Dict[str, Any]):
+        """Process contract messages with enhanced error handling"""
+        poc = data.get("proposal_open_contract", {})
+        cid = poc.get("contract_id")
+        try:
+            cid_int = int(cid) if cid is not None else None
+        except Exception:
+            cid_int = None
+            
+        if cid_int is not None:
+            message = {
+                "type": "contract",
+                "contract_id": cid_int,
+                "underlying": poc.get("underlying"),
+                "tick_count": poc.get("current_spot_time"),
+                "entry_spot": poc.get("entry_spot"),
+                "current_spot": poc.get("current_spot"),
+                "buy_price": poc.get("buy_price"),
+                "bid_price": poc.get("bid_price"),
+                "profit": poc.get("profit"),
+                "payout": poc.get("payout"),
+                "status": poc.get("status"),
+                "is_expired": poc.get("is_expired"),
+                "date_start": poc.get("date_start"),
+                "date_expiry": poc.get("date_expiry"),
+            }
+
+            # Update global stats when contract expires and persist to Mongo
+            if poc.get("is_expired"):
+                try:
+                    profit = float(poc.get("profit") or 0.0)
+                    accounted = _global_stats.add_trade_result(cid_int, profit)
+                    if accounted:
+                        try:
+                            _global_pnl.add(profit)
+                        except Exception:
+                            pass
+                        logger.info(f"📊 Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
+                        
+                        # Online Learning: Adapt models with trade outcome
+                        try:
+                            await _adapt_online_models_with_trade(cid_int, profit, poc)
+                        except Exception as e:
+                            logger.warning(f"🤖 Online learning adaptation failed: {e}")
+                            
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to update global stats: {e}")
+                    
+                # Persist contract closing to Mongo
+                try:
+                    if db is not None:
+                        res_str = "win" if (float(poc.get("profit") or 0.0) > 0) else ("breakeven" if float(poc.get("profit") or 0.0) == 0 else "lose")
+                        await db.contracts.update_one(
+                            {"deriv_contract_id": cid_int},
+                            {"$set": {
+                                "exit_price": float(poc.get("bid_price") or 0.0),
+                                "pnl": float(poc.get("profit") or 0.0),
+                                "result": res_str,
+                                "status": "closed",
+                                "updated_at": int(time.time()),
+                            }}
+                        )
+                except Exception as e:
+                    logger.warning(f"💾 Mongo update (contract close) failed: {e}")
+
+            # Send to contract listeners with improved queue management
+            if cid_int in self.contract_queues:
+                queues_to_remove = []
+                for q in list(self.contract_queues.get(cid_int, [])):
+                    try:
+                        if not q.full():
+                            q.put_nowait(message)
+                        else:
+                            queues_to_remove.append(q)
+                    except Exception:
+                        queues_to_remove.append(q)
+                
+                for q in queues_to_remove:
+                    try:
+                        self.contract_queues[cid_int].remove(q)
+                    except ValueError:
+                        pass
+
     async def ensure_subscribed(self, symbol: str):
         if symbol not in SUPPORTED_SYMBOLS:
             # Allow dynamic, but log
