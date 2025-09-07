@@ -1761,15 +1761,18 @@ class StrategyRunner:
                     logger.error(f"Strategy loop error #{consecutive_errors}: {e}")
                     
                     if consecutive_errors >= max_consecutive_errors:
-                        logger.warning(f"Too many consecutive errors ({consecutive_errors}), waiting longer...")
+                        logger.warning(f"Muitos erros consecutivos ({consecutive_errors}), pausa estratégica de 60s...")
                         await asyncio.sleep(60)  # Wait 1 minute after many errors
                         consecutive_errors = 0   # Reset counter
+                        logger.info("🔄 Retomando Strategy Loop após pausa...")
                     else:
-                        await asyncio.sleep(30)  # Wait 30s after single error
+                        await asyncio.sleep(15)  # Reduzido para 15s - retoma mais rápido
                     
-                    # CRITICAL: Continue running despite errors
+                    # GARANTIA: Continua rodando SEMPRE até usuário parar
                     if self.running:
-                        logger.info(f"Strategy continuando após erro... (iteração #{loop_iteration})")
+                        logger.info(f"🚀 Strategy CONTINUA executando após erro... (iteração #{loop_iteration})")
+                        # FORÇA continuidade - nunca para automaticamente
+                        self.last_run_at = int(time.time())  # Atualiza timestamp
                         
         except asyncio.CancelledError:
             logger.info("Strategy loop finalmente cancelado")
