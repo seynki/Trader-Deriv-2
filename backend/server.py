@@ -1569,9 +1569,8 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                             break
                         except Exception as e:
                             logger.warning(f"Error sending tick message: {e}")
-                            # Don't immediately close on single message failure
-                            # connection_active = False
-                            # break
+                            # Continue processing mesmo com erros individuais
+                            continue
                 else:
                     # No queues available, short sleep
                     await asyncio.sleep(0.1)
