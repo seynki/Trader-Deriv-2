@@ -336,9 +336,9 @@ class DerivConnectivityTester:
             is_stable = False
             issues.append("Nenhuma mensagem recebida")
             
-        elif message_rate < 0.5:  # Less than 0.5 messages per second
+        elif message_rate < 0.52:  # Less than 0.52 messages per second (as per review request)
             is_stable = False
-            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s")
+            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s (esperado > 0.52 msg/s)")
             
         if connection_errors > 2:
             is_stable = False
