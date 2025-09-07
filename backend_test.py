@@ -491,9 +491,10 @@ class DerivConnectivityTester:
         self.log("🚀" + "="*68)
         self.log("📋 Conforme solicitado na review request em português:")
         self.log("   1. GET /api/deriv/status - verificar conectividade com Deriv")
-        self.log("   2. GET /api/strategy/status - verificar estado da estratégia")
-        self.log("   3. WebSocket /api/ws/ticks - testar por 60s para verificar estabilidade após correções")
-        self.log("   4. Verificar logs do backend para erros de WebSocket")
+        self.log("   2. GET /api/ml/online/progress - verificar se há modelos ativos e updates > 0")
+        self.log("   3. GET /api/strategy/status - verificar estado da estratégia")
+        self.log("   4. WebSocket /api/ws/ticks - testar por 30s para verificar estabilidade (> 0.52 ticks/s)")
+        self.log("   5. Verificar logs do backend para erros de WebSocket")
         self.log("   ⚠️  IMPORTANTE: Conta DEMO, NÃO executar /api/deriv/buy")
         self.log(f"   🌐 Base URL: {self.base_url}")
         
@@ -504,18 +505,23 @@ class DerivConnectivityTester:
         deriv_ok, deriv_data = self.test_deriv_status()
         results['deriv_status'] = deriv_ok
         
-        # Test 2: Strategy Status
-        self.log("\n🔍 EXECUTANDO TESTE 2: Estado da Estratégia")
+        # Test 2: Online Learning Progress
+        self.log("\n🔍 EXECUTANDO TESTE 2: Online Learning Progress")
+        online_learning_ok, online_learning_data = self.test_online_learning_progress()
+        results['online_learning'] = online_learning_ok
+        
+        # Test 3: Strategy Status
+        self.log("\n🔍 EXECUTANDO TESTE 3: Estado da Estratégia")
         strategy_ok, strategy_data = self.test_strategy_status()
         results['strategy_status'] = strategy_ok
         
-        # Test 3: WebSocket Ticks (60 seconds)
-        self.log("\n🔍 EXECUTANDO TESTE 3: WebSocket de Ticks (60s)")
+        # Test 4: WebSocket Ticks (30 seconds)
+        self.log("\n🔍 EXECUTANDO TESTE 4: WebSocket de Ticks (30s)")
         websocket_ok, websocket_data = await self.test_websocket_ticks()
         results['websocket_ticks'] = websocket_ok
         
-        # Test 4: Backend Logs Check
-        self.log("\n🔍 EXECUTANDO TESTE 4: Verificação de Logs")
+        # Test 5: Backend Logs Check
+        self.log("\n🔍 EXECUTANDO TESTE 5: Verificação de Logs")
         logs_ok, logs_data = self.check_backend_logs()
         results['backend_logs'] = logs_ok
         
