@@ -256,27 +256,27 @@ export default function OnlineLearningPanel() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">
-                      {modelStatus.model_info?.update_count || 0}
+                      {String(modelStatus.model_info?.update_count || 0)}
                     </div>
                     <div className="text-sm opacity-70">Updates</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-blue-600">
-                      {modelStatus.model_info?.features_count || 0}
+                      {String(modelStatus.model_info?.features_count || 0)}
                     </div>
                     <div className="text-sm opacity-70">Features</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-600">
                       {modelStatus.performance_history?.slice(-1)[0]?.accuracy ? 
-                        (modelStatus.performance_history.slice(-1)[0].accuracy * 100).toFixed(1) + '%' : 
+                        String((modelStatus.performance_history.slice(-1)[0].accuracy * 100).toFixed(1)) + '%' : 
                         'N/A'}
                     </div>
                     <div className="text-sm opacity-70">Precisão Atual</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-orange-600">
-                      {modelStatus.performance_history?.length || 0}
+                      {String(modelStatus.performance_history?.length || 0)}
                     </div>
                     <div className="text-sm opacity-70">Avaliações</div>
                   </div>
