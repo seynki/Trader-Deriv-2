@@ -1505,8 +1505,8 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
         
         # Enhanced message processing with robust ping/pong keepalive
         last_ping = time.time()
-        ping_interval = 20  # Send ping every 20 seconds for more aggressive keepalive
-        ping_timeout = 5    # Wait 5 seconds for pong response
+        ping_interval = 30  # Send ping every 30 seconds - mais conservador
+        ping_timeout = 10   # Wait 10 seconds for pong response - mais tempo
         pending_pong = False
         
         while connection_active:
