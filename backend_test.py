@@ -656,22 +656,23 @@ class DerivConnectivityTester:
             self.log("⚠️  SOME INDIVIDUAL TESTS FAILED")
 
 async def main():
-    """Main function to run connectivity tests"""
-    print("🤖 Deriv Trading Bot Connectivity Tester")
+    """Main function to run WebSocket stability tests after corrections"""
+    print("🚀 TESTE CRÍTICO: WebSocket Stability após Correções para R_100, R_75, R_50")
     print("=" * 70)
-    print("📋 Testing as requested in Portuguese review:")
-    print("   1. GET /api/deriv/status - verificar conectividade")
-    print("   2. GET /api/ml/online/progress - verificar modelos ativos e updates > 0")
-    print("   3. GET /api/strategy/status - verificar estado da estratégia")
-    print("   4. WebSocket /api/ws/ticks - testar estabilidade por 30s (> 0.52 ticks/s)")
-    print("   5. Verificar logs do backend")
-    print("   ⚠️  IMPORTANTE: Conta DEMO, não executar trades reais")
+    print("📋 Executando teste completo de estabilidade do WebSocket após correções:")
+    print("   1. GET /api/deriv/status - verificar conectividade Deriv (connected=true, authenticated=true)")
+    print("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - conectar e monitorar por 60+ segundos")
+    print("   3. Verificar se recebe ticks consistentemente sem desconexões (erro 1006)")
+    print("   4. Contar mensagens e calcular taxa (deve ser >0.5 msg/s)")
+    print("   5. Verificar heartbeat messages e uptime tracking")
+    print("   6. Validar que não há mais erros 'received 1000 (OK)' nos logs")
+    print("   ⚠️  IMPORTANTE: Usar exatamente os símbolos R_100,R_75,R_50 como solicitado")
     
     # Use the URL from frontend/.env as specified
     tester = DerivConnectivityTester()
     
     try:
-        # Run comprehensive tests
+        # Run WebSocket stability tests
         success, results = await tester.run_connectivity_tests()
         
         # Print summary
