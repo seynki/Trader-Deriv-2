@@ -1533,17 +1533,17 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_10,R_25"):
                         connection_active = False
                         break
                 
-                # Process messages from all symbol queues with shorter timeout
+                # Process messages from all symbol queues with optimal timeout
                 tasks = []
                 for symbol, queue in queues.items():
                     task = asyncio.create_task(queue.get())
                     tasks.append((symbol, task))
                 
                 if tasks:
-                    # Wait for any queue to have data, with shorter timeout for more responsive ping/pong
+                    # Wait for any queue to have data, with balanced timeout
                     done, pending = await asyncio.wait(
                         [task for _, task in tasks], 
-                        timeout=0.5,  # Shorter timeout for more responsive connection monitoring
+                        timeout=2.0,  # Timeout mais generoso para reduzir overhead
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
