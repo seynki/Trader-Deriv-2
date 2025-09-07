@@ -369,15 +369,46 @@ class DerivWS:
         return f"{self.ws_url}?app_id={self.app_id}"
 
     async def start(self):
+        """Start the WebSocket connection loop with enhanced monitoring"""
         if self.loop_task and not self.loop_task.done():
+            logger.info("🔄 DerivWS already running")
             return
+            
+        self._running = True
+        self.consecutive_reconnects = 0
+        self.last_successful_connection = 0
+        
+        logger.info("🚀 Starting DerivWS with enhanced stability features...")
         self.loop_task = asyncio.create_task(self._run())
+        
+        # Wait a bit to ensure connection is established
+        await asyncio.sleep(2)
+        
+        if self.connected:
+            logger.info("✅ DerivWS started successfully and connected")
+        else:
+            logger.warning("⚠️ DerivWS started but not yet connected (will retry)")
 
     async def stop(self):
-        if self.loop_task:
+        """Stop the WebSocket connection gracefully"""
+        logger.info("🛑 Stopping DerivWS...")
+        self._running = False
+        
+        if self.ws and not self.ws.closed:
+            try:
+                await self.ws.close()
+                logger.info("✅ WebSocket connection closed")
+            except Exception as e:
+                logger.warning(f"⚠️ Error closing WebSocket: {e}")
+        
+        if self.loop_task and not self.loop_task.done():
             self.loop_task.cancel()
-        if self.ws:
-            await self.ws.close()
+            try:
+                await self.loop_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("✅ DerivWS task cancelled")
+        
         self.connected = False
         self.authenticated = False
 
