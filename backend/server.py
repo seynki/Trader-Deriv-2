@@ -384,20 +384,42 @@ class DerivWS:
     @retry(stop=stop_after_attempt(8), wait=wait_exponential_jitter(initial=2, max=20))
     async def _connect(self):
         uri = self._build_uri()
-        logger.info(f"Connecting to Deriv WS: {uri}")
-        # Enhanced WebSocket stability with better ping/pong settings
-        self.ws = await websockets.connect(
-            uri, 
-            ping_interval=30,  # Send ping every 30 seconds
-            ping_timeout=10,   # Wait 10 seconds for pong
-            close_timeout=10,  # Close timeout
-            max_size=2**23,    # 8MB max message size
-            max_queue=None     # Unlimited queue size
-        )
-        self.connected = True
-        logger.info(f"Connected to Deriv WS with enhanced stability settings")
-        if self.token:
-            await self._send({"authorize": self.token})
+        try:
+            self.ws = await websockets.connect(
+                uri,
+                # Ultra-stable WebSocket settings for Deriv API
+                ping_interval=20,    # More frequent pings - 20 seconds
+                ping_timeout=15,     # Longer pong timeout - 15 seconds  
+                max_size=16 * 1024**2,  # 16MB buffer for large responses
+                max_queue=500,       # Reasonable queue limit
+                compression=None,    # Disable compression for performance
+                close_timeout=10,    # Timeout for close handshake
+                # Additional connection options for stability
+                extra_headers={"User-Agent": "DerivBot/1.0"},
+            )
+            self.connected = True
+            self.subscribed_symbols.clear()
+            current_time = int(time.time())
+            
+            # Check if this connection lasted long enough to be considered stable
+            if self.last_successful_connection > 0:
+                connection_duration = current_time - self.last_successful_connection
+                if connection_duration >= self.connection_stability_threshold:
+                    # Reset consecutive reconnect counter on stable connection
+                    self.consecutive_reconnects = 0
+                    logger.info(f"✅ Stable connection detected ({connection_duration}s), reset reconnect counter")
+                    
+            self.last_successful_connection = current_time
+            logger.info(f"🔗 Connected to Deriv WS (attempt #{self.consecutive_reconnects + 1})")
+            
+            if self.token:
+                await self._send({"authorize": self.token})
+                
+        except Exception as e:
+            self.connected = False
+            self.consecutive_reconnects += 1
+            logger.error(f"Failed to connect to Deriv WS: {e}")
+            raise
 
     async def _send(self, payload: Dict[str, Any]):
         if not self.ws:
