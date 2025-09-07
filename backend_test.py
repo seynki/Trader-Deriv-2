@@ -538,30 +538,37 @@ class DerivConnectivityTester:
         else:
             self.log("❌ 1. Deriv Status: FAILED")
         
+        if online_learning_ok:
+            active_models = online_learning_data.get('active_models', 0) if isinstance(online_learning_data, dict) else 0
+            total_updates = online_learning_data.get('total_updates', 0) if isinstance(online_learning_data, dict) else 0
+            self.log(f"✅ 2. Online Learning: {active_models} modelo(s) ativo(s), {total_updates} update(s) ✓")
+        else:
+            self.log("❌ 2. Online Learning: FAILED")
+        
         if strategy_ok:
             running = strategy_data.get('running', False) if isinstance(strategy_data, dict) else False
             total_trades = strategy_data.get('total_trades', 0) if isinstance(strategy_data, dict) else 0
-            self.log(f"✅ 2. Strategy Status: running={running}, total_trades={total_trades} ✓")
+            self.log(f"✅ 3. Strategy Status: running={running}, total_trades={total_trades} ✓")
         else:
-            self.log("❌ 2. Strategy Status: FAILED")
+            self.log("❌ 3. Strategy Status: FAILED")
         
         if websocket_ok:
             messages = websocket_data.get('messages_received', 0) if isinstance(websocket_data, dict) else 0
             rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
-            self.log(f"✅ 3. WebSocket Ticks: {messages} mensagens, {rate:.2f} msg/s ✓")
+            self.log(f"✅ 4. WebSocket Ticks: {messages} mensagens, {rate:.2f} msg/s ✓")
         else:
             issues = websocket_data.get('issues', []) if isinstance(websocket_data, dict) else []
-            self.log(f"❌ 3. WebSocket Ticks: INSTÁVEL - {len(issues)} problema(s)")
+            self.log(f"❌ 4. WebSocket Ticks: INSTÁVEL - {len(issues)} problema(s)")
             for issue in issues[:3]:  # Show first 3 issues
                 self.log(f"   - {issue}")
         
         if logs_ok:
-            self.log("✅ 4. Backend Logs: Sem problemas detectados ✓")
+            self.log("✅ 5. Backend Logs: Sem problemas detectados ✓")
         else:
-            self.log("❌ 4. Backend Logs: Problemas detectados")
+            self.log("❌ 5. Backend Logs: Problemas detectados")
         
         # Overall assessment
-        critical_tests_passed = deriv_ok and strategy_ok
+        critical_tests_passed = deriv_ok and online_learning_ok and strategy_ok
         all_tests_passed = critical_tests_passed and websocket_ok and logs_ok
         
         if all_tests_passed:
