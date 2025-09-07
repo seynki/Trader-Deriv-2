@@ -650,8 +650,16 @@ async def _wait_deriv_ready(max_wait: float = 20.0, require_auth: bool = True) -
 @app.on_event("startup")
 async def _startup():
     await _deriv.start()
-    # Initialize online learning models automatically
-    asyncio.create_task(ensure_online_models_active())
+    # Initialize online learning models automatically - FORÇA inicialização
+    logger.info("🚀 INICIALIZAÇÃO FORÇADA do Online Learning no startup...")
+    await ensure_online_models_active()
+    
+    # Verifica se realmente temos modelos ativos
+    if not _online_manager.active_models:
+        logger.warning("⚠️ Tentativa adicional de criação de modelo online...")
+        await create_default_online_model()
+        
+    logger.info(f"✅ Sistema iniciado com {len(_online_manager.active_models)} modelo(s) online ativo(s)")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
