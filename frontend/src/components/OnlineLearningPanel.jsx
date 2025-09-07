@@ -156,7 +156,7 @@ export default function OnlineLearningPanel() {
               </Badge>
             )}
             <Badge variant={onlineProgress?.total_updates > 0 ? "default" : "outline"}>
-              {onlineProgress?.total_updates || 0} atualizações
+              {String(onlineProgress?.total_updates || 0)} atualizações
             </Badge>
           </div>
         </CardTitle>
