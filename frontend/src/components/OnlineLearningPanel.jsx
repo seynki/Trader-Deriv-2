@@ -331,7 +331,7 @@ export default function OnlineLearningPanel() {
                   <div className="flex items-center gap-3">
                     <div className="text-sm font-medium">{model.model_id}</div>
                     <Badge variant="outline" className="text-xs">
-                      {model.features_count} features
+                      {String(model.features_count || 0)} features
                     </Badge>
                   </div>
                   <div className="flex items-center gap-4 text-sm">
