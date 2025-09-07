@@ -427,28 +427,39 @@ class DerivWS:
         await self.ws.send(json.dumps(payload))
 
     async def _run(self):
-        """Enhanced WebSocket loop with better error handling and recovery"""
+        """Enhanced WebSocket loop with robust error handling and smart reconnection"""
         reconnect_count = 0
-        max_reconnects = 50  # Allow more reconnects
+        max_reconnects = 100  # Allow more reconnects
         
-        while True:
+        while self._running:
             try:
                 await self._connect()
                 reconnect_count = 0  # Reset on successful connection
+                message_count = 0
+                connection_start = int(time.time())
                 
-                # Enhanced message processing loop
-                async for raw in self.ws:
+                logger.info("🚀 Starting enhanced message processing loop...")
+                
+                # Enhanced message processing loop with better stability
+                async for raw_message in self.ws:
                     try:
-                        data = json.loads(raw)
+                        message_count += 1
+                        if message_count % 100 == 0:  # Log every 100 messages
+                            uptime = int(time.time()) - connection_start
+                            logger.info(f"📊 Connection stable: {message_count} messages processed, uptime: {uptime}s")
+                            
+                        data = json.loads(raw_message)
                         msg_type = data.get("msg_type")
                         req_id = data.get("req_id")
                         
+                        # Handle request-response pattern
                         if req_id is not None and req_id in self.pending:
                             fut = self.pending.pop(req_id)
                             if not fut.done():
                                 fut.set_result(data)
                                 continue
                                 
+                        # Process different message types
                         if msg_type == "authorize":
                             self.authenticated = data.get("error") is None
                             if self.authenticated:
@@ -456,159 +467,98 @@ class DerivWS:
                                 self.last_authorize = auth
                                 self.landing_company_name = auth.get("landing_company_name") or auth.get("landing_company_fullname")
                                 self.currency = auth.get("currency")
-                            logger.info(f"Authorize status: {self.authenticated}")
+                            logger.info(f"🔐 Authorization status: {'✅ SUCCESS' if self.authenticated else '❌ FAILED'}")
                             
                         elif msg_type == "tick":
-                            tick = data.get("tick", {})
-                            symbol = tick.get("symbol")
-                            if symbol and symbol in self.queues:
-                                message = {
-                                    "type": "tick",
-                                    "symbol": symbol,
-                                    "price": tick.get("quote"),
-                                    "timestamp": tick.get("epoch"),
-                                    "ask": tick.get("ask"),
-                                    "bid": tick.get("bid"),
-                                }
-                                # Improved queue management - remove full/broken queues
-                                queues_to_remove = []
-                                for q in list(self.queues.get(symbol, [])):
-                                    try:
-                                        if not q.full():
-                                            q.put_nowait(message)
-                                        else:
-                                            logger.warning(f"Queue full for symbol {symbol}, removing")
-                                            queues_to_remove.append(q)
-                                    except Exception as qe:
-                                        logger.warning(f"Queue error for {symbol}: {qe}")
-                                        queues_to_remove.append(q)
-                                        
-                                for q in queues_to_remove:
-                                    try:
-                                        self.queues[symbol].remove(q)
-                                    except ValueError:
-                                        pass
-                                        
+                            await self._process_tick_message(data)
+                            
                         elif msg_type == "proposal_open_contract":
-                            poc = data.get("proposal_open_contract", {})
-                            cid = poc.get("contract_id")
-                            try:
-                                cid_int = int(cid) if cid is not None else None
-                            except Exception:
-                                cid_int = None
-                            if cid_int is not None:
-                                message = {
-                                    "type": "contract",
-                                    "contract_id": cid_int,
-                                    "underlying": poc.get("underlying"),
-                                    "tick_count": poc.get("current_spot_time"),
-                                    "entry_spot": poc.get("entry_spot"),
-                                    "current_spot": poc.get("current_spot"),
-                                    "buy_price": poc.get("buy_price"),
-                                    "bid_price": poc.get("bid_price"),
-                                    "profit": poc.get("profit"),
-                                    "payout": poc.get("payout"),
-                                    "status": poc.get("status"),
-                                    "is_expired": poc.get("is_expired"),
-                                    "date_start": poc.get("date_start"),
-                                    "date_expiry": poc.get("date_expiry"),
-                                }
-
-                                # Update global stats when contract expires and persist to Mongo
-                                if poc.get("is_expired"):
-                                    try:
-                                        profit = float(poc.get("profit") or 0.0)
-                                        accounted = _global_stats.add_trade_result(cid_int, profit)
-                                        if accounted:
-                                            try:
-                                                _global_pnl.add(profit)
-                                            except Exception:
-                                                pass
-                                            logger.info(f"Updated global stats: contract_id={cid_int}, profit={profit}, total_trades={_global_stats.total_trades}")
-                                            
-                                            # Online Learning: Adapt models with trade outcome
-                                            try:
-                                                await _adapt_online_models_with_trade(cid_int, profit, poc)
-                                            except Exception as e:
-                                                logger.warning(f"Online learning adaptation failed: {e}")
-                                                
-                                    except Exception as e:
-                                        logger.warning(f"Failed to update global stats: {e}")
-                                    # Persist contract closing to Mongo
-                                    try:
-                                        if db is not None:
-                                            res_str = "win" if (float(poc.get("profit") or 0.0) > 0) else ("breakeven" if float(poc.get("profit") or 0.0) == 0 else "lose")
-                                            await db.contracts.update_one(
-                                                {"deriv_contract_id": cid_int},
-                                                {"$set": {
-                                                    "exit_price": float(poc.get("bid_price") or 0.0),
-                                                    "pnl": float(poc.get("profit") or 0.0),
-                                                    "result": res_str,
-                                                    "status": "closed",
-                                                    "updated_at": int(time.time()),
-                                                }}
-                                            )
-                                    except Exception as e:
-                                        logger.warning(f"Mongo update (contract close) failed: {e}")
-
-                                # Send to contract listeners with improved queue management
-                                if cid_int in self.contract_queues:
-                                    queues_to_remove = []
-                                    for q in list(self.contract_queues.get(cid_int, [])):
-                                        try:
-                                            if not q.full():
-                                                q.put_nowait(message)
-                                            else:
-                                                queues_to_remove.append(q)
-                                        except Exception:
-                                            queues_to_remove.append(q)
-                                    
-                                    for q in queues_to_remove:
-                                        try:
-                                            self.contract_queues[cid_int].remove(q)
-                                        except ValueError:
-                                            pass
-                                            
+                            await self._process_contract_message(data)
+                            
                         elif msg_type == "heartbeat":
                             self.last_heartbeat = int(time.time())
+                            logger.debug("💓 Heartbeat received")
                             
                         elif msg_type == "error":
-                            logger.warning(f"Deriv error: {data}")
+                            error_code = data.get("error", {}).get("code")
+                            error_message = data.get("error", {}).get("message", "Unknown error")
+                            logger.warning(f"⚠️ Deriv API Error [{error_code}]: {error_message}")
                             
                     except json.JSONDecodeError as je:
-                        logger.warning(f"Failed to decode JSON: {je}")
+                        logger.warning(f"❌ JSON decode error: {je}")
+                        continue
                     except Exception as me:
-                        logger.warning(f"Message processing error: {me}")
+                        logger.warning(f"⚠️ Message processing error: {me}")
+                        continue
+                        
+                # If we reach here, the connection was closed normally
+                logger.info("🔚 WebSocket message loop ended normally")
                         
             except websockets.exceptions.ConnectionClosed as cc:
-                logger.warning(f"WebSocket closed: {cc.code} - {cc.reason}")
+                connection_duration = int(time.time()) - connection_start if 'connection_start' in locals() else 0
+                
+                if cc.code == 1000:  # Normal closure
+                    logger.info(f"✅ WebSocket closed normally (code 1000) after {connection_duration}s")
+                    # For normal closures, use progressive backoff
+                    if connection_duration < 10:  # Connection lasted less than 10 seconds
+                        self.consecutive_reconnects += 1
+                        wait_time = min(self.consecutive_reconnects * 2, self.max_reconnect_delay)
+                        logger.info(f"⏳ Short connection detected, waiting {wait_time}s before reconnect")
+                        await asyncio.sleep(wait_time)
+                else:
+                    logger.warning(f"❌ WebSocket closed unexpectedly: code={cc.code}, reason='{cc.reason}' after {connection_duration}s")
+                    self.consecutive_reconnects += 1
+                    
                 self.connected = False
                 self.authenticated = False
                 reconnect_count += 1
+                
+            except websockets.exceptions.ConnectionClosedError as cce:
+                logger.warning(f"🔌 Connection closed with error: {cce}")
+                self.connected = False
+                self.authenticated = False
+                reconnect_count += 1
+                self.consecutive_reconnects += 1
                 
             except Exception as e:
-                logger.warning(f"WS loop error, will reconnect: {e}")
+                logger.error(f"💥 WS loop error: {type(e).__name__}: {e}")
                 self.connected = False
                 self.authenticated = False
                 reconnect_count += 1
+                self.consecutive_reconnects += 1
                 
             finally:
+                # Clean connection state
                 try:
                     if self.ws and not self.ws.closed:
                         await self.ws.close()
-                        logger.info("WebSocket connection properly closed")
+                        logger.debug("🔒 WebSocket connection properly closed")
                 except Exception as e:
-                    logger.warning(f"Error closing WebSocket: {e}")
-                self.ws = None
+                    logger.warning(f"⚠️ Error closing WebSocket: {e}")
+                finally:
+                    self.ws = None
 
-            # Enhanced reconnection logic with more aggressive reconnect
+            # Enhanced reconnection logic with intelligent backoff
             if reconnect_count >= max_reconnects:
-                logger.error(f"Max reconnection attempts ({max_reconnects}) reached. Stopping.")
+                logger.error(f"🛑 Max reconnection attempts ({max_reconnects}) reached. Stopping reconnections.")
                 break
                 
-            wait_time = min(2 ** min(reconnect_count, 4), 15)  # Exponential backoff, max 15s (faster reconnect)
-            logger.info(f"🔄 DerivWS Reconnecting in {wait_time}s (attempt {reconnect_count}/{max_reconnects})")
+            if not self._running:
+                logger.info("🛑 WebSocket loop stopping as requested")
+                break
+                
+            # Smart reconnection delay based on consecutive failures  
+            if self.consecutive_reconnects <= 3:
+                wait_time = 5  # Quick reconnect for first few failures
+            elif self.consecutive_reconnects <= 10:
+                wait_time = 15  # Medium delay for persistent issues
+            else:
+                wait_time = self.max_reconnect_delay  # Max delay for chronic problems
+                
+            logger.info(f"🔄 Reconnecting in {wait_time}s (attempt {reconnect_count}/{max_reconnects}, consecutive: {self.consecutive_reconnects})")
             await asyncio.sleep(wait_time)
+            
+        logger.info("🏁 DerivWS main loop finished")
 
     async def ensure_subscribed(self, symbol: str):
         if symbol not in SUPPORTED_SYMBOLS:
