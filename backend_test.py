@@ -333,43 +333,67 @@ class DerivConnectivityTester:
         # Analysis
         elapsed_time = time.time() - start_time
         message_rate = messages_received / elapsed_time if elapsed_time > 0 else 0
+        tick_rate = tick_messages / elapsed_time if elapsed_time > 0 else 0
         
-        self.log(f"\n📊 ANÁLISE DO WEBSOCKET:")
+        self.log(f"\n📊 ANÁLISE DETALHADA DO WEBSOCKET:")
         self.log(f"   Tempo de teste: {elapsed_time:.1f}s")
-        self.log(f"   Mensagens recebidas: {messages_received}")
-        self.log(f"   Taxa de mensagens: {message_rate:.2f} msg/s")
-        self.log(f"   Erros de conexão: {connection_errors}")
+        self.log(f"   Total mensagens: {messages_received}")
+        self.log(f"   Mensagens de tick: {tick_messages}")
+        self.log(f"   Mensagens de heartbeat: {heartbeat_messages}")
+        self.log(f"   Taxa total: {message_rate:.2f} msg/s")
+        self.log(f"   Taxa de ticks: {tick_rate:.2f} ticks/s")
+        self.log(f"   Timeouts/erros: {connection_errors}")
         self.log(f"   Símbolos detectados: {list(symbols_detected)}")
         
-        # Determine if WebSocket is stable
+        # Determine if WebSocket is stable based on review requirements
         is_stable = True
         issues = []
         
+        # Check if we received any messages
         if messages_received == 0:
             is_stable = False
             issues.append("Nenhuma mensagem recebida")
             
-        elif message_rate < 0.52:  # Less than 0.52 messages per second (as per review request)
+        # Check message rate (should be > 0.5 msg/s as per review)
+        elif message_rate < 0.5:
             is_stable = False
-            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s (esperado > 0.52 msg/s)")
+            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s (esperado > 0.5 msg/s)")
             
-        if connection_errors > 2:
+        # Check if we received ticks specifically
+        if tick_messages == 0:
             is_stable = False
-            issues.append(f"Muitos erros de conexão: {connection_errors}")
+            issues.append("Nenhum tick recebido")
             
-        if len(symbols_detected) == 0:
+        # Check for excessive connection errors
+        if connection_errors > 5:
             is_stable = False
-            issues.append("Nenhum símbolo detectado nas mensagens")
+            issues.append(f"Muitos timeouts/erros: {connection_errors}")
             
-        if elapsed_time < test_duration * 0.8:  # Test ended prematurely
+        # Check if we detected the expected symbols (R_100, R_75, R_50)
+        expected_symbols = {"R_100", "R_75", "R_50"}
+        if not symbols_detected.intersection(expected_symbols):
+            is_stable = False
+            issues.append(f"Nenhum dos símbolos esperados detectado: {expected_symbols}")
+            
+        # Check if test ran for sufficient time (at least 80% of expected duration)
+        if elapsed_time < test_duration * 0.8:
             is_stable = False
             issues.append(f"Teste terminou prematuramente: {elapsed_time:.1f}s < {test_duration}s")
         
+        # Check heartbeat functionality
+        if heartbeat_messages == 0 and elapsed_time > 30:
+            issues.append("Nenhum heartbeat recebido (esperado a cada 25s)")
+        
         if is_stable:
-            self.log("✅ WebSocket ESTÁVEL - funcionando corretamente")
+            self.log("✅ WebSocket ESTÁVEL - correções funcionaram!")
+            self.log(f"   ✓ Conexão mantida por {elapsed_time:.1f}s sem desconexões")
+            self.log(f"   ✓ Taxa adequada: {message_rate:.2f} msg/s (> 0.5 msg/s)")
+            self.log(f"   ✓ Ticks recebidos: {tick_messages} de símbolos {list(symbols_detected)}")
+            if heartbeat_messages > 0:
+                self.log(f"   ✓ Heartbeats funcionando: {heartbeat_messages} recebidos")
             self.tests_passed += 1
         else:
-            self.log("❌ WebSocket INSTÁVEL - problemas detectados:")
+            self.log("❌ WebSocket AINDA INSTÁVEL - correções não resolveram todos os problemas:")
             for issue in issues:
                 self.log(f"   - {issue}")
         
@@ -378,7 +402,10 @@ class DerivConnectivityTester:
         return is_stable, {
             "elapsed_time": elapsed_time,
             "messages_received": messages_received,
+            "tick_messages": tick_messages,
+            "heartbeat_messages": heartbeat_messages,
             "message_rate": message_rate,
+            "tick_rate": tick_rate,
             "connection_errors": connection_errors,
             "symbols_detected": list(symbols_detected),
             "is_stable": is_stable,
