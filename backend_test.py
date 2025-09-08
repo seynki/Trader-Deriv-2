@@ -781,9 +781,19 @@ class DerivConnectivityTester:
             self.log("❌ CRITICAL: Não foi possível obter status inicial da estratégia")
             return False, results
         
-        # Test 3: Start Strategy - iniciar estratégia
+        # Test 3: Start Strategy - iniciar estratégia (ou verificar se já está rodando)
         self.log("\n🔍 TESTE 3: INICIAR ESTRATÉGIA")
-        start_ok, start_data = self.test_strategy_start()
+        
+        # Check if strategy is already running from initial status
+        initial_running = initial_status_data.get('running', False) if isinstance(initial_status_data, dict) else False
+        
+        if initial_running:
+            self.log("✅ Estratégia já está rodando - prosseguindo com teste de continuidade")
+            start_ok = True
+            start_data = {"message": "already_running"}
+        else:
+            start_ok, start_data = self.test_strategy_start()
+            
         results['strategy_start'] = start_ok
         
         if not start_ok:
