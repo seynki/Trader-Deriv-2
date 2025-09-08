@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 class DerivBotCorrectionsTester:
-    def __init__(self, base_url="https://market-predictor-ml.preview.emergentagent.com"):
+    def __init__(self, base_url="https://tick-system-repair.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.ws_url = f"{base_url.replace('https://', 'wss://').replace('http://', 'ws://')}/api"
