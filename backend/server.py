@@ -1170,11 +1170,30 @@ async def create_contract(contract: ContractCreate):
 # Deriv helper endpoints
 @api_router.get("/deriv/status", response_model=DerivStatus)
 async def deriv_status():
+    if not _deriv:
+        return DerivStatus(
+            connected=False, 
+            authenticated=False,
+            symbols=[],
+            last_heartbeat=None,
+            tick_stats={
+                "message_rate": 0,
+                "last_message": "nunca",
+                "status": "desconectado"
+            }
+        )
+    
     return DerivStatus(
         connected=_deriv.connected,
         authenticated=_deriv.authenticated,
         symbols=list(_deriv.subscribed_symbols.keys()),
         last_heartbeat=_deriv.last_heartbeat,
+        tick_stats={
+            "message_rate": getattr(_deriv, 'current_message_rate', 0),
+            "last_message": getattr(_deriv, 'last_message_time', 'nunca'),
+            "status": "ativo" if _deriv.connected else "desconectado",
+            "target_rate": "~0.57 msg/s (otimizado para >1.0 msg/s)"
+        }
     )
 
 # cache for contracts_for
