@@ -1,24 +1,52 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Deriv Trading Bot Connectivity
+Backend API Testing for Deriv Trading Bot Strategy Runner Continuity
 Tests as requested in Portuguese review:
-🤖 TESTE DE CONECTIVIDADE BÁSICA DO BOT DE TRADING DERIV
+🤖 TESTE DE CONTINUIDADE DO BOT TRADING - PRIORIDADE MÁXIMA
 
-CONTEXTO: Bot de trading com problemas de WebSocket fechando constantemente, 
-bot parando após contratos, e sistema ML não retreinando. Usuario usando conta DEMO, símbolo R_100.
+OBJETIVO: Validar que o Strategy Runner funciona infinitamente sem parar automaticamente
 
-TESTES SOLICITADOS:
-1. GET /api/deriv/status - verificar conectividade com Deriv
-2. GET /api/strategy/status - verificar estado do strategy runner  
-3. WebSocket /api/ws/ticks - testar conexão de ticks (conectar por 30s, verificar se recebe ticks consistentes)
-4. Verificar se há erros nos logs do backend relacionados ao WebSocket
+CONTEXTO CRÍTICO:
+- Sistema tem Strategy Runner já implementado com Enhanced strategy loop
+- Bot deve rodar infinitamente até usuário parar manualmente
+- Problema reportado: "Bot para após um contrato"
+- Sistema tem recuperação automática de erros
 
-IMPORTANTE: 
-- Conta DEMO da Deriv
-- NÃO executar trades reais (/api/deriv/buy)
-- Focar em identificar problemas de conectividade e estabilidade
-- Verificar se WebSocket fica estável ou fica desconectando
-- Reportar qualquer erro ou instabilidade observada
+TESTES OBRIGATÓRIOS:
+1. CONECTIVIDADE BÁSICA (confirmar sistema operacional):
+   - GET /api/deriv/status (must return connected=true, authenticated=true)
+   - GET /api/strategy/status (verificar estado inicial)
+
+2. INICIAR ESTRATÉGIA:
+   - POST /api/strategy/start com payload padrão
+
+3. TESTE DE CONTINUIDADE (CRÍTICO):
+   - Monitorar GET /api/strategy/status por 90 segundos
+   - Verificar que running=true permanece true
+   - Verificar que last_run_at continua atualizando (timestamp deve aumentar)
+   - Documentar mudanças nos valores: today_pnl, today_trades, total_trades
+
+4. ONLINE LEARNING ATIVO:
+   - GET /api/ml/online/progress (verificar modelos ativos e updates)
+
+CRITÉRIOS DE SUCESSO:
+- ✅ running=true durante todo o teste (90s)
+- ✅ last_run_at timestamp atualizando regularmente (a cada 10-20s)
+- ✅ Sistema não para automaticamente
+- ✅ Logs mostram estratégia rodando continuamente
+
+CRITÉRIOS DE FALHA:
+- ❌ running muda para false automaticamente
+- ❌ last_run_at para de atualizar por >30s
+- ❌ Estratégia para por conta própria
+
+INSTRUÇÕES ESPECIAIS:
+- NÃO usar /api/deriv/buy (manter paper mode apenas)
+- Documentar todos os timestamps de last_run_at para provar continuidade
+- Se estratégia parar automaticamente, isso é BUG CRÍTICO
+- Relatar qualquer comportamento que indique parada automática
+
+FOCO: O teste deve provar que o bot funciona INFINITAMENTE e nunca para sozinho.
 """
 
 import requests
