@@ -304,7 +304,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Teste rápido de conectividade e velocidade dos ticks completado com sucesso"
+##     - "Teste de continuidade do Strategy Runner completado com sucesso - bot funciona infinitamente"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
