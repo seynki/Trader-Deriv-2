@@ -831,7 +831,10 @@ class DerivConnectivityTester:
         
         # Test 3 Results
         if start_ok:
-            self.log("✅ 3. INICIAR ESTRATÉGIA: Estratégia iniciada com sucesso ✓")
+            if isinstance(start_data, dict) and start_data.get("message") == "already_running":
+                self.log("✅ 3. INICIAR ESTRATÉGIA: Estratégia já estava rodando ✓")
+            else:
+                self.log("✅ 3. INICIAR ESTRATÉGIA: Estratégia iniciada com sucesso ✓")
         else:
             self.log("❌ 3. INICIAR ESTRATÉGIA: FAILED")
         
