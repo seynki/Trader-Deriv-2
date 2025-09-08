@@ -227,15 +227,15 @@ class DerivConnectivityTester:
         return True, data
 
     async def test_websocket_ticks(self):
-        """Test 4: WebSocket /api/ws/ticks - testar por 60+ segundos para R_100,R_75,R_50 após correções"""
+        """Test WebSocket /api/ws/ticks - testar por 30 segundos para R_100,R_75,R_50 conforme review request"""
         self.log("\n" + "="*70)
-        self.log("TEST 4: WEBSOCKET STABILITY TESTING APÓS CORREÇÕES PARA R_100,R_75,R_50")
+        self.log("TEST: WEBSOCKET TICKS SPEED AND CONNECTIVITY")
         self.log("="*70)
-        self.log("📋 Objetivo: Conectar ao WebSocket /api/ws/ticks por 60+ segundos e verificar estabilidade")
+        self.log("📋 Objetivo: Conectar ao WebSocket /api/ws/ticks por 30 segundos e medir velocidade")
         self.log("📋 Símbolos: R_100,R_75,R_50 (conforme review request)")
-        self.log("📋 Verificar se correções resolveram problemas de 'received 1000 (OK)' e desconexões")
-        self.log("📋 Taxa esperada: > 0.5 msg/s conforme review request")
-        self.log("📋 Validar heartbeat messages e uptime tracking")
+        self.log("📋 Taxa esperada: ~0.57 msg/s conforme usuário mencionou")
+        self.log("📋 Verificar se conexão é estável (sem desconexões)")
+        self.log("📋 Contar quantos ticks são recebidos")
         
         ws_url = f"{self.ws_url}/api/ws/ticks?symbols=R_100,R_75,R_50"
         self.log(f"   WebSocket URL: {ws_url}")
@@ -246,7 +246,7 @@ class DerivConnectivityTester:
         connection_errors = 0
         symbols_detected = set()
         start_time = time.time()
-        test_duration = 60  # 60+ seconds as requested in review
+        test_duration = 30  # 30 seconds as requested in review
         
         try:
             self.log("🔌 Conectando ao WebSocket...")
