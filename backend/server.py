@@ -598,7 +598,19 @@ class DerivWS:
         logger.info("🏁 DerivWS main loop finished")
 
     async def _process_tick_message(self, data: Dict[str, Any]):
-        """Process tick messages with enhanced queue management"""
+        """Process tick messages with enhanced queue management and real-time rate tracking"""
+        
+        # Update message rate tracking
+        self.message_count += 1
+        self.last_message_time = time.time()
+        
+        # Update rate every 10 messages for better performance
+        if self.message_count % 10 == 0:
+            elapsed_time = self.last_message_time - self.start_time
+            if elapsed_time > 0:
+                self.current_message_rate = self.message_count / elapsed_time
+                self.last_rate_update = self.last_message_time
+        
         tick = data.get("tick", {})
         symbol = tick.get("symbol")
         if symbol and symbol in self.queues:
