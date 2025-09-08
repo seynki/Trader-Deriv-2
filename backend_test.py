@@ -651,24 +651,24 @@ class DerivConnectivityTester:
             self.log("⚠️  SOME INDIVIDUAL TESTS FAILED")
 
 async def main():
-    """Main function to run WebSocket stability tests after corrections"""
-    print("🚀 TESTE CRÍTICO: WebSocket Stability após Correções para R_100, R_75, R_50")
+    """Main function to run quick connectivity and tick speed tests"""
+    print("🚀 TESTE RÁPIDO DE CONECTIVIDADE E VELOCIDADE DOS TICKS")
     print("=" * 70)
-    print("📋 Executando teste completo de estabilidade do WebSocket após correções:")
-    print("   1. GET /api/deriv/status - verificar conectividade Deriv (connected=true, authenticated=true)")
-    print("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - conectar e monitorar por 60+ segundos")
-    print("   3. Verificar se recebe ticks consistentemente sem desconexões (erro 1006)")
-    print("   4. Contar mensagens e calcular taxa (deve ser >0.5 msg/s)")
-    print("   5. Verificar heartbeat messages e uptime tracking")
-    print("   6. Validar que não há mais erros 'received 1000 (OK)' nos logs")
-    print("   ⚠️  IMPORTANTE: Usar exatamente os símbolos R_100,R_75,R_50 como solicitado")
+    print("📋 Conforme solicitado na review request:")
+    print("   1. GET /api/deriv/status - verificar se está conectado e autenticado")
+    print("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - testar por 30 segundos:")
+    print("      - Medir taxa messages/segundo (deveria ser ~0.57 msg/s conforme usuário)")
+    print("      - Verificar se a conexão é estável (sem desconexões)")
+    print("      - Contar quantos ticks são recebidos")
+    print("   3. GET /api/ml/online/progress - verificar status do sistema de retreinamento automático")
+    print("   🎯 FOCO: velocidade dos ticks - usuário disse que deveria ser 0.57 msg/s mas não está funcionando")
     
     # Use the URL from frontend/.env as specified
     tester = DerivConnectivityTester()
     
     try:
-        # Run WebSocket stability tests
-        success, results = await tester.run_connectivity_tests()
+        # Run review request tests
+        success, results = await tester.run_review_request_tests()
         
         # Print summary
         tester.print_summary()
