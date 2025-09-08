@@ -1990,9 +1990,16 @@ class StrategyRunner:
                 logger.info(f"Daily loss limit reached: {self.today_pnl}")
                 return
 
-            # Get recent candles
-            df = await fetch_candles(self.config.symbol, self.config.granularity, self.config.candle_len)
-            if len(df) < 50:
+            # Get recent candles with enhanced error handling
+            try:
+                df = await fetch_candles(self.config.symbol, self.config.granularity, self.config.candle_len)
+                if len(df) < 50:
+                    logger.warning(f"Insufficient candles: {len(df)} < 50, skipping strategy execution")
+                    return
+                logger.debug(f"Successfully fetched {len(df)} candles for strategy analysis")
+            except Exception as candle_error:
+                logger.error(f"Failed to fetch candles for strategy: {candle_error}")
+                # Don't stop the strategy, just skip this iteration
                 return
 
             # Calculate technical indicators
