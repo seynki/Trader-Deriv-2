@@ -362,6 +362,13 @@ class DerivWS:
         self.last_successful_connection = 0
         self.connection_stability_threshold = 30  # seconds
         self.max_reconnect_delay = 30  # max delay between reconnects
+        
+        # Real-time message rate tracking
+        self.message_count = 0
+        self.start_time = time.time()
+        self.current_message_rate = 0.0
+        self.last_message_time = None
+        self.last_rate_update = time.time()
 
     def _build_uri(self) -> str:
         if not self.app_id:
