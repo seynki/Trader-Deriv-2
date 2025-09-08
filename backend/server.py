@@ -418,13 +418,13 @@ class DerivWS:
         try:
             self.ws = await websockets.connect(
                 uri,
-                # Ultra-stable WebSocket settings for Deriv API
-                ping_interval=20,    # More frequent pings - 20 seconds
-                ping_timeout=15,     # Longer pong timeout - 15 seconds  
-                max_size=16 * 1024**2,  # 16MB buffer for large responses
-                max_queue=500,       # Reasonable queue limit
-                compression=None,    # Disable compression for performance
-                close_timeout=10,    # Timeout for close handshake
+                # HIGH-SPEED WebSocket settings for maximum tick velocity
+                ping_interval=15,    # Frequent pings for connection health - 15 seconds  
+                ping_timeout=8,      # Quick pong timeout - 8 seconds for faster detection
+                max_size=32 * 1024**2,  # 32MB buffer for even larger responses
+                max_queue=1000,      # Higher queue limit for high-frequency data
+                compression=None,    # Disable compression for maximum performance
+                close_timeout=5,     # Shorter close timeout for faster reconnects
             )
             self.connected = True
             self.subscribed_symbols.clear()
