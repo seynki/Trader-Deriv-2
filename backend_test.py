@@ -524,32 +524,25 @@ class DerivConnectivityTester:
                 "status_code": status_code
             }
 
-    async def run_connectivity_tests(self):
-        """Run WebSocket stability tests as requested in Portuguese review"""
+    async def run_review_request_tests(self):
+        """Run specific tests as requested in Portuguese review"""
         self.log("\n" + "🚀" + "="*68)
-        self.log("TESTE CRÍTICO: WebSocket Stability após Correções para R_100, R_75, R_50")
+        self.log("TESTE RÁPIDO DE CONECTIVIDADE E VELOCIDADE DOS TICKS")
         self.log("🚀" + "="*68)
         self.log("📋 Conforme solicitado na review request:")
-        self.log("   1. GET /api/deriv/status - verificar conectividade Deriv (connected=true, authenticated=true)")
-        self.log("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - conectar e monitorar por 60+ segundos")
-        self.log("   3. Verificar se recebe ticks consistentemente sem desconexões (erro 1006)")
-        self.log("   4. Contar mensagens e calcular taxa (deve ser >0.5 msg/s)")
-        self.log("   5. Verificar heartbeat messages e uptime tracking")
-        self.log("   6. Validar que não há mais erros 'received 1000 (OK)' nos logs")
-        self.log("   ⚠️  CORREÇÕES IMPLEMENTADAS A VALIDAR:")
-        self.log("      - Ultra-stable WebSocket settings (ping_interval=20s, ping_timeout=15s)")
-        self.log("      - Enhanced connection stability tracking com consecutive_reconnects")
-        self.log("      - Smart reconnection logic com progressive backoff")
-        self.log("      - Improved error handling para código 1000 (normal closure)")
-        self.log("      - Data starvation detection (alerta se sem dados por 60s)")
-        self.log("      - Heartbeat a cada 25s com status detalhado")
-        self.log("      - Message processing statistics com logs a cada 50 mensagens")
+        self.log("   1. GET /api/deriv/status - verificar se está conectado e autenticado")
+        self.log("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - testar por 30 segundos:")
+        self.log("      - Medir taxa messages/segundo (deveria ser ~0.57 msg/s conforme usuário)")
+        self.log("      - Verificar se a conexão é estável (sem desconexões)")
+        self.log("      - Contar quantos ticks são recebidos")
+        self.log("   3. GET /api/ml/online/progress - verificar status do sistema de retreinamento automático")
+        self.log("   🎯 FOCO: velocidade dos ticks - usuário disse que deveria ser 0.57 msg/s mas não está funcionando")
         self.log(f"   🌐 Base URL: {self.base_url}")
         
         results = {}
         
-        # Test 1: Deriv Status - OBRIGATÓRIO
-        self.log("\n🔍 EXECUTANDO TESTE 1: GET /api/deriv/status")
+        # Test 1: Deriv Status - verificar conectividade
+        self.log("\n🔍 TESTE 1: GET /api/deriv/status")
         deriv_ok, deriv_data = self.test_deriv_status()
         results['deriv_status'] = deriv_ok
         
@@ -557,15 +550,15 @@ class DerivConnectivityTester:
             self.log("❌ CRITICAL: Deriv não conectado - não é possível testar WebSocket")
             return False, results
         
-        # Test 2: WebSocket Stability - TESTE PRINCIPAL
-        self.log("\n🔍 EXECUTANDO TESTE PRINCIPAL: WebSocket Stability (60s)")
+        # Test 2: WebSocket Ticks Speed - TESTE PRINCIPAL
+        self.log("\n🔍 TESTE 2: WebSocket /api/ws/ticks velocidade (30s)")
         websocket_ok, websocket_data = await self.test_websocket_ticks()
         results['websocket_ticks'] = websocket_ok
         
-        # Test 3: Backend Logs Check - Verificar se erros 'received 1000 (OK)' ainda aparecem
-        self.log("\n🔍 EXECUTANDO TESTE 3: Verificação de Logs para erros 'received 1000 (OK)'")
-        logs_ok, logs_data = self.check_backend_logs()
-        results['backend_logs'] = logs_ok
+        # Test 3: Online Learning Progress - verificar retreinamento automático
+        self.log("\n🔍 TESTE 3: GET /api/ml/online/progress")
+        online_learning_ok, online_learning_data = self.test_online_learning_progress()
+        results['online_learning'] = online_learning_ok
         
         # Final Summary
         self.log("\n" + "🏁" + "="*68)
