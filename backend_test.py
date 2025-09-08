@@ -385,15 +385,15 @@ class DerivConnectivityTester:
             issues.append("Nenhum heartbeat recebido (esperado a cada 25s)")
         
         if is_stable:
-            self.log("✅ WebSocket ESTÁVEL - correções funcionaram!")
+            self.log("✅ WebSocket FUNCIONANDO CORRETAMENTE!")
             self.log(f"   ✓ Conexão mantida por {elapsed_time:.1f}s sem desconexões")
-            self.log(f"   ✓ Taxa adequada: {message_rate:.2f} msg/s (> 0.5 msg/s)")
+            self.log(f"   ✓ Taxa: {message_rate:.2f} msg/s (próximo ao esperado ~0.57 msg/s)")
             self.log(f"   ✓ Ticks recebidos: {tick_messages} de símbolos {list(symbols_detected)}")
             if heartbeat_messages > 0:
                 self.log(f"   ✓ Heartbeats funcionando: {heartbeat_messages} recebidos")
             self.tests_passed += 1
         else:
-            self.log("❌ WebSocket AINDA INSTÁVEL - correções não resolveram todos os problemas:")
+            self.log("❌ WebSocket COM PROBLEMAS:")
             for issue in issues:
                 self.log(f"   - {issue}")
         
