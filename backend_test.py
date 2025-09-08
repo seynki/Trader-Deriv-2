@@ -562,7 +562,7 @@ class DerivConnectivityTester:
         
         # Final Summary
         self.log("\n" + "🏁" + "="*68)
-        self.log("RESULTADO FINAL: WebSocket Stability após Correções")
+        self.log("RESULTADO FINAL: Teste Rápido de Conectividade e Velocidade dos Ticks")
         self.log("🏁" + "="*68)
         
         if deriv_ok:
@@ -581,57 +581,59 @@ class DerivConnectivityTester:
             symbols = websocket_data.get('symbols_detected', []) if isinstance(websocket_data, dict) else []
             heartbeats = websocket_data.get('heartbeat_messages', 0) if isinstance(websocket_data, dict) else 0
             
-            self.log(f"✅ 2. WebSocket /api/ws/ticks: ESTÁVEL por {elapsed:.1f}s ✓")
+            self.log(f"✅ 2. WebSocket /api/ws/ticks: FUNCIONANDO por {elapsed:.1f}s ✓")
             self.log(f"   📊 {messages} mensagens ({ticks} ticks, {heartbeats} heartbeats)")
-            self.log(f"   📈 Taxa: {rate:.2f} msg/s (> 0.5 msg/s ✓)")
+            self.log(f"   📈 Taxa: {rate:.2f} msg/s (esperado ~0.57 msg/s)")
             self.log(f"   🎯 Símbolos: {symbols}")
+            
+            # Check if rate is close to expected 0.57 msg/s
+            if 0.4 <= rate <= 0.8:
+                self.log(f"   ✅ Taxa dentro do esperado (~0.57 msg/s)")
+            else:
+                self.log(f"   ⚠️  Taxa diferente do esperado (0.57 msg/s)")
         else:
             issues = websocket_data.get('issues', []) if isinstance(websocket_data, dict) else []
             elapsed = websocket_data.get('elapsed_time', 0) if isinstance(websocket_data, dict) else 0
             rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
             
-            self.log(f"❌ 2. WebSocket /api/ws/ticks: AINDA INSTÁVEL após {elapsed:.1f}s")
-            self.log(f"   📉 Taxa: {rate:.2f} msg/s (< 0.5 msg/s)")
+            self.log(f"❌ 2. WebSocket /api/ws/ticks: PROBLEMAS após {elapsed:.1f}s")
+            self.log(f"   📉 Taxa: {rate:.2f} msg/s (esperado ~0.57 msg/s)")
             self.log(f"   🚨 Problemas detectados: {len(issues)}")
             for issue in issues[:3]:  # Show first 3 issues
                 self.log(f"      - {issue}")
         
-        if logs_ok:
-            self.log("✅ 3. Backend Logs: Sem erros 'received 1000 (OK)' detectados ✓")
+        if online_learning_ok:
+            active_models = online_learning_data.get('active_models', 0) if isinstance(online_learning_data, dict) else 0
+            total_updates = online_learning_data.get('total_updates', 0) if isinstance(online_learning_data, dict) else 0
+            self.log(f"✅ 3. GET /api/ml/online/progress: {active_models} modelo(s) ativo(s), {total_updates} update(s) ✓")
         else:
-            errors_found = logs_data.get('websocket_errors_found', 0) if isinstance(logs_data, dict) else 0
-            self.log(f"❌ 3. Backend Logs: {errors_found} erro(s) 'received 1000 (OK)' ainda detectados")
+            self.log("❌ 3. GET /api/ml/online/progress: FAILED")
         
         # Overall assessment based on review requirements
-        websocket_stable = websocket_ok
-        no_websocket_errors = logs_ok
+        websocket_working = websocket_ok
         deriv_connected = deriv_ok
+        online_learning_working = online_learning_ok
         
-        if websocket_stable and no_websocket_errors and deriv_connected:
-            self.log("\n🎉 CORREÇÕES FUNCIONARAM! WebSocket estável para R_100,R_75,R_50")
+        if websocket_working and deriv_connected and online_learning_working:
+            self.log("\n🎉 TODOS OS TESTES PASSARAM!")
             self.log("📋 Validações bem-sucedidas:")
             self.log("   ✅ Deriv conectado e autenticado")
-            self.log("   ✅ WebSocket mantém conexão estável por 60+ segundos")
-            self.log("   ✅ Taxa de mensagens > 0.5 msg/s")
-            self.log("   ✅ Ticks recebidos consistentemente de R_100,R_75,R_50")
-            self.log("   ✅ Heartbeats funcionando")
-            self.log("   ✅ Sem erros 'received 1000 (OK)' nos logs")
-            self.log("📈 RESULTADO: Taxa melhorou significativamente vs. versão anterior (0.03 msg/s)")
-        elif deriv_connected and websocket_stable:
-            self.log("\n🎯 CORREÇÕES PARCIALMENTE FUNCIONARAM")
-            self.log("   ✅ WebSocket estável e funcionando")
-            if not no_websocket_errors:
-                self.log("   ⚠️  Ainda há alguns erros 'received 1000 (OK)' nos logs")
-                self.log("   📋 RECOMENDAÇÃO: Monitorar logs para verificar se erros persistem")
+            self.log("   ✅ WebSocket funcionando com taxa adequada")
+            self.log("   ✅ Sistema de retreinamento automático ativo")
+        elif deriv_connected and websocket_working:
+            self.log("\n🎯 CONECTIVIDADE OK, MAS VERIFICAR ONLINE LEARNING")
+            self.log("   ✅ Deriv e WebSocket funcionando")
+            if not online_learning_working:
+                self.log("   ⚠️  Sistema de retreinamento automático com problemas")
         else:
-            self.log("\n❌ CORREÇÕES NÃO RESOLVERAM PROBLEMAS FUNDAMENTAIS")
+            self.log("\n❌ PROBLEMAS DETECTADOS")
             if not deriv_connected:
                 self.log("   ❌ Deriv não conectado")
-            if not websocket_stable:
-                self.log("   ❌ WebSocket ainda instável")
-                self.log("   📋 RECOMENDAÇÃO CRÍTICA: Usar WEBSEARCH TOOL para investigar causa raiz")
+            if not websocket_working:
+                self.log("   ❌ WebSocket com problemas de velocidade/estabilidade")
+                self.log("   📋 FOCO: usuário reportou que deveria ser 0.57 msg/s mas às vezes para")
         
-        return websocket_stable and deriv_connected, results
+        return websocket_working and deriv_connected, results
 
     def print_summary(self):
         """Print test summary"""
