@@ -1658,10 +1658,10 @@ async def websocket_ticks(websocket: WebSocket, symbols: str = "R_100,R_75,R_50"
             logger.warning(f"Failed to send initial confirmation: {e}")
             connection_active = False
         
-        # Ultra-stable message processing loop
+        # HIGH-SPEED message processing loop optimized for tick velocity
         last_heartbeat = time.time()
-        heartbeat_interval = 25  # Send heartbeat every 25 seconds
-        no_data_threshold = 60   # Alert if no data for 60 seconds
+        heartbeat_interval = 20  # More frequent heartbeat every 20 seconds for faster feedback
+        no_data_threshold = 45   # Faster alert if no data for 45 seconds
         last_tick_time = time.time()
         
         while connection_active:
