@@ -900,17 +900,21 @@ class DerivConnectivityTester:
             self.log("⚠️  SOME INDIVIDUAL TESTS FAILED")
 
 async def main():
-    """Main function to run quick connectivity and tick speed tests"""
-    print("🚀 TESTE RÁPIDO DE CONECTIVIDADE E VELOCIDADE DOS TICKS")
+    """Main function to run Strategy Runner continuity tests"""
+    print("🚀 TESTE DE CONTINUIDADE DO BOT TRADING - PRIORIDADE MÁXIMA")
     print("=" * 70)
     print("📋 Conforme solicitado na review request:")
-    print("   1. GET /api/deriv/status - verificar se está conectado e autenticado")
-    print("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - testar por 30 segundos:")
-    print("      - Medir taxa messages/segundo (deveria ser ~0.57 msg/s conforme usuário)")
-    print("      - Verificar se a conexão é estável (sem desconexões)")
-    print("      - Contar quantos ticks são recebidos")
-    print("   3. GET /api/ml/online/progress - verificar status do sistema de retreinamento automático")
-    print("   🎯 FOCO: velocidade dos ticks - usuário disse que deveria ser 0.57 msg/s mas não está funcionando")
+    print("   OBJETIVO: Validar que o Strategy Runner funciona infinitamente sem parar automaticamente")
+    print("   PROBLEMA: Bot para após um contrato")
+    print("   TESTES:")
+    print("   1. GET /api/deriv/status (connected=true, authenticated=true)")
+    print("   2. GET /api/strategy/status (verificar estado inicial)")
+    print("   3. POST /api/strategy/start com payload padrão")
+    print("   4. Monitorar GET /api/strategy/status por 90 segundos:")
+    print("      - Verificar que running=true permanece true")
+    print("      - Verificar que last_run_at continua atualizando")
+    print("   5. GET /api/ml/online/progress (verificar modelos ativos)")
+    print("   🎯 FOCO: Provar que o bot funciona INFINITAMENTE e nunca para sozinho")
     
     # Use the URL from frontend/.env as specified
     tester = DerivConnectivityTester()
