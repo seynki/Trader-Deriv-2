@@ -117,6 +117,7 @@ class DerivStatus(BaseModel):
     environment: str = "DEMO"
     symbols: List[str] = Field(default_factory=list)
     last_heartbeat: Optional[int] = None
+    tick_stats: Optional[Dict[str, Any]] = None
 
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
