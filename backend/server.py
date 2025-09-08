@@ -2164,50 +2164,106 @@ _jobs: Dict[str, Dict[str, Any]] = {}
 
 # Fetch candles helper
 async def fetch_candles(symbol: str, granularity: int, count: int) -> pd.DataFrame:
-    """Fetch candles from Deriv API"""
-    if not _deriv.connected:
-        raise RuntimeError("Deriv not connected")
+    """Fetch candles from Deriv API with retry logic and connection health checks"""
+    max_retries = 3
+    retry_delay = 5  # seconds
     
-    req_id = int(time.time() * 1000)
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
+    for attempt in range(max_retries):
+        try:
+            # Check connection health before attempt
+            if not _deriv.connected:
+                logger.warning(f"Deriv not connected (attempt {attempt+1}/{max_retries}), trying to reconnect...")
+                await asyncio.sleep(retry_delay)
+                continue
+            
+            # Health check: ensure WebSocket is responsive
+            try:
+                # Send a simple ping to test connectivity
+                test_req_id = int(time.time() * 1000) + 999999
+                test_fut = asyncio.get_running_loop().create_future()
+                _deriv.pending[test_req_id] = test_fut
+                
+                await _deriv._send({"ping": 1, "req_id": test_req_id})
+                await asyncio.wait_for(test_fut, timeout=5)  # Short timeout for ping
+                logger.debug("WebSocket health check passed")
+            except Exception as ping_error:
+                logger.warning(f"WebSocket health check failed (attempt {attempt+1}/{max_retries}): {ping_error}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    continue
+                else:
+                    raise RuntimeError(f"WebSocket unhealthy after {max_retries} attempts: {ping_error}")
+            
+            # Proceed with candles request
+            req_id = int(time.time() * 1000)
+            fut = asyncio.get_running_loop().create_future()
+            _deriv.pending[req_id] = fut
+            
+            await _deriv._send({
+                "ticks_history": symbol,
+                "adjust_start_time": 1,
+                "count": count,
+                "end": "latest", 
+                "start": 1,
+                "style": "candles",
+                "granularity": granularity,
+                "req_id": req_id,
+            })
+            
+            try:
+                data = await asyncio.wait_for(fut, timeout=45)  # Increased timeout
+            except asyncio.TimeoutError:
+                _deriv.pending.pop(req_id, None)
+                if attempt < max_retries - 1:
+                    logger.warning(f"Timeout fetching candles (attempt {attempt+1}/{max_retries}), retrying...")
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+                else:
+                    raise RuntimeError(f"Timeout fetching candles after {max_retries} attempts")
+            
+            if data.get("error"):
+                error_msg = data['error'].get('message', 'unknown')
+                if attempt < max_retries - 1:
+                    logger.warning(f"Deriv error (attempt {attempt+1}/{max_retries}): {error_msg}, retrying...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    raise RuntimeError(f"Deriv error: {error_msg}")
+            
+            candles = data.get("candles") or []
+            if not candles:
+                if attempt < max_retries - 1:
+                    logger.warning(f"No candles received (attempt {attempt+1}/{max_retries}), retrying...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    raise RuntimeError("No candles received after all retry attempts")
+            
+            # Success! Process the candles
+            records = []
+            for candle in candles:
+                records.append({
+                    "open": float(candle["open"]),
+                    "high": float(candle["high"]), 
+                    "low": float(candle["low"]),
+                    "close": float(candle["close"]),
+                    "volume": int(candle.get("volume", 0)),
+                    "time": int(candle["epoch"])
+                })
+            
+            logger.debug(f"Successfully fetched {len(records)} candles for {symbol}")
+            return pd.DataFrame(records)
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Fetch candles error (attempt {attempt+1}/{max_retries}): {e}, retrying...")
+                await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                continue
+            else:
+                logger.error(f"Failed to fetch candles after {max_retries} attempts: {e}")
+                raise RuntimeError(f"Failed to fetch candles: {e}")
     
-    await _deriv._send({
-        "ticks_history": symbol,
-        "adjust_start_time": 1,
-        "count": count,
-        "end": "latest", 
-        "start": 1,
-        "style": "candles",
-        "granularity": granularity,
-        "req_id": req_id,
-    })
-    
-    try:
-        data = await asyncio.wait_for(fut, timeout=30)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise RuntimeError("Timeout fetching candles")
-    
-    if data.get("error"):
-        raise RuntimeError(f"Deriv error: {data['error'].get('message', 'unknown')}")
-    
-    candles = data.get("candles") or []
-    if not candles:
-        raise RuntimeError("No candles received")
-    
-    records = []
-    for candle in candles:
-        records.append({
-            "open": float(candle["open"]),
-            "high": float(candle["high"]), 
-            "low": float(candle["low"]),
-            "close": float(candle["close"]),
-            "volume": int(candle.get("volume", 0)),
-            "time": int(candle["epoch"])
-        })
-    
-    return pd.DataFrame(records)
+    raise RuntimeError("Unexpected exit from retry loop")
 
 async def _fetch_deriv_data_for_ml(symbol: str, timeframe: str, count: int) -> pd.DataFrame:
     """Fetch data from Deriv for ML training"""
