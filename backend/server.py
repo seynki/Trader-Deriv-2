@@ -1818,7 +1818,7 @@ async def websocket_contract(websocket: WebSocket, contract_id: int):
         # Relay contract updates
         while True:
             try:
-                message = await asyncio.wait_for(queue.get(), timeout=1.0)
+                message = await asyncio.wait_for(queue.get(), timeout=0.5)  # Faster timeout for higher message throughput
                 await websocket.send_json(message)
             except asyncio.TimeoutError:
                 # Send heartbeat
