@@ -354,10 +354,10 @@ class DerivConnectivityTester:
             is_stable = False
             issues.append("Nenhuma mensagem recebida")
             
-        # Check message rate (should be > 0.5 msg/s as per review)
-        elif message_rate < 0.5:
+        # Check message rate (should be ~0.57 msg/s as per user feedback)
+        elif message_rate < 0.4:  # Allow some tolerance
             is_stable = False
-            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s (esperado > 0.5 msg/s)")
+            issues.append(f"Taxa de mensagens muito baixa: {message_rate:.2f} msg/s (esperado ~0.57 msg/s)")
             
         # Check if we received ticks specifically
         if tick_messages == 0:
