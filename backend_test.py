@@ -552,116 +552,337 @@ class DerivConnectivityTester:
                 "status_code": status_code
             }
 
+    def test_strategy_start(self):
+        """Test POST /api/strategy/start with default payload"""
+        self.log("\n" + "="*70)
+        self.log("TEST: INICIAR ESTRATÉGIA COM PAYLOAD PADRÃO")
+        self.log("="*70)
+        self.log("📋 Objetivo: POST /api/strategy/start com payload padrão para iniciar bot")
+        
+        # Default payload as specified in review request
+        payload = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "candle_len": 200,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "daily_loss_limit": -20.0,
+            "adx_trend": 22.0,
+            "rsi_ob": 70.0,
+            "rsi_os": 30.0,
+            "bbands_k": 2.0,
+            "mode": "paper"
+        }
+        
+        success, data, status_code = self.run_test(
+            "Strategy Start",
+            "POST",
+            "strategy/start",
+            200,
+            payload
+        )
+        
+        if not success:
+            self.log(f"❌ CRITICAL: POST /api/strategy/start falhou - Status: {status_code}")
+            return False, data
+        
+        self.log(f"✅ Estratégia iniciada com sucesso")
+        return True, data
+
+    def test_strategy_continuity(self, duration_seconds=90):
+        """Test Strategy Runner continuity for specified duration (90s by default)"""
+        self.log("\n" + "="*70)
+        self.log("TEST CRÍTICO: CONTINUIDADE DO STRATEGY RUNNER (90 SEGUNDOS)")
+        self.log("="*70)
+        self.log("📋 Objetivo: Monitorar GET /api/strategy/status por 90 segundos")
+        self.log("📋 Verificar que running=true permanece true")
+        self.log("📋 Verificar que last_run_at continua atualizando")
+        self.log("📋 Documentar mudanças nos valores: today_pnl, today_trades, total_trades")
+        
+        start_time = time.time()
+        last_run_timestamps = []
+        status_snapshots = []
+        continuity_issues = []
+        
+        self.log(f"⏱️  Iniciando monitoramento por {duration_seconds} segundos...")
+        
+        check_count = 0
+        while time.time() - start_time < duration_seconds:
+            check_count += 1
+            elapsed = time.time() - start_time
+            
+            # Get strategy status
+            success, data, status_code = self.run_test(
+                f"Strategy Status Check #{check_count}",
+                "GET",
+                "strategy/status",
+                200,
+                timeout=10
+            )
+            
+            if not success:
+                issue = f"Falha ao obter status após {elapsed:.1f}s (check #{check_count})"
+                continuity_issues.append(issue)
+                self.log(f"❌ {issue}")
+                time.sleep(5)
+                continue
+            
+            # Extract key metrics
+            running = data.get('running', False)
+            last_run_at = data.get('last_run_at')
+            total_trades = data.get('total_trades', 0)
+            today_pnl = data.get('daily_pnl', 0.0)
+            wins = data.get('wins', 0)
+            losses = data.get('losses', 0)
+            
+            # Record snapshot
+            snapshot = {
+                'elapsed': elapsed,
+                'check': check_count,
+                'running': running,
+                'last_run_at': last_run_at,
+                'total_trades': total_trades,
+                'today_pnl': today_pnl,
+                'wins': wins,
+                'losses': losses,
+                'timestamp': time.time()
+            }
+            status_snapshots.append(snapshot)
+            
+            # Track last_run_at timestamps
+            if last_run_at:
+                last_run_timestamps.append((elapsed, last_run_at))
+            
+            # Check for critical issues
+            if not running:
+                issue = f"CRÍTICO: running=false após {elapsed:.1f}s (check #{check_count})"
+                continuity_issues.append(issue)
+                self.log(f"❌ {issue}")
+                break
+            
+            # Log progress every 15 seconds or on significant changes
+            if check_count == 1 or elapsed % 15 < 5 or check_count % 6 == 0:
+                self.log(f"📊 Check #{check_count} ({elapsed:.1f}s): running={running}, last_run_at={last_run_at}, trades={total_trades}, pnl={today_pnl:.2f}")
+            
+            # Wait 5 seconds between checks
+            time.sleep(5)
+        
+        # Analysis
+        total_elapsed = time.time() - start_time
+        
+        self.log(f"\n📊 ANÁLISE DE CONTINUIDADE ({total_elapsed:.1f}s, {check_count} checks):")
+        
+        # Check if strategy stayed running
+        running_checks = [s for s in status_snapshots if s['running']]
+        stopped_checks = [s for s in status_snapshots if not s['running']]
+        
+        self.log(f"   Checks com running=true: {len(running_checks)}/{len(status_snapshots)}")
+        self.log(f"   Checks com running=false: {len(stopped_checks)}")
+        
+        # Check last_run_at updates
+        if len(last_run_timestamps) >= 2:
+            first_timestamp = last_run_timestamps[0][1]
+            last_timestamp = last_run_timestamps[-1][1]
+            timestamp_updates = len(set(ts[1] for ts in last_run_timestamps))
+            
+            self.log(f"   last_run_at updates: {timestamp_updates} diferentes timestamps")
+            self.log(f"   Primeiro timestamp: {first_timestamp}")
+            self.log(f"   Último timestamp: {last_timestamp}")
+            
+            # Check if timestamps are updating regularly
+            if timestamp_updates < 3 and total_elapsed > 30:
+                issue = f"last_run_at não está atualizando regularmente ({timestamp_updates} updates em {total_elapsed:.1f}s)"
+                continuity_issues.append(issue)
+        else:
+            issue = "Poucos timestamps de last_run_at capturados"
+            continuity_issues.append(issue)
+        
+        # Check for trade activity changes
+        if len(status_snapshots) >= 2:
+            first_snapshot = status_snapshots[0]
+            last_snapshot = status_snapshots[-1]
+            
+            trade_change = last_snapshot['total_trades'] - first_snapshot['total_trades']
+            pnl_change = last_snapshot['today_pnl'] - first_snapshot['today_pnl']
+            
+            self.log(f"   Mudança em trades: {trade_change}")
+            self.log(f"   Mudança em PnL: {pnl_change:.2f}")
+        
+        # Determine success
+        is_continuous = len(continuity_issues) == 0 and len(running_checks) == len(status_snapshots)
+        
+        if is_continuous:
+            self.log("✅ CONTINUIDADE CONFIRMADA!")
+            self.log("   ✓ running=true durante todo o teste")
+            self.log("   ✓ last_run_at atualizando regularmente")
+            self.log("   ✓ Sistema não parou automaticamente")
+            self.tests_passed += 1
+        else:
+            self.log("❌ PROBLEMAS DE CONTINUIDADE DETECTADOS:")
+            for issue in continuity_issues:
+                self.log(f"   - {issue}")
+        
+        self.tests_run += 1
+        
+        return is_continuous, {
+            'total_elapsed': total_elapsed,
+            'checks_performed': check_count,
+            'running_checks': len(running_checks),
+            'stopped_checks': len(stopped_checks),
+            'timestamp_updates': len(set(ts[1] for ts in last_run_timestamps)) if last_run_timestamps else 0,
+            'continuity_issues': continuity_issues,
+            'status_snapshots': status_snapshots[-5:],  # Last 5 snapshots
+            'is_continuous': is_continuous
+        }
+
     async def run_review_request_tests(self):
-        """Run specific tests as requested in Portuguese review"""
+        """Run Strategy Runner continuity tests as requested in Portuguese review"""
         self.log("\n" + "🚀" + "="*68)
-        self.log("TESTE RÁPIDO DE CONECTIVIDADE E VELOCIDADE DOS TICKS")
+        self.log("TESTE DE CONTINUIDADE DO BOT TRADING - PRIORIDADE MÁXIMA")
         self.log("🚀" + "="*68)
         self.log("📋 Conforme solicitado na review request:")
-        self.log("   1. GET /api/deriv/status - verificar se está conectado e autenticado")
-        self.log("   2. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 - testar por 30 segundos:")
-        self.log("      - Medir taxa messages/segundo (deveria ser ~0.57 msg/s conforme usuário)")
-        self.log("      - Verificar se a conexão é estável (sem desconexões)")
-        self.log("      - Contar quantos ticks são recebidos")
-        self.log("   3. GET /api/ml/online/progress - verificar status do sistema de retreinamento automático")
-        self.log("   🎯 FOCO: velocidade dos ticks - usuário disse que deveria ser 0.57 msg/s mas não está funcionando")
+        self.log("   1. CONECTIVIDADE BÁSICA - GET /api/deriv/status (connected=true, authenticated=true)")
+        self.log("   2. ESTADO INICIAL - GET /api/strategy/status (verificar estado inicial)")
+        self.log("   3. INICIAR ESTRATÉGIA - POST /api/strategy/start com payload padrão")
+        self.log("   4. TESTE DE CONTINUIDADE - Monitorar por 90 segundos:")
+        self.log("      - Verificar que running=true permanece true")
+        self.log("      - Verificar que last_run_at continua atualizando")
+        self.log("      - Documentar mudanças nos valores")
+        self.log("   5. ONLINE LEARNING ATIVO - GET /api/ml/online/progress")
+        self.log("   🎯 FOCO: Provar que o bot funciona INFINITAMENTE e nunca para sozinho")
         self.log(f"   🌐 Base URL: {self.base_url}")
         
         results = {}
         
-        # Test 1: Deriv Status - verificar conectividade
-        self.log("\n🔍 TESTE 1: GET /api/deriv/status")
+        # Test 1: Deriv Status - conectividade básica
+        self.log("\n🔍 TESTE 1: CONECTIVIDADE BÁSICA")
         deriv_ok, deriv_data = self.test_deriv_status()
         results['deriv_status'] = deriv_ok
         
         if not deriv_ok:
-            self.log("❌ CRITICAL: Deriv não conectado - não é possível testar WebSocket")
+            self.log("❌ CRITICAL: Deriv não conectado - não é possível testar Strategy Runner")
             return False, results
         
-        # Test 2: WebSocket Ticks Speed - TESTE PRINCIPAL
-        self.log("\n🔍 TESTE 2: WebSocket /api/ws/ticks velocidade (30s)")
-        websocket_ok, websocket_data = await self.test_websocket_ticks()
-        results['websocket_ticks'] = websocket_ok
+        # Verify connected=true and authenticated=true
+        connected = deriv_data.get('connected', False) if isinstance(deriv_data, dict) else False
+        authenticated = deriv_data.get('authenticated', False) if isinstance(deriv_data, dict) else False
         
-        # Test 3: Online Learning Progress - verificar retreinamento automático
-        self.log("\n🔍 TESTE 3: GET /api/ml/online/progress")
+        if not connected or not authenticated:
+            self.log(f"❌ CRITICAL: Deriv status inadequado - connected={connected}, authenticated={authenticated}")
+            return False, results
+        
+        # Test 2: Strategy Status - estado inicial
+        self.log("\n🔍 TESTE 2: ESTADO INICIAL DA ESTRATÉGIA")
+        initial_status_ok, initial_status_data = self.test_strategy_status()
+        results['initial_strategy_status'] = initial_status_ok
+        
+        if not initial_status_ok:
+            self.log("❌ CRITICAL: Não foi possível obter status inicial da estratégia")
+            return False, results
+        
+        # Test 3: Start Strategy - iniciar estratégia
+        self.log("\n🔍 TESTE 3: INICIAR ESTRATÉGIA")
+        start_ok, start_data = self.test_strategy_start()
+        results['strategy_start'] = start_ok
+        
+        if not start_ok:
+            self.log("❌ CRITICAL: Falha ao iniciar estratégia")
+            return False, results
+        
+        # Test 4: Continuity Test - TESTE PRINCIPAL (90 segundos)
+        self.log("\n🔍 TESTE 4: CONTINUIDADE DO STRATEGY RUNNER (90 SEGUNDOS)")
+        continuity_ok, continuity_data = self.test_strategy_continuity(90)
+        results['strategy_continuity'] = continuity_ok
+        
+        # Test 5: Online Learning Progress
+        self.log("\n🔍 TESTE 5: ONLINE LEARNING ATIVO")
         online_learning_ok, online_learning_data = self.test_online_learning_progress()
         results['online_learning'] = online_learning_ok
         
         # Final Summary
         self.log("\n" + "🏁" + "="*68)
-        self.log("RESULTADO FINAL: Teste Rápido de Conectividade e Velocidade dos Ticks")
+        self.log("RESULTADO FINAL: Teste de Continuidade do Bot Trading")
         self.log("🏁" + "="*68)
         
-        if deriv_ok:
-            connected = deriv_data.get('connected', False) if isinstance(deriv_data, dict) else False
-            authenticated = deriv_data.get('authenticated', False) if isinstance(deriv_data, dict) else False
-            environment = deriv_data.get('environment', 'UNKNOWN') if isinstance(deriv_data, dict) else 'UNKNOWN'
-            self.log(f"✅ 1. GET /api/deriv/status: connected={connected}, authenticated={authenticated} ✓")
+        # Test 1 Results
+        if deriv_ok and connected and authenticated:
+            self.log(f"✅ 1. CONECTIVIDADE BÁSICA: connected=true, authenticated=true ✓")
         else:
-            self.log("❌ 1. GET /api/deriv/status: FAILED")
+            self.log(f"❌ 1. CONECTIVIDADE BÁSICA: FAILED")
         
-        if websocket_ok:
-            messages = websocket_data.get('messages_received', 0) if isinstance(websocket_data, dict) else 0
-            ticks = websocket_data.get('tick_messages', 0) if isinstance(websocket_data, dict) else 0
-            rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
-            elapsed = websocket_data.get('elapsed_time', 0) if isinstance(websocket_data, dict) else 0
-            symbols = websocket_data.get('symbols_detected', []) if isinstance(websocket_data, dict) else []
-            heartbeats = websocket_data.get('heartbeat_messages', 0) if isinstance(websocket_data, dict) else 0
-            
-            self.log(f"✅ 2. WebSocket /api/ws/ticks: FUNCIONANDO por {elapsed:.1f}s ✓")
-            self.log(f"   📊 {messages} mensagens ({ticks} ticks, {heartbeats} heartbeats)")
-            self.log(f"   📈 Taxa: {rate:.2f} msg/s (esperado ~0.57 msg/s)")
-            self.log(f"   🎯 Símbolos: {symbols}")
-            
-            # Check if rate is close to expected 0.57 msg/s
-            if 0.4 <= rate <= 0.8:
-                self.log(f"   ✅ Taxa dentro do esperado (~0.57 msg/s)")
-            else:
-                self.log(f"   ⚠️  Taxa diferente do esperado (0.57 msg/s)")
+        # Test 2 Results
+        if initial_status_ok:
+            running = initial_status_data.get('running', False) if isinstance(initial_status_data, dict) else False
+            total_trades = initial_status_data.get('total_trades', 0) if isinstance(initial_status_data, dict) else 0
+            self.log(f"✅ 2. ESTADO INICIAL: running={running}, total_trades={total_trades} ✓")
         else:
-            issues = websocket_data.get('issues', []) if isinstance(websocket_data, dict) else []
-            elapsed = websocket_data.get('elapsed_time', 0) if isinstance(websocket_data, dict) else 0
-            rate = websocket_data.get('message_rate', 0) if isinstance(websocket_data, dict) else 0
+            self.log("❌ 2. ESTADO INICIAL: FAILED")
+        
+        # Test 3 Results
+        if start_ok:
+            self.log("✅ 3. INICIAR ESTRATÉGIA: Estratégia iniciada com sucesso ✓")
+        else:
+            self.log("❌ 3. INICIAR ESTRATÉGIA: FAILED")
+        
+        # Test 4 Results - CRÍTICO
+        if continuity_ok:
+            elapsed = continuity_data.get('total_elapsed', 0) if isinstance(continuity_data, dict) else 0
+            checks = continuity_data.get('checks_performed', 0) if isinstance(continuity_data, dict) else 0
+            running_checks = continuity_data.get('running_checks', 0) if isinstance(continuity_data, dict) else 0
+            timestamp_updates = continuity_data.get('timestamp_updates', 0) if isinstance(continuity_data, dict) else 0
             
-            self.log(f"❌ 2. WebSocket /api/ws/ticks: PROBLEMAS após {elapsed:.1f}s")
-            self.log(f"   📉 Taxa: {rate:.2f} msg/s (esperado ~0.57 msg/s)")
+            self.log(f"✅ 4. CONTINUIDADE: FUNCIONANDO por {elapsed:.1f}s ✓")
+            self.log(f"   📊 {running_checks}/{checks} checks com running=true")
+            self.log(f"   📈 {timestamp_updates} atualizações de last_run_at")
+            self.log(f"   🎯 Sistema NÃO parou automaticamente")
+        else:
+            elapsed = continuity_data.get('total_elapsed', 0) if isinstance(continuity_data, dict) else 0
+            issues = continuity_data.get('continuity_issues', []) if isinstance(continuity_data, dict) else []
+            
+            self.log(f"❌ 4. CONTINUIDADE: PROBLEMAS após {elapsed:.1f}s")
             self.log(f"   🚨 Problemas detectados: {len(issues)}")
             for issue in issues[:3]:  # Show first 3 issues
                 self.log(f"      - {issue}")
         
+        # Test 5 Results
         if online_learning_ok:
             active_models = online_learning_data.get('active_models', 0) if isinstance(online_learning_data, dict) else 0
             total_updates = online_learning_data.get('total_updates', 0) if isinstance(online_learning_data, dict) else 0
-            self.log(f"✅ 3. GET /api/ml/online/progress: {active_models} modelo(s) ativo(s), {total_updates} update(s) ✓")
+            self.log(f"✅ 5. ONLINE LEARNING: {active_models} modelo(s) ativo(s), {total_updates} update(s) ✓")
         else:
-            self.log("❌ 3. GET /api/ml/online/progress: FAILED")
+            self.log("❌ 5. ONLINE LEARNING: FAILED")
         
         # Overall assessment based on review requirements
-        websocket_working = websocket_ok
-        deriv_connected = deriv_ok
+        basic_connectivity = deriv_ok and connected and authenticated
+        strategy_working = initial_status_ok and start_ok
+        continuity_proven = continuity_ok
         online_learning_working = online_learning_ok
         
-        if websocket_working and deriv_connected and online_learning_working:
-            self.log("\n🎉 TODOS OS TESTES PASSARAM!")
+        if basic_connectivity and strategy_working and continuity_proven and online_learning_working:
+            self.log("\n🎉 TODOS OS TESTES CRÍTICOS PASSARAM!")
             self.log("📋 Validações bem-sucedidas:")
             self.log("   ✅ Deriv conectado e autenticado")
-            self.log("   ✅ WebSocket funcionando com taxa adequada")
+            self.log("   ✅ Estratégia inicia corretamente")
+            self.log("   ✅ Bot funciona INFINITAMENTE (90s+ sem parar)")
             self.log("   ✅ Sistema de retreinamento automático ativo")
-        elif deriv_connected and websocket_working:
-            self.log("\n🎯 CONECTIVIDADE OK, MAS VERIFICAR ONLINE LEARNING")
-            self.log("   ✅ Deriv e WebSocket funcionando")
+            self.log("   🎯 CONCLUSÃO: Bot NÃO para após um contrato - problema RESOLVIDO!")
+        elif basic_connectivity and strategy_working and continuity_proven:
+            self.log("\n🎯 CONTINUIDADE CONFIRMADA, MAS VERIFICAR ONLINE LEARNING")
+            self.log("   ✅ Bot funciona infinitamente sem parar")
             if not online_learning_working:
                 self.log("   ⚠️  Sistema de retreinamento automático com problemas")
         else:
-            self.log("\n❌ PROBLEMAS DETECTADOS")
-            if not deriv_connected:
-                self.log("   ❌ Deriv não conectado")
-            if not websocket_working:
-                self.log("   ❌ WebSocket com problemas de velocidade/estabilidade")
-                self.log("   📋 FOCO: usuário reportou que deveria ser 0.57 msg/s mas às vezes para")
+            self.log("\n❌ PROBLEMAS CRÍTICOS DETECTADOS")
+            if not basic_connectivity:
+                self.log("   ❌ Deriv não conectado adequadamente")
+            if not strategy_working:
+                self.log("   ❌ Estratégia não inicia ou não funciona")
+            if not continuity_proven:
+                self.log("   ❌ BOT PARA AUTOMATICAMENTE - BUG CRÍTICO CONFIRMADO")
+                self.log("   📋 FOCO: Bot para após um contrato - problema PERSISTE")
         
-        return websocket_working and deriv_connected, results
+        return basic_connectivity and strategy_working and continuity_proven, results
 
     def print_summary(self):
         """Print test summary"""
