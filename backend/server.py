@@ -2029,6 +2029,31 @@ class StrategyRunner:
                 
                 logger.info(f"Paper trade executed: {signal}, profit: {profit:.2f}, today_pnl: {self.today_pnl:.2f}")
                 
+                # 🧠 CRITICAL: Trigger online learning for paper trades too!
+                try:
+                    # Create fake contract data similar to real trades
+                    fake_contract_id = int(time.time() * 1000)  # Unique ID based on timestamp
+                    fake_poc_data = {
+                        'underlying': self.config.symbol,
+                        'entry_spot': 100.0,  # Simulated entry price
+                        'current_spot': 100.0 + (profit / self.config.stake) * 5,  # Simulated exit based on profit
+                        'buy_price': self.config.stake,
+                        'bid_price': self.config.stake + profit,
+                        'payout': self.config.stake * payout if won else 0,
+                        'date_start': int(time.time()),
+                        'date_expiry': int(time.time()) + (self.config.duration * 60),  # Assuming duration in minutes
+                        'profit': profit,
+                        'contract_type': signal
+                    }
+                    
+                    # Trigger online learning adaptation with paper trade data
+                    logger.info(f"🧠 Iniciando retreinamento automático para paper trade (profit: {profit:.2f})")
+                    asyncio.create_task(_adapt_online_models_with_trade(fake_contract_id, profit, fake_poc_data))
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Falha no retreinamento automático para paper trade: {e}")
+                
+                
             elif self.config.mode == "live":
                 # Live trading - execute actual trade
                 buy_req = BuyRequest(
