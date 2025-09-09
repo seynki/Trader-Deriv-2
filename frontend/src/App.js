@@ -57,9 +57,10 @@ function wsHostFromEnv() {
   }
 }
 
-function wsTicksUrl() {
+function wsTicksUrl(symbols = []) {
   const { base } = wsHostFromEnv();
-  return base ? `${base}/api/ws/ticks` : `/api/ws/ticks`;
+  const qs = Array.isArray(symbols) && symbols.length ? `?symbols=${encodeURIComponent(symbols.join(','))}` : '';
+  return base ? `${base}/api/ws/ticks${qs}` : `/api/ws/ticks${qs}`;
 }
 function wsContractUrl(contractId) {
   const { base } = wsHostFromEnv();
