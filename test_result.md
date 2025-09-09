@@ -111,11 +111,11 @@
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
-##       -comment: "IMPLEMENTADAS CORREÇÕES CRÍTICAS: 1) Enhanced WebSocket stability com ping_interval=30s, ping_timeout=10s, max_size=8MB, max_queue=None 2) Robust reconnection logic com exponential backoff (max 30s), max 50 reconnects 3) Improved message processing com tratamento de erros individual, queue management melhorado, remoção automática de filas quebradas 4) Enhanced error handling em cada etapa do processamento de mensagens. Sistema agora deve manter WebSocket estável sem desconexões constantes."
+##       -comment: "Atualização: Corrigido frontend para construir URL de WebSocket com REACT_APP_BACKEND_URL e prefixo /api (nada de ws://localhost:443/ws). WS agora usa querystring symbols= e não envia payload inicial. Backend já tem /api/ws/ticks e /api/ws/contract/{id} ultra-estáveis. Solicito reteste rápido de conectividade e taxa de mensagens visando ~1.54 msg/s."
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "WEBSOCKET STABILITY TESTING COMPLETADO COM SUCESSO (2025-01-28): ✅ CORREÇÕES FUNCIONARAM PERFEITAMENTE - WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 mantém conexão ESTÁVEL por 60.5s, recebeu 94 mensagens (91 ticks, 2 heartbeats), taxa 1.55 msg/s (> 0.5 msg/s ✓), todos os símbolos detectados, 0 timeouts/erros. Taxa melhorou drasticamente de 0.03 msg/s para 1.55 msg/s. Problema de 'WebSocket fechando constantemente' RESOLVIDO. Ultra-stable settings, heartbeat funcionando, sem erros 'received 1000 (OK)' nos logs."
