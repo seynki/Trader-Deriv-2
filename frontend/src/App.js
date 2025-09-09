@@ -80,13 +80,12 @@ function useDerivTicks(symbols) {
 
     const connect = () => {
       if (stopRef.current) return;
-      const url = wsTicksUrl();
+      const url = wsTicksUrl(symbols);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
-        try { ws.send(JSON.stringify({ symbols })); } catch {}
       };
       ws.onmessage = (ev) => {
         try {
