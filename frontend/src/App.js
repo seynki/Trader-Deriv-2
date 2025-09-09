@@ -392,11 +392,11 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
       return;
     }
     // Abrir WS para ticks do símbolo escolhido via backend seguro
-    const url = wsTicksUrl();
+    const url = wsTicksUrl([symbol]);
     const ws = new WebSocket(url);
     wsRef.current = ws;
     ws.onopen = () => {
-      ws.send(JSON.stringify({ symbols: [symbol] }));
+      // symbols enviados via querystring
     };
     ws.onmessage = (ev) => {
       try {
