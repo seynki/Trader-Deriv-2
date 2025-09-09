@@ -1940,12 +1940,16 @@ class StrategyRunner:
             while self.running:
                 loop_iteration += 1
                 try:
+                    logger.debug(f"Strategy Loop: Iniciando iteração #{loop_iteration}")
                     await self._run_strategy_once()
                     consecutive_errors = 0  # Reset error counter on success
                     
                     # Log progress every 10 iterations
                     if loop_iteration % 10 == 0:
                         logger.info(f"Strategy Loop: Iteração #{loop_iteration}, PnL hoje: {self.today_pnl:.2f}, Trades: {self.today_trades}")
+                    
+                    # Update last run timestamp on successful execution
+                    self.last_run_at = int(time.time())
                     
                     await asyncio.sleep(10)  # Run every 10 seconds
                     
@@ -1955,7 +1959,7 @@ class StrategyRunner:
                     
                 except Exception as e:
                     consecutive_errors += 1
-                    logger.error(f"Strategy loop error #{consecutive_errors}: {e}")
+                    logger.error(f"Strategy loop error #{consecutive_errors} (iteração #{loop_iteration}): {e}")
                     
                     if consecutive_errors >= max_consecutive_errors:
                         logger.warning(f"Muitos erros consecutivos ({consecutive_errors}), pausa estratégica de 60s...")
