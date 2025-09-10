@@ -829,6 +829,8 @@ async def ensure_csv_exists():
 @app.on_event("startup")
 async def _startup():
     await _deriv.start()
+    # Gerar CSV fallback automaticamente (se não existir)
+    await ensure_csv_exists()
     # Initialize online learning models automatically - FORÇA inicialização
     logger.info("🚀 INICIALIZAÇÃO FORÇADA do Online Learning no startup...")
     await ensure_online_models_active()
