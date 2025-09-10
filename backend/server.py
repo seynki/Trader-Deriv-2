@@ -893,35 +893,43 @@ async def _adapt_online_models_with_trade(contract_id: int, profit: float, poc_d
         
         for model_id, model in _online_manager.active_models.items():
             try:
-                # Get current market data for adaptation
+                # Decide data source for adaptation
                 symbol = poc_data.get('underlying', 'R_100')
                 granularity = 180  # 3m default
                 
-                logger.info(f"🔄 Adaptando modelo {model_id} com dados de {symbol}...")
+                logger.info(f"🔄 Adaptando modelo {model_id} com fonte: {ONLINE_LEARNING_ADAPT_SOURCE}")
                 
-                # Fetch recent candles for feature extraction
+                # Fetch features data according to source flag
                 try:
-                    df = await fetch_candles(symbol, granularity, 100)  # Get more data for better features
+                    if ONLINE_LEARNING_ADAPT_SOURCE == "file":
+                        # Carregar do CSV local (/data/ml/ohlcv.csv)
+                        df = await asyncio.to_thread(ml_trainer.load_data_with_fallback, symbol, "3m")
+                        # usar apenas o trecho mais recente
+                        df = df.tail(300).reset_index(drop=True)
+                    else:
+                        # Padrão: dados em tempo real da Deriv
+                        df = await fetch_candles(symbol, granularity, 100)
+                    
                     if len(df) >= 20:
                         # Build features using the same process as training
                         features_df = ml_utils.build_features(df)
                         features_df = ml_utils.add_feature_interactions(features_df, max_interactions=15)
                         
-                        # Adapt the model with the latest market state and trade outcome
+                        # Adapt the model with the selected data source and trade outcome
                         success = _online_manager.adapt_model(model_id, trade_features, features_df, trade_outcome)
                         
                         if success:
                             adaptation_count += 1
                             models_updated.append(model_id)
-                            logger.info(f"✅ Modelo {model_id} atualizado com sucesso")
+                            logger.info(f"✅ Modelo {model_id} atualizado com sucesso (fonte={ONLINE_LEARNING_ADAPT_SOURCE})")
                         else:
                             logger.warning(f"⚠️ Falha na adaptação do modelo {model_id}")
                         
                     else:
-                        logger.warning(f"⚠️ Poucos dados de mercado para {symbol} ({len(df)} candles)")
+                        logger.warning(f"⚠️ Poucos dados para adaptação (fonte={ONLINE_LEARNING_ADAPT_SOURCE}): {len(df)} linhas")
                         
                 except Exception as feature_error:
-                    logger.warning(f"❌ Failed to get market data for adaptation: {feature_error}")
+                    logger.warning(f"❌ Falha ao obter dados para adaptação (fonte={ONLINE_LEARNING_ADAPT_SOURCE}): {feature_error}")
                     
             except Exception as model_error:
                 logger.warning(f"❌ Failed to update online model {model_id}: {model_error}")
