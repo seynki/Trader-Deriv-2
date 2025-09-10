@@ -51,7 +51,8 @@ class OnlineLearningModel:
         self.buffer_X = []
         self.buffer_y = []
         self._partial_fit_initialized = False
-        self._known_classes = np.array([0, 1])
+        self._known_classes = np.array([0, 1], dtype=int)
+        self._fitted_classes = None
 
         self.buffer_size = 10  # Update every 10 samples
         
