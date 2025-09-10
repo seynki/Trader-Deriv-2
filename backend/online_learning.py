@@ -50,6 +50,9 @@ class OnlineLearningModel:
         # Buffer for mini-batch updates
         self.buffer_X = []
         self.buffer_y = []
+        self._partial_fit_initialized = False
+        self._known_classes = np.array([0, 1])
+
         self.buffer_size = 10  # Update every 10 samples
         
     def _create_model(self):
