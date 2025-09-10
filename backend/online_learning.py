@@ -128,8 +128,16 @@ class OnlineLearningModel:
             # Determine classes to pass on first incremental call
             first_incremental = not self._partial_fit_initialized
             if first_incremental:
-                # Use fitted classes if available, else default [0,1]
-                classes_to_use = self._fitted_classes if self._fitted_classes is not None else self._known_classes
+                # Build a safe classes array that always contains the current labels and [0,1]
+                try:
+                    batch_labels = np.array(sorted(set(int(v) for v in pd.Series(y_clean).astype(int).unique().tolist())), dtype=int)
+                except Exception:
+                    batch_labels = np.array([0, 1], dtype=int)
+                classes_to_use = np.array(sorted(set(batch_labels.tolist() + self._known_classes.tolist())), dtype=int)
+                try:
+                    logger.info(f"OnlineLearningModel.partial_fit first call - classes={classes_to_use.tolist()}, y={batch_labels.tolist()}")
+                except Exception:
+                    pass
                 self.model.partial_fit(X_filtered, y_clean, classes=classes_to_use)
                 self.is_fitted = True
                 self._partial_fit_initialized = True
