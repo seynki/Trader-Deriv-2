@@ -87,47 +87,58 @@ class OnlineLearningModel:
         # Replace inf values
         X_filtered = X_filtered.replace([np.inf, -np.inf], 0)
         
-        self.model.fit(X_filtered, y)
+        y_clean = pd.Series(y).astype(int)
+        self.model.fit(X_filtered, y_clean)
         self.is_fitted = True
+        # After a full fit(), scikit sets classes_; next partial_fit can omit classes
+        self._partial_fit_initialized = True
         
         # Evaluate initial performance
         y_pred = self.model.predict(X_filtered)
-        accuracy = accuracy_score(y, y_pred)
-        precision = precision_score(y, y_pred, zero_division=0)
+        accuracy = accuracy_score(y_clean, y_pred)
+        precision = precision_score(y_clean, y_pred, zero_division=0)
         
         self.performance_history.append({
             'timestamp': datetime.utcnow().isoformat(),
             'accuracy': float(accuracy),
             'precision': float(precision),
             'update_count': self.update_count,
-            'sample_size': len(y)
+            'sample_size': len(y_clean)
         })
         
         logger.info(f"Online model initial fit: accuracy={accuracy:.3f}, precision={precision:.3f}")
         
     def partial_fit(self, X: pd.DataFrame, y: pd.Series):
         """Incrementally update the model with new data"""
-        if not self.is_fitted:
-            raise ValueError("Model must be initially fitted before partial_fit")
-        
         if self.features is None:
             raise ValueError("Features not set")
             
         X_filtered = X[self.features].fillna(0)
         X_filtered = X_filtered.replace([np.inf, -np.inf], 0)
+        y_clean = pd.Series(y).astype(int)
         
         # Use partial_fit for incremental learning
         if hasattr(self.model, 'partial_fit'):
-            self.model.partial_fit(X_filtered, y)
+            # If the model was not fully fitted yet or this is the first incremental call,
+            # provide classes=[0,1] to satisfy scikit-learn requirement
+            if not self.is_fitted:
+                self.model.partial_fit(X_filtered, y_clean, classes=self._known_classes)
+                self.is_fitted = True
+                self._partial_fit_initialized = True
+            elif not self._partial_fit_initialized:
+                self.model.partial_fit(X_filtered, y_clean, classes=self._known_classes)
+                self._partial_fit_initialized = True
+            else:
+                self.model.partial_fit(X_filtered, y_clean)
         else:
             # For models that don't support partial_fit, use mini-batch approach
-            self._mini_batch_update(X_filtered, y)
+            self._mini_batch_update(X_filtered, y_clean)
         
-        self.update_count += len(y)
+        self.update_count += len(y_clean)
         
-        # Evaluate performance periodically
-        if self.update_count % 50 == 0:  # Every 50 updates
-            self._evaluate_performance(X_filtered, y)
+        # Evaluate performance periodically (every 5 trades as solicitado)
+        if self.update_count % 5 == 0:
+            self._evaluate_performance(X_filtered, y_clean)
     
     def _mini_batch_update(self, X: pd.DataFrame, y: pd.Series):
         """Mini-batch update for models that don't support partial_fit"""
