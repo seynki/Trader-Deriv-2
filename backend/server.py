@@ -788,6 +788,42 @@ async def _wait_deriv_ready(max_wait: float = 20.0, require_auth: bool = True) -
         if _deriv.connected and (not require_auth or _deriv.authenticated):
             return True
         await asyncio.sleep(0.25)
+
+# CSV Fallback auto-generation
+async def ensure_csv_exists():
+    try:
+        import os as _os
+        _os.makedirs("/data/ml", exist_ok=True)
+        csv_path = Path("/data/ml/ohlcv.csv")
+        if csv_path.exists() and csv_path.stat().st_size > 0:
+            logger.info("📁 CSV fallback já existe em /data/ml/ohlcv.csv")
+            return
+        # parâmetros
+        symbol = _os.environ.get("CSV_SYMBOL", "R_100")
+        granularity = int(_os.environ.get("CSV_GRANULARITY", "180"))  # 3m
+        count = int(_os.environ.get("CSV_COUNT", "3000"))
+        logger.info(f"📝 Gerando CSV fallback automático: symbol={symbol}, granularity={granularity}, count={count}")
+        # aguardar WS pronto (sem exigir auth)
+        try:
+            await _wait_deriv_ready(20.0, require_auth=False)
+        except Exception:
+            pass
+        # buscar candles e salvar
+        df = await fetch_candles(symbol, granularity, count)
+        if df is None or len(df) == 0:
+            logger.warning("⚠️ Não foi possível obter candles para gerar CSV fallback")
+            return
+        try:
+            # normalizar colunas e salvar
+            cols = [c.lower() for c in df.columns]
+            df.columns = cols
+            df[["open","high","low","close","volume"]].to_csv(str(csv_path), index=False)
+            logger.info(f"✅ CSV fallback gerado em {csv_path}")
+        except Exception as se:
+            logger.warning(f"💾 Falha ao salvar CSV fallback: {se}")
+    except Exception as e:
+        logger.warning(f"❌ ensure_csv_exists falhou: {e}")
+
     return False
 
 @app.on_event("startup")
