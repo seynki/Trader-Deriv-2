@@ -73,6 +73,8 @@ api_router = APIRouter(prefix="/api")
 DERIV_APP_ID = os.environ.get("DERIV_APP_ID")
 DERIV_API_TOKEN = os.environ.get("DERIV_API_TOKEN")
 DERIV_WS_URL = os.environ.get("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
+# Fonte para adaptação do Online Learning após cada trade: 'deriv' (padrão) ou 'file' (CSV local)
+ONLINE_LEARNING_ADAPT_SOURCE = os.environ.get("ONLINE_LEARNING_ADAPT_SOURCE", "deriv").strip().lower()
 
 SUPPORTED_SYMBOLS = [
     "CRYETHUSD",  # Crypto ETH/USD
