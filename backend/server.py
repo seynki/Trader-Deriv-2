@@ -404,12 +404,21 @@ class DerivWS:
         logger.info("🛑 Stopping DerivWS...")
         self._running = False
         
-        if self.ws and not self.ws.closed:
-            try:
-                await self.ws.close()
-                logger.info("✅ WebSocket connection closed")
-            except Exception as e:
-                logger.warning(f"⚠️ Error closing WebSocket: {e}")
+        try:
+            if self.ws:
+                # Alguns objetos ClientConnection não têm atributo 'closed'
+                try:
+                    is_closed = getattr(self.ws, "closed", False)
+                except Exception:
+                    is_closed = False
+                if not is_closed:
+                    try:
+                        await self.ws.close()
+                        logger.info("✅ WebSocket connection closed")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Error closing WebSocket: {e}")
+        except Exception:
+            pass
         
         if self.loop_task and not self.loop_task.done():
             self.loop_task.cancel()
