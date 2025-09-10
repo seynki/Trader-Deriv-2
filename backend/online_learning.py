@@ -91,6 +91,11 @@ class OnlineLearningModel:
         y_clean = pd.Series(y).astype(int)
         self.model.fit(X_filtered, y_clean)
         self.is_fitted = True
+        # Cache fitted classes for safety
+        try:
+            self._fitted_classes = np.array(sorted(set(int(v) for v in pd.Series(self.model.classes_).astype(int).tolist())), dtype=int)
+        except Exception:
+            self._fitted_classes = self._known_classes
         # After a full fit(), scikit sets classes_; next partial_fit can omit classes
         self._partial_fit_initialized = True
         
