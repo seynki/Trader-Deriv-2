@@ -51,7 +51,7 @@ import websockets
 from datetime import datetime
 
 class DerivWebSocketTester:
-    def __init__(self, base_url="https://stock-robot-fix.preview.emergentagent.com"):
+    def __init__(self, base_url="https://partial-fit-fix.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")

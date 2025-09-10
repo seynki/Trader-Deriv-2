@@ -13,7 +13,7 @@ def log(message):
 
 def test_connectivity():
     """Test basic connectivity to the API"""
-    base_url = "https://stock-robot-fix.preview.emergentagent.com"
+    base_url = "https://partial-fit-fix.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     log("🔍 Testing basic connectivity...")
@@ -55,7 +55,7 @@ def test_connectivity():
 
 def test_simple_ml_training():
     """Test simple ML training with smaller parameters"""
-    base_url = "https://stock-robot-fix.preview.emergentagent.com"
+    base_url = "https://partial-fit-fix.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     log("🧠 Testing simple ML training...")
