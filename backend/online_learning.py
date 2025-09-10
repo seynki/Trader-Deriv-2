@@ -125,14 +125,13 @@ class OnlineLearningModel:
         
         # Use partial_fit for incremental learning
         if hasattr(self.model, 'partial_fit'):
-            # If the model was not fully fitted yet or this is the first incremental call,
-            # provide classes=[0,1] to satisfy scikit-learn requirement
-            if not self.is_fitted:
-                self.model.partial_fit(X_filtered, y_clean, classes=self._known_classes)
+            # Determine classes to pass on first incremental call
+            first_incremental = not self._partial_fit_initialized
+            if first_incremental:
+                # Use fitted classes if available, else default [0,1]
+                classes_to_use = self._fitted_classes if self._fitted_classes is not None else self._known_classes
+                self.model.partial_fit(X_filtered, y_clean, classes=classes_to_use)
                 self.is_fitted = True
-                self._partial_fit_initialized = True
-            elif not self._partial_fit_initialized:
-                self.model.partial_fit(X_filtered, y_clean, classes=self._known_classes)
                 self._partial_fit_initialized = True
             else:
                 self.model.partial_fit(X_filtered, y_clean)
