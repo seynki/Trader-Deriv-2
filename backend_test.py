@@ -619,5 +619,427 @@ async def main():
         traceback.print_exc()
         sys.exit(1)
 
+async def test_online_learning_update_count():
+    """
+    Test online learning update_count increase after paper trade
+    Conforme review request português:
+    
+    Objetivo: validar que o update_count do modelo online aumenta após um paper trade. Passos exatos:
+    1) GET /api/deriv/status -> esperar 200 com connected=true (aguardar até 8s antes do primeiro request caso necessário)
+    2) GET /api/ml/online/list -> capturar a lista e identificar um model_id existente. Se existir "online_model_R100_auto" usar esse; se não existir, pegar o primeiro id retornado.
+    3) GET /api/ml/online/progress -> capturar update_count atual desse model_id (digamos count0)
+    4) POST /api/strategy/start com payload JSON: {"symbol":"R_100","granularity":60,"candle_len":200,"duration":5,"duration_unit":"t","stake":1,"daily_loss_limit":-20,"adx_trend":22,"rsi_ob":70,"rsi_os":30,"bbands_k":2,"mode":"paper"} -> deve retornar 200
+    5) Aguardar 20-40s verificando a cada 5s se GET /api/strategy/status indica last_run_at mudando e today_trades >=1, ou aguardar até detectar o primeiro trade executado em paper (o backend registra automaticamente um paper trade com probabilidade de ~0.52 por sinal). Se não houver trade após 60s, terminar com observação.
+    6) Após detecção de um trade (ou ao fim de 60s), GET /api/strategy/stop -> parar a estratégia
+    7) GET /api/ml/online/progress novamente -> coletar update_count (count1) do mesmo model_id
+    8) Teste passa se count1 > count0 (houve pelo menos 1 update). Caso não aumente, capturar logs via /var/log/supervisor/backend.err.log (últimas 200 linhas) para procurar por mensagens: "ONLINE LEARNING SUCESSO", "Model .* updated with trade outcome", ou erros "Failed to process adaptation item".
+    Produza um relatório detalhando: model_id testado, count0, count1, estado da estratégia, se houve trade paper, mensagens-chave de log encontradas.
+    """
+    
+    base_url = "https://partial-fit-fix.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🧠" + "="*68)
+    log("TESTE ONLINE LEARNING UPDATE_COUNT APÓS PAPER TRADE")
+    log("🧠" + "="*68)
+    log("📋 Objetivo: Validar que update_count aumenta após paper trade")
+    log("📋 Passos: deriv/status -> ml/online/list -> ml/online/progress -> strategy/start -> aguardar trade -> strategy/stop -> verificar update_count")
+    
+    # Variables to track
+    model_id = None
+    count0 = 0
+    count1 = 0
+    trade_detected = False
+    strategy_started = False
+    
+    try:
+        # Step 1: GET /api/deriv/status (wait up to 8s if needed)
+        log("\n🔍 STEP 1: Verificar conectividade Deriv (aguardar até 8s se necessário)")
+        
+        deriv_connected = False
+        for attempt in range(1, 9):  # Try up to 8 seconds
+            try:
+                response = session.get(f"{api_url}/deriv/status", timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    connected = data.get('connected', False)
+                    authenticated = data.get('authenticated', False)
+                    
+                    log(f"   Tentativa {attempt}: Status {response.status_code}, connected={connected}, authenticated={authenticated}")
+                    
+                    if connected:
+                        deriv_connected = True
+                        log(f"✅ Deriv conectado na tentativa {attempt}")
+                        break
+                else:
+                    log(f"   Tentativa {attempt}: Status {response.status_code}")
+            except Exception as e:
+                log(f"   Tentativa {attempt}: Erro {e}")
+            
+            if attempt < 8:
+                time.sleep(1)
+        
+        if not deriv_connected:
+            log("❌ CRITICAL: Deriv não conectou após 8s")
+            return False, {"error": "deriv_not_connected"}
+        
+        # Step 2: GET /api/ml/online/list -> identify model_id
+        log("\n🔍 STEP 2: Listar modelos online e identificar model_id")
+        
+        try:
+            response = session.get(f"{api_url}/ml/online/list", timeout=10)
+            log(f"   GET /api/ml/online/list: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get('models', [])
+                log(f"   Modelos disponíveis: {models}")
+                
+                # Prefer "online_model_R100_auto" if exists, otherwise first model
+                if "online_model_R100_auto" in models:
+                    model_id = "online_model_R100_auto"
+                    log(f"✅ Usando modelo preferido: {model_id}")
+                elif models:
+                    model_id = models[0]
+                    log(f"✅ Usando primeiro modelo disponível: {model_id}")
+                else:
+                    log("❌ CRITICAL: Nenhum modelo online encontrado")
+                    return False, {"error": "no_online_models"}
+            else:
+                log(f"❌ CRITICAL: Falha ao listar modelos online: {response.status_code}")
+                return False, {"error": "list_models_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao listar modelos online: {e}")
+            return False, {"error": "list_models_exception", "details": str(e)}
+        
+        # Step 3: GET /api/ml/online/progress -> capture count0
+        log(f"\n🔍 STEP 3: Capturar update_count inicial do modelo {model_id}")
+        
+        try:
+            response = session.get(f"{api_url}/ml/online/progress", timeout=10)
+            log(f"   GET /api/ml/online/progress: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get('models', [])
+                
+                # Find our model
+                target_model = None
+                for model in models:
+                    if model.get('model_id') == model_id:
+                        target_model = model
+                        break
+                
+                if target_model:
+                    count0 = target_model.get('update_count', 0)
+                    log(f"✅ Modelo {model_id} encontrado: update_count inicial = {count0}")
+                    log(f"   Features: {target_model.get('features_count', 'N/A')}")
+                    log(f"   Status: {target_model.get('status', 'N/A')}")
+                else:
+                    log(f"❌ CRITICAL: Modelo {model_id} não encontrado no progress")
+                    return False, {"error": "model_not_in_progress"}
+            else:
+                log(f"❌ CRITICAL: Falha ao obter progress: {response.status_code}")
+                return False, {"error": "progress_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao obter progress: {e}")
+            return False, {"error": "progress_exception", "details": str(e)}
+        
+        # Step 4: POST /api/strategy/start with exact payload
+        log("\n🔍 STEP 4: Iniciar estratégia em modo paper")
+        
+        strategy_payload = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "candle_len": 200,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "daily_loss_limit": -20,
+            "adx_trend": 22,
+            "rsi_ob": 70,
+            "rsi_os": 30,
+            "bbands_k": 2,
+            "mode": "paper"
+        }
+        
+        try:
+            response = session.post(f"{api_url}/strategy/start", json=strategy_payload, timeout=15)
+            log(f"   POST /api/strategy/start: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"✅ Estratégia iniciada: {data}")
+                strategy_started = True
+            else:
+                log(f"❌ CRITICAL: Falha ao iniciar estratégia: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Erro: {error_data}")
+                except:
+                    log(f"   Erro: {response.text}")
+                return False, {"error": "strategy_start_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao iniciar estratégia: {e}")
+            return False, {"error": "strategy_start_exception", "details": str(e)}
+        
+        # Step 5: Monitor for trades (20-60s, check every 5s)
+        log("\n🔍 STEP 5: Monitorar por trades (verificar a cada 5s por até 60s)")
+        
+        initial_last_run_at = None
+        initial_today_trades = 0
+        max_wait_time = 60  # 60 seconds max
+        check_interval = 5  # Check every 5 seconds
+        start_monitor_time = time.time()
+        
+        while time.time() - start_monitor_time < max_wait_time:
+            try:
+                response = session.get(f"{api_url}/strategy/status", timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    running = data.get('running', False)
+                    last_run_at = data.get('last_run_at')
+                    today_trades = data.get('today_trades', 0)
+                    total_trades = data.get('total_trades', 0)
+                    
+                    elapsed = time.time() - start_monitor_time
+                    log(f"   Monitor {elapsed:.1f}s: running={running}, last_run_at={last_run_at}, today_trades={today_trades}, total_trades={total_trades}")
+                    
+                    # Store initial values
+                    if initial_last_run_at is None:
+                        initial_last_run_at = last_run_at
+                        initial_today_trades = today_trades
+                    
+                    # Check if we detected a trade
+                    if (last_run_at != initial_last_run_at and last_run_at is not None) or today_trades >= 1 or total_trades > initial_today_trades:
+                        trade_detected = True
+                        log(f"✅ TRADE DETECTADO! last_run_at mudou ou trades aumentaram")
+                        log(f"   Inicial: last_run_at={initial_last_run_at}, today_trades={initial_today_trades}")
+                        log(f"   Atual: last_run_at={last_run_at}, today_trades={today_trades}, total_trades={total_trades}")
+                        break
+                else:
+                    log(f"   Monitor: Erro status {response.status_code}")
+                    
+            except Exception as e:
+                log(f"   Monitor: Erro {e}")
+            
+            time.sleep(check_interval)
+        
+        if not trade_detected:
+            elapsed = time.time() - start_monitor_time
+            log(f"⚠️  Nenhum trade detectado após {elapsed:.1f}s de monitoramento")
+            log("   Continuando com teste para verificar se update_count mudou mesmo assim...")
+        
+        # Step 6: POST /api/strategy/stop
+        log("\n🔍 STEP 6: Parar estratégia")
+        
+        try:
+            response = session.post(f"{api_url}/strategy/stop", timeout=10)
+            log(f"   POST /api/strategy/stop: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"✅ Estratégia parada: {data}")
+            else:
+                log(f"⚠️  Falha ao parar estratégia: {response.status_code}")
+                
+        except Exception as e:
+            log(f"⚠️  Erro ao parar estratégia: {e}")
+        
+        # Step 7: GET /api/ml/online/progress again -> capture count1
+        log(f"\n🔍 STEP 7: Capturar update_count final do modelo {model_id}")
+        
+        try:
+            response = session.get(f"{api_url}/ml/online/progress", timeout=10)
+            log(f"   GET /api/ml/online/progress: Status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get('models', [])
+                
+                # Find our model
+                target_model = None
+                for model in models:
+                    if model.get('model_id') == model_id:
+                        target_model = model
+                        break
+                
+                if target_model:
+                    count1 = target_model.get('update_count', 0)
+                    log(f"✅ Modelo {model_id} encontrado: update_count final = {count1}")
+                    log(f"   Features: {target_model.get('features_count', 'N/A')}")
+                    log(f"   Status: {target_model.get('status', 'N/A')}")
+                else:
+                    log(f"❌ CRITICAL: Modelo {model_id} não encontrado no progress final")
+                    return False, {"error": "model_not_in_final_progress"}
+            else:
+                log(f"❌ CRITICAL: Falha ao obter progress final: {response.status_code}")
+                return False, {"error": "final_progress_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao obter progress final: {e}")
+            return False, {"error": "final_progress_exception", "details": str(e)}
+        
+        # Step 8: Analyze results and capture logs if needed
+        log(f"\n🔍 STEP 8: Análise de resultados")
+        log(f"   Modelo testado: {model_id}")
+        log(f"   Update count inicial (count0): {count0}")
+        log(f"   Update count final (count1): {count1}")
+        log(f"   Trade detectado: {trade_detected}")
+        log(f"   Estratégia iniciada: {strategy_started}")
+        
+        update_count_increased = count1 > count0
+        
+        if update_count_increased:
+            log(f"✅ SUCESSO: Update count aumentou de {count0} para {count1} (+{count1 - count0})")
+            log("   Online learning funcionando corretamente após paper trade!")
+            
+            return True, {
+                "model_id": model_id,
+                "count0": count0,
+                "count1": count1,
+                "update_increase": count1 - count0,
+                "trade_detected": trade_detected,
+                "strategy_started": strategy_started,
+                "test_result": "PASSED"
+            }
+        else:
+            log(f"❌ FALHA: Update count não aumentou (permaneceu {count0})")
+            log("   Capturando logs do backend para diagnóstico...")
+            
+            # Capture backend logs for debugging
+            backend_logs = []
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["tail", "-n", "200", "/var/log/supervisor/backend.err.log"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    backend_logs = result.stdout.split('\n')
+                    log(f"   Capturados {len(backend_logs)} linhas de log")
+                else:
+                    log(f"   Erro ao capturar logs: {result.stderr}")
+            except Exception as e:
+                log(f"   Erro ao executar tail: {e}")
+            
+            # Search for key messages
+            key_messages = []
+            search_patterns = [
+                "ONLINE LEARNING SUCESSO",
+                "Model .* updated with trade outcome",
+                "Failed to process adaptation item"
+            ]
+            
+            for line in backend_logs:
+                for pattern in search_patterns:
+                    if pattern.lower() in line.lower() or "online learning" in line.lower():
+                        key_messages.append(line.strip())
+            
+            if key_messages:
+                log("   Mensagens-chave encontradas nos logs:")
+                for msg in key_messages[-10:]:  # Show last 10 relevant messages
+                    log(f"      {msg}")
+            else:
+                log("   Nenhuma mensagem-chave de online learning encontrada nos logs")
+            
+            return False, {
+                "model_id": model_id,
+                "count0": count0,
+                "count1": count1,
+                "update_increase": count1 - count0,
+                "trade_detected": trade_detected,
+                "strategy_started": strategy_started,
+                "test_result": "FAILED",
+                "key_log_messages": key_messages,
+                "backend_logs_lines": len(backend_logs)
+            }
+            
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "model_id": model_id,
+            "count0": count0,
+            "count1": count1,
+            "trade_detected": trade_detected,
+            "strategy_started": strategy_started
+        }
+
+async def main_online_learning_test():
+    """Main function to run online learning update_count test"""
+    print("🧠 TESTE ONLINE LEARNING UPDATE_COUNT APÓS PAPER TRADE")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Validar que update_count aumenta após paper trade")
+    print("   PASSOS:")
+    print("   1. GET /api/deriv/status (aguardar até 8s)")
+    print("   2. GET /api/ml/online/list (identificar model_id)")
+    print("   3. GET /api/ml/online/progress (capturar count0)")
+    print("   4. POST /api/strategy/start (modo paper)")
+    print("   5. Aguardar 20-60s por trades")
+    print("   6. POST /api/strategy/stop")
+    print("   7. GET /api/ml/online/progress (capturar count1)")
+    print("   8. Verificar se count1 > count0")
+    
+    try:
+        # Run online learning test
+        success, results = await test_online_learning_update_count()
+        
+        # Print final summary
+        print("\n" + "🏁" + "="*68)
+        print("RESULTADO FINAL: Teste Online Learning Update Count")
+        print("🏁" + "="*68)
+        
+        if success:
+            print("✅ TESTE PASSOU: Online learning update_count aumentou após paper trade")
+            print(f"   Modelo: {results.get('model_id')}")
+            print(f"   Count inicial: {results.get('count0')}")
+            print(f"   Count final: {results.get('count1')}")
+            print(f"   Aumento: +{results.get('update_increase')}")
+            print(f"   Trade detectado: {results.get('trade_detected')}")
+        else:
+            print("❌ TESTE FALHOU: Online learning update_count não aumentou")
+            print(f"   Modelo: {results.get('model_id')}")
+            print(f"   Count inicial: {results.get('count0')}")
+            print(f"   Count final: {results.get('count1')}")
+            print(f"   Trade detectado: {results.get('trade_detected')}")
+            
+            if results.get('key_log_messages'):
+                print("   Mensagens relevantes nos logs:")
+                for msg in results.get('key_log_messages', [])[-5:]:
+                    print(f"      {msg}")
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Test interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Check if we want to run the online learning test specifically
+    if len(sys.argv) > 1 and sys.argv[1] == "online_learning":
+        asyncio.run(main_online_learning_test())
+    else:
+        asyncio.run(main())
