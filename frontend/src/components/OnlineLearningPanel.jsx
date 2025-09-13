@@ -16,6 +16,7 @@ export default function OnlineLearningPanel() {
   const [creatingModel, setCreatingModel] = useState(false);
   const [selectedModel, setSelectedModel] = useState("");
   const [modelStatus, setModelStatus] = useState(null);
+  const [riverStatus, setRiverStatus] = useState(null);
   
   // Model creation params
   const [newModelParams, setNewModelParams] = useState({
@@ -62,13 +63,25 @@ export default function OnlineLearningPanel() {
     }
   };
 
+  const fetchRiverStatus = async () => {
+    try {
+      const { data } = await axios.get(`${API}/ml/river/status`);
+      setRiverStatus(data);
+    } catch (error) {
+      // Silenciar para não poluir logs quando ainda não há modelo salvo
+      // console.debug("River status error:", error?.response?.data || error.message);
+    }
+  };
+
   useEffect(() => {
     fetchOnlineModels();
     fetchOnlineProgress();
+    fetchRiverStatus();
     
     // Set up polling for real-time updates
     refreshInterval.current = setInterval(() => {
       fetchOnlineProgress();
+      fetchRiverStatus();
       if (selectedModel) {
         fetchModelStatus(selectedModel);
       }
