@@ -2281,16 +2281,19 @@ async def main_global_metrics_test():
 if __name__ == "__main__":
     # Check which test to run based on command line arguments
     if len(sys.argv) > 1:
-        if sys.argv[1] == "online_learning":
+        if sys.argv[1] == "hybrid":
+            asyncio.run(main_hybrid_test())
+        elif sys.argv[1] == "online_learning":
             asyncio.run(main_online_learning_test())
         elif sys.argv[1] == "river":
             asyncio.run(main_river_test())
         elif sys.argv[1] == "global_metrics":
             asyncio.run(main_global_metrics_test())
         else:
-            print("Available test modes: online_learning, river, global_metrics")
-            print("Usage: python backend_test.py [online_learning|river|global_metrics]")
+            print("Available test modes: hybrid, online_learning, river, global_metrics")
+            print("Usage: python backend_test.py [hybrid|online_learning|river|global_metrics]")
             print("Default: WebSocket tests")
             asyncio.run(main())
     else:
-        asyncio.run(main())
+        # Default to hybrid test as requested in review
+        asyncio.run(main_hybrid_test())
