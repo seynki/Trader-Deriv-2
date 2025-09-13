@@ -1,6 +1,6 @@
 """
 River-based Online Learning for Candle Data (OHLCV)
-- Single model for Long/Short (binary: next_close &gt; close)
+- Single model for Long/Short (binary: next_close > close)
 - Designed to be called per-candle (online/incremental)
 - Compatible with FastAPI endpoints in server.py
 
@@ -13,6 +13,7 @@ import pickle
 from collections import deque
 from datetime import datetime
 from typing import Dict, Any, Optional
+from pathlib import Path
 
 # River ML (online)
 from river import preprocessing, linear_model, metrics, compose
@@ -64,13 +65,13 @@ class RiverOnlineCandleModel:
 
         # returns
         ret_1 = 0.0
-        if len(closes) &gt;= 2:
+        if len(closes) >= 2:
             prev = closes[-2]
             ret_1 = float(np.log((c + MIN_TICK) / (prev + MIN_TICK)))
 
-        sma = float(closes.mean()) if len(closes) &gt; 0 else float(c)
-        std = float(closes.std(ddof=0)) if len(closes) &gt; 1 else 0.0
-        vol_mean = float(vols.mean()) if len(vols) &gt; 0 else 0.0
+        sma = float(closes.mean()) if len(closes) > 0 else float(c)
+        std = float(closes.std(ddof=0)) if len(closes) > 1 else 0.0
+        vol_mean = float(vols.mean()) if len(vols) > 0 else 0.0
 
         ts = self._parse_ts(timestamp)
         seconds = ts.hour * 3600 + ts.minute * 60 + ts.second
@@ -98,7 +99,7 @@ class RiverOnlineCandleModel:
             "body": float(body),
         }
 
-    def predict_and_update(self, timestamp, o, h, l, c, v, next_close: Optional[float] = None) -&gt; Dict[str, Any]:
+    def predict_and_update(self, timestamp, o, h, l, c, v, next_close: Optional[float] = None) -> Dict[str, Any]:
         x = self._make_features(timestamp, o, h, l, c, v)
         # predict prob up
         try:
@@ -112,7 +113,7 @@ class RiverOnlineCandleModel:
                 prob_up = 0.9 if pred_class == 1 else 0.1
             except Exception:
                 prob_up = 0.5
-        pred_class = 1 if float(prob_up) &gt;= 0.5 else 0
+        pred_class = 1 if float(prob_up) >= 0.5 else 0
 
         info = {
             "features": x,
@@ -122,7 +123,7 @@ class RiverOnlineCandleModel:
         }
 
         if next_close is not None:
-            label = 1 if float(next_close) &gt; float(c) else 0
+            label = 1 if float(next_close) > float(c) else 0
             # update metrics before learning
             self.metric_acc.update(label, pred_class)
             self.metric_logloss.update(label, prob_up)
@@ -138,6 +139,8 @@ class RiverOnlineCandleModel:
         return info
 
     def save(self, path: str = MODEL_SAVE_PATH):
+        # ensure parent dir
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
@@ -147,38 +150,37 @@ class RiverOnlineCandleModel:
             return pickle.load(f)
 
 
-def run_on_dataframe(df: pd.DataFrame, model: Optional[RiverOnlineCandleModel] = None) -&gt; Dict[str, Any]:
-    """Simulate streaming over a OHLCV dataframe (sorted by datetime)"""
-    required_cols = {"datetime", "open", "high", "low", "close", "volume"}
-    cols = set(c.lower() for c in df.columns)
-    # normalize column names to lower
-    df2 = df.copy()
-    df2.columns = [c.lower() for c in df2.columns]
-    if not required_cols.issubset(set(df2.columns)):
-        raise ValueError(f"CSV precisa conter colunas: {sorted(list(required_cols))}")
-    df2 = df2.sort_values("datetime").reset_index(drop=True)
+def run_on_dataframe(df: pd.DataFrame, model: Optional[RiverOnlineCandleModel] = None) -> Dict[str, Any]:
+        """Simulate streaming over a OHLCV dataframe (sorted by datetime)"""
+        required_cols = {"datetime", "open", "high", "low", "close", "volume"}
+        # normalize column names to lower
+        df2 = df.copy()
+        df2.columns = [c.lower() for c in df2.columns]
+        if not required_cols.issubset(set(df2.columns)):
+            raise ValueError(f"CSV precisa conter colunas: {sorted(list(required_cols))}")
+        df2 = df2.sort_values("datetime").reset_index(drop=True)
 
-    if model is None:
-        model = RiverOnlineCandleModel()
+        if model is None:
+            model = RiverOnlineCandleModel()
 
-    logs = []
-    for i in range(len(df2)):
-        row = df2.iloc[i]
-        next_close = float(df2.iloc[i + 1]["close"]) if i + 1 &lt; len(df2) else None
-        info = model.predict_and_update(
-            row["datetime"], float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]), float(row.get("volume", 0.0)),
-            next_close=next_close,
-        )
-        if i % 100 == 0:
-            logs.append({"i": i, "prob_up": round(info["prob_up"], 4), "pred": int(info["pred_class"]), "label": info.get("label")})
+        logs = []
+        for i in range(len(df2)):
+            row = df2.iloc[i]
+            next_close = float(df2.iloc[i + 1]["close"]) if i + 1 < len(df2) else None
+            info = model.predict_and_update(
+                row["datetime"], float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]), float(row.get("volume", 0.0)),
+                next_close=next_close,
+            )
+            if i % 100 == 0:
+                logs.append({"i": i, "prob_up": round(info["prob_up"], 4), "pred": int(info["pred_class"]), "label": info.get("label")})
 
-    model.save()
-    summary = {
-        "message": "treino online finalizado",
-        "model_path": MODEL_SAVE_PATH,
-        "samples": int(model.sample_count),
-        "acc": float(model.metric_acc.get()) if model.sample_count &gt; 0 else None,
-        "logloss": float(model.metric_logloss.get()) if model.sample_count &gt; 0 else None,
-        "logs": logs[-5:],
-    }
-    return {"model": model, "summary": summary}
+        model.save()
+        summary = {
+            "message": "treino online finalizado",
+            "model_path": MODEL_SAVE_PATH,
+            "samples": int(model.sample_count),
+            "acc": float(model.metric_acc.get()) if model.sample_count > 0 else None,
+            "logloss": float(model.metric_logloss.get()) if model.sample_count > 0 else None,
+            "logs": logs[-5:],
+        }
+        return {"model": model, "summary": summary}
