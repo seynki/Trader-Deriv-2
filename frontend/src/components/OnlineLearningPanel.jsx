@@ -107,10 +107,10 @@ export default function OnlineLearningPanel() {
         setSelectedModel(newModelParams.model_id);
       }
       
-      alert(`Modelo online criado com sucesso!\nFeatures: ${String(data.features_count || 0)}\nSamples: ${String(data.training_samples || 0)}`);
+      window.alert(`Modelo online criado com sucesso!\nFeatures: ${String(data.features_count || 0)}\nSamples: ${String(data.training_samples || 0)}`);
     } catch (error) {
       const errorMsg = error.response?.data?.detail || error.message;
-      alert(`Erro ao criar modelo online: ${errorMsg}`);
+      window.alert(`Erro ao criar modelo online: ${errorMsg}`);
     } finally {
       setCreatingModel(false);
     }
@@ -126,13 +126,13 @@ export default function OnlineLearningPanel() {
       await fetchOnlineProgress();
       
       if (data.models_created > 0) {
-        alert(`${data.models_created} modelo(s) online inicializado(s) automaticamente!\nModelos: ${data.models.join(', ')}`);
+        window.alert(`${data.models_created} modelo(s) online inicializado(s) automaticamente!\nModelos: ${data.models.join(', ')}`);
       } else {
-        alert("Nenhum modelo foi criado (pode precisar de mais dados históricos)");
+        window.alert("Nenhum modelo foi criado (pode precisar de mais dados históricos)");
       }
     } catch (error) {
       const errorMsg = error.response?.data?.detail || error.message;
-      alert(`Erro na inicialização automática: ${errorMsg}`);
+      window.alert(`Erro na inicialização automática: ${errorMsg}`);
     } finally {
       setCreatingModel(false);
     }
