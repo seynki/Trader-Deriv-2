@@ -185,6 +185,12 @@ function StrategyPanel({ onMlActiveChange }) {
     rsi_ob: 70,
     rsi_os: 30,
     bbands_k: 2,
+    fast_ma: 9,
+    slow_ma: 21,
+    macd_fast: 12,
+    macd_slow: 26,
+    macd_sig: 9,
+    river_threshold: 0.53,  // Filtro River: prob_up >= para CALL, prob_up <= 1-threshold para PUT
     mode: "paper",
     ml_gate: true,
     ml_prob_threshold: Number(localStorage.getItem("ml_prob_threshold") || 0.5),
