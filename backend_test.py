@@ -1037,9 +1037,364 @@ async def main_online_learning_test():
         traceback.print_exc()
         sys.exit(1)
 
+async def test_river_online_learning():
+    """
+    Test River Online Learning endpoints as requested in Portuguese review:
+    
+    1) GET /api/ml/river/status - should return {initialized:true/false, samples, acc?, logloss?, model_path}
+    2) POST /api/ml/river/train_csv with CSV data - should return training summary
+    3) GET /api/ml/river/status again - should show samples > 0 after training
+    4) POST /api/ml/river/predict with candle data - should return prediction
+    5) POST /api/ml/river/decide_trade with dry_run=true - should return trading decision
+    """
+    
+    base_url = "https://smart-trader-ml.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🌊" + "="*68)
+    log("TESTE RIVER ONLINE LEARNING ENDPOINTS")
+    log("🌊" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   1) GET /api/ml/river/status (baseline)")
+    log("   2) POST /api/ml/river/train_csv (treinar com CSV)")
+    log("   3) GET /api/ml/river/status (verificar samples > 0)")
+    log("   4) POST /api/ml/river/predict (predição)")
+    log("   5) POST /api/ml/river/decide_trade (dry_run=true)")
+    
+    test_results = {
+        "status_initial": False,
+        "train_csv": False,
+        "status_after_training": False,
+        "predict": False,
+        "decide_trade": False
+    }
+    
+    # CSV data for training as specified in the review request
+    csv_data = """datetime,open,high,low,close,volume
+2025-01-01T00:00:00Z,100,101,99,100.5,10
+2025-01-01T00:00:05Z,100.5,101.2,100.2,100.8,11
+2025-01-01T00:00:10Z,100.8,101.0,100.6,100.7,9
+2025-01-01T00:00:15Z,100.7,101.5,100.4,101.2,12
+2025-01-01T00:00:20Z,101.2,101.4,100.9,101.0,8
+2025-01-01T00:00:25Z,101.0,101.3,100.7,100.9,10"""
+    
+    try:
+        # Test 1: GET /api/ml/river/status (initial)
+        log("\n🔍 TEST 1: GET /api/ml/river/status (baseline)")
+        try:
+            response = session.get(f"{api_url}/ml/river/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Validate expected fields
+                has_initialized = 'initialized' in data
+                has_samples = 'samples' in data
+                has_model_path = 'model_path' in data
+                
+                if has_initialized and has_samples and has_model_path:
+                    test_results["status_initial"] = True
+                    log("✅ Status inicial OK - campos obrigatórios presentes")
+                    log(f"   Initialized: {data.get('initialized')}")
+                    log(f"   Samples: {data.get('samples')}")
+                    log(f"   Model path: {data.get('model_path')}")
+                    if data.get('acc') is not None:
+                        log(f"   Accuracy: {data.get('acc')}")
+                    if data.get('logloss') is not None:
+                        log(f"   Log loss: {data.get('logloss')}")
+                else:
+                    log("❌ Status inicial FALHOU - campos obrigatórios ausentes")
+                    log(f"   Has initialized: {has_initialized}")
+                    log(f"   Has samples: {has_samples}")
+                    log(f"   Has model_path: {has_model_path}")
+            else:
+                log(f"❌ Status inicial FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Status inicial FALHOU - Exception: {e}")
+        
+        # Test 2: POST /api/ml/river/train_csv
+        log("\n🔍 TEST 2: POST /api/ml/river/train_csv (treinar com CSV)")
+        try:
+            payload = {"csv_text": csv_data}
+            response = session.post(f"{api_url}/ml/river/train_csv", json=payload, timeout=30)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Validate training summary
+                has_message = 'message' in data or any(key in data for key in ['samples', 'acc', 'logloss'])
+                samples = data.get('samples', 0)
+                
+                if has_message and samples >= 1:
+                    test_results["train_csv"] = True
+                    log("✅ Treinamento CSV OK - resumo válido retornado")
+                    log(f"   Samples processados: {samples}")
+                    if 'message' in data:
+                        log(f"   Message: {data.get('message')}")
+                    if 'acc' in data:
+                        log(f"   Accuracy: {data.get('acc')}")
+                    if 'logloss' in data:
+                        log(f"   Log loss: {data.get('logloss')}")
+                else:
+                    log("❌ Treinamento CSV FALHOU - resumo inválido")
+                    log(f"   Has message/metrics: {has_message}")
+                    log(f"   Samples: {samples}")
+            else:
+                log(f"❌ Treinamento CSV FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Treinamento CSV FALHOU - Exception: {e}")
+        
+        # Test 3: GET /api/ml/river/status (after training)
+        log("\n🔍 TEST 3: GET /api/ml/river/status (após treinamento)")
+        try:
+            response = session.get(f"{api_url}/ml/river/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                samples = data.get('samples', 0)
+                initialized = data.get('initialized', False)
+                
+                if initialized and samples > 0:
+                    test_results["status_after_training"] = True
+                    log("✅ Status após treinamento OK - samples > 0")
+                    log(f"   Initialized: {initialized}")
+                    log(f"   Samples: {samples}")
+                    if data.get('acc') is not None:
+                        log(f"   Accuracy: {data.get('acc')}")
+                    if data.get('logloss') is not None:
+                        log(f"   Log loss: {data.get('logloss')}")
+                else:
+                    log("❌ Status após treinamento FALHOU - samples não aumentaram")
+                    log(f"   Initialized: {initialized}")
+                    log(f"   Samples: {samples}")
+            else:
+                log(f"❌ Status após treinamento FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Status após treinamento FALHOU - Exception: {e}")
+        
+        # Test 4: POST /api/ml/river/predict
+        log("\n🔍 TEST 4: POST /api/ml/river/predict (predição)")
+        try:
+            predict_payload = {
+                "datetime": "2025-01-01T00:00:30Z",
+                "open": 100.9,
+                "high": 101.1,
+                "low": 100.8,
+                "close": 101.05,
+                "volume": 10
+            }
+            response = session.post(f"{api_url}/ml/river/predict", json=predict_payload, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Validate prediction response
+                has_prob_up = 'prob_up' in data
+                has_pred_class = 'pred_class' in data
+                has_signal = 'signal' in data
+                has_features = 'features' in data
+                
+                if has_prob_up and has_pred_class and has_signal and has_features:
+                    test_results["predict"] = True
+                    log("✅ Predição OK - campos obrigatórios presentes")
+                    log(f"   Prob up: {data.get('prob_up')}")
+                    log(f"   Pred class: {data.get('pred_class')}")
+                    log(f"   Signal: {data.get('signal')}")
+                    log(f"   Features count: {len(data.get('features', {}))}")
+                else:
+                    log("❌ Predição FALHOU - campos obrigatórios ausentes")
+                    log(f"   Has prob_up: {has_prob_up}")
+                    log(f"   Has pred_class: {has_pred_class}")
+                    log(f"   Has signal: {has_signal}")
+                    log(f"   Has features: {has_features}")
+            else:
+                log(f"❌ Predição FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Predição FALHOU - Exception: {e}")
+        
+        # Test 5: POST /api/ml/river/decide_trade (dry_run=true)
+        log("\n🔍 TEST 5: POST /api/ml/river/decide_trade (dry_run=true)")
+        try:
+            trade_payload = {
+                "symbol": "R_100",
+                "duration": 5,
+                "duration_unit": "t",
+                "stake": 1,
+                "currency": "USD",
+                "dry_run": True,
+                "candle": {
+                    "datetime": "2025-01-01T00:00:35Z",
+                    "open": 101.05,
+                    "high": 101.2,
+                    "low": 100.9,
+                    "close": 101.1,
+                    "volume": 11
+                }
+            }
+            response = session.post(f"{api_url}/ml/river/decide_trade", json=trade_payload, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Validate trade decision response
+                has_decision = 'decision' in data
+                has_prob_up = 'prob_up' in data
+                has_signal = 'signal' in data
+                has_dry_run = 'dry_run' in data
+                decision_valid = data.get('decision') in ['CALL', 'PUT']
+                dry_run_true = data.get('dry_run') is True
+                
+                if has_decision and has_prob_up and has_signal and has_dry_run and decision_valid and dry_run_true:
+                    test_results["decide_trade"] = True
+                    log("✅ Decisão de trade OK - campos obrigatórios presentes")
+                    log(f"   Decision: {data.get('decision')}")
+                    log(f"   Prob up: {data.get('prob_up')}")
+                    log(f"   Signal: {data.get('signal')}")
+                    log(f"   Dry run: {data.get('dry_run')}")
+                else:
+                    log("❌ Decisão de trade FALHOU - campos obrigatórios ausentes ou inválidos")
+                    log(f"   Has decision: {has_decision}")
+                    log(f"   Has prob_up: {has_prob_up}")
+                    log(f"   Has signal: {has_signal}")
+                    log(f"   Has dry_run: {has_dry_run}")
+                    log(f"   Decision valid: {decision_valid}")
+                    log(f"   Dry run true: {dry_run_true}")
+            else:
+                log(f"❌ Decisão de trade FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Decisão de trade FALHOU - Exception: {e}")
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste River Online Learning")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        for test_name, passed in test_results.items():
+            status = "✅ PASSOU" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        overall_success = passed_tests == total_tests
+        
+        if overall_success:
+            log("\n🎉 TODOS OS TESTES RIVER ONLINE LEARNING PASSARAM!")
+            log("📋 Validações bem-sucedidas:")
+            log("   ✅ GET /api/ml/river/status retorna campos obrigatórios")
+            log("   ✅ POST /api/ml/river/train_csv processa CSV e retorna resumo")
+            log("   ✅ Status após treinamento mostra samples > 0")
+            log("   ✅ POST /api/ml/river/predict retorna predição válida")
+            log("   ✅ POST /api/ml/river/decide_trade (dry_run=true) retorna decisão")
+            log("   🎯 CONCLUSÃO: River Online Learning funcionando PERFEITAMENTE!")
+        else:
+            log("\n❌ ALGUNS TESTES RIVER ONLINE LEARNING FALHARAM")
+            failed_tests = [name for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_tests}")
+            log("   📋 FOCO: Verificar implementação dos endpoints que falharam")
+        
+        return overall_success, test_results
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE RIVER: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }
+
+async def main_river_test():
+    """Main function to run River Online Learning tests"""
+    print("🌊 TESTE RIVER ONLINE LEARNING ENDPOINTS")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Testar novos endpoints River Online Learning")
+    print("   TESTES:")
+    print("   1) GET /api/ml/river/status (baseline)")
+    print("   2) POST /api/ml/river/train_csv (treinar com CSV)")
+    print("   3) GET /api/ml/river/status (verificar samples > 0)")
+    print("   4) POST /api/ml/river/predict (predição)")
+    print("   5) POST /api/ml/river/decide_trade (dry_run=true)")
+    print("   🎯 FOCO: Validar funcionamento completo do River Online Learning")
+    
+    try:
+        # Run River Online Learning tests
+        success, results = await test_river_online_learning()
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Tests interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 if __name__ == "__main__":
-    # Check if we want to run the online learning test specifically
-    if len(sys.argv) > 1 and sys.argv[1] == "online_learning":
-        asyncio.run(main_online_learning_test())
+    # Check which test to run based on command line arguments
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "online_learning":
+            asyncio.run(main_online_learning_test())
+        elif sys.argv[1] == "river":
+            asyncio.run(main_river_test())
+        else:
+            print("Available test modes: online_learning, river")
+            print("Usage: python backend_test.py [online_learning|river]")
+            print("Default: WebSocket tests")
+            asyncio.run(main())
     else:
         asyncio.run(main())
