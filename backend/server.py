@@ -103,6 +103,57 @@ class StatusCheckCreate(BaseModel):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("deriv")
 
+# ------------------------ Global Stats ------------------------
+class GlobalStats:
+    """Contabiliza métricas globais (manual/auto/estratégia) e PnL diário.
+    - Evita dupla contagem por contract_id
+    - Reseta PnL automaticamente ao mudar o dia
+    """
+    def __init__(self):
+        self.wins: int = 0
+        self.losses: int = 0
+        self.total_trades: int = 0
+        self._day: date = date.today()
+        self._daily_pnl: float = 0.0
+        self._recorded_contracts: Dict[int, bool] = {}
+
+    def _roll_day_if_needed(self):
+        if date.today() != self._day:
+            self._day = date.today()
+            self._daily_pnl = 0.0
+
+    def add_pnl(self, pnl: float):
+        self._roll_day_if_needed()
+        self._daily_pnl += float(pnl or 0.0)
+        if pnl > 0:
+            self.wins += 1
+        else:
+            self.losses += 1
+        self.total_trades += 1
+
+    def add_contract_result(self, contract_id: Optional[int], profit: float):
+        if contract_id is None:
+            # Ainda assim computa, pois veio de fonte confiável
+            self.add_pnl(profit)
+            return
+        if not self._recorded_contracts.get(contract_id):
+            self._recorded_contracts[contract_id] = True
+            self.add_pnl(profit)
+
+    def snapshot(self) -> Dict[str, Any]:
+        self._roll_day_if_needed()
+        wr = (self.wins / self.total_trades * 100.0) if self.total_trades > 0 else 0.0
+        return {
+            "wins": self.wins,
+            "losses": self.losses,
+            "total_trades": self.total_trades,
+            "win_rate": wr,
+            "global_daily_pnl": round(self._daily_pnl, 6),
+            "day": self._day.isoformat(),
+        }
+
+_global_stats = GlobalStats()
+
 class DerivWS:
     """Minimal Deriv WS manager with auto reconnect, dispatcher, tick and contract broadcasting."""
     def __init__(self, app_id: Optional[str], token: Optional[str], ws_url: str):
@@ -129,6 +180,8 @@ class DerivWS:
         self.currency: Optional[str] = None
         # avoid double-learning per contract
         self._river_learned: Dict[int, bool] = {}
+        # avoid double-counting stats per contract
+        self.stats_recorded: Dict[int, bool] = {}
 
     def _build_uri(self) -> str:
         if not self.app_id:
@@ -251,6 +304,14 @@ class DerivWS:
                                 self._river_learned[cid_int] = True
                         except Exception as le:
                             logger.warning(f"River post-trade learn failed: {le}")
+                        # Atualiza estatísticas globais quando contrato expira
+                        try:
+                            if cid_int is not None and bool(poc.get("is_expired")) and not self.stats_recorded.get(cid_int):
+                                profit = float(poc.get("profit") or 0.0)
+                                _global_stats.add_contract_result(cid_int, profit)
+                                self.stats_recorded[cid_int] = True
+                        except Exception as se:
+                            logger.warning(f"Global stats add failed: {se}")
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
@@ -338,364 +399,104 @@ async def create_status_check(input: StatusCheckCreate):
         _ = await db.status_checks.insert_one(status_obj.dict())
     return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    if not db:
-        return []
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Deriv helper endpoints
 @api_router.get("/deriv/status", response_model=DerivStatus)
 async def deriv_status():
     return DerivStatus(
         connected=_deriv.connected,
         authenticated=_deriv.authenticated,
-        symbols=list(_deriv.subscribed_symbols.keys()),
+        environment="DEMO",
+        symbols=SUPPORTED_SYMBOLS,
         last_heartbeat=_deriv.last_heartbeat,
     )
 
-# cache for contracts_for
-_contracts_cache: Dict[str, Dict[str, Any]] = {}
-_CONTRACTS_TTL = 60  # seconds
-
-def _parse_duration(s: Optional[str]):
-    if not s or not isinstance(s, str):
-        return None, None
-    try:
-        num = int(''.join(ch for ch in s if ch.isdigit()))
-        unit = ''.join(ch for ch in s if ch.isalpha())
-        return num, unit
-    except Exception:
-        return None, None
-
 @api_router.get("/deriv/contracts_for/{symbol}")
-async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
-    # TTL cache key includes product_type
-    now = time.time()
-    # Derive defaults from last authorize when not provided
-    resolved_currency = currency or _deriv.currency or "USD"
-    resolved_lc = (landing_company or _deriv.landing_company_name or "").lower() or "any"
-    cache_key = f"{symbol}:{product_type or 'basic'}:{resolved_currency}:{resolved_lc}"
-    cached = _contracts_cache.get(cache_key)
-    if cached and now - cached.get("_ts", 0) < _CONTRACTS_TTL:
-        return cached["data"]
+async def deriv_contracts_for(symbol: str):
+    # Minimal contracts_for for CALL/PUT (basic)
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send({
+        "contracts_for": symbol,
+        "product_type": "basic",
+        "req_id": req_id,
+    })
+    try:
+        data = await asyncio.wait_for(fut, timeout=10)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for contracts_for")
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "contracts_for error"))
+    # Parse only what we need for UI (CALL/PUT availability)
+    cfor = data.get("contracts_for", {})
+    available = []
+    for c in (cfor.get("available") or []):
+        if c.get("contract_category") == "callput":
+            available.extend([t.get("name") for t in (c.get("contract_types") or []) if t.get("name") in ("CALL", "PUT")])
+    return {"contract_types": sorted(list(set(available)))}
 
+@api_router.post("/deriv/proposal")
+async def deriv_proposal(req: BuyRequest):
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
     req_id = int(time.time() * 1000)
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
     payload = {
-        "contracts_for": symbol,
-        "currency": resolved_currency,
+        "proposal": 1,
+        "amount": req.stake,
+        "basis": "stake",
+        "contract_type": req.contract_type or ("CALL" if (req.extra or {}).get("side") == "RISE" else "PUT"),
+        "currency": req.currency,
+        "duration": req.duration,
+        "duration_unit": req.duration_unit or "t",
+        "symbol": req.symbol,
         "req_id": req_id,
     }
-    # Send product_type if the caller specified it (accumulator, turbos, multipliers, basic)
-    if product_type:
-        payload["product_type"] = product_type
-    # Include landing_company when available to get account-specific availability
-    if resolved_lc != "any":
-        payload["landing_company"] = resolved_lc
     await _deriv._send(payload)
     try:
         data = await asyncio.wait_for(fut, timeout=10)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for contracts_for")
-
-    if data.get("error"):
-        msg = data["error"].get("message", "contracts_for error")
-        raise HTTPException(status_code=400, detail=msg)
-
-    cf = data.get("contracts_for", {})
-    if not cf:
-        raise HTTPException(status_code=400, detail="There's no contract available for this symbol.")
-    available = cf.get("available", [])
-    types = set()
-    durations: Dict[str, Dict[str, int]] = {}
-    barrier_categories = set()
-
-    for item in available:
-        ctype = item.get("contract_type") or item.get("trade_type")
-        if ctype:
-            types.add(ctype)
-        min_d, min_u = _parse_duration(item.get("min_duration"))
-        max_d, max_u = _parse_duration(item.get("max_duration"))
-        if min_u and min_d is not None:
-            d = durations.setdefault(min_u, {"min": min_d, "max": min_d})
-            d["min"] = min(d["min"], min_d)
-        if max_u and max_d is not None:
-            d = durations.setdefault(max_u, {"min": max_d, "max": max_d})
-            d["max"] = max(d["max"], max_d)
-        bc = item.get("barrier_category")
-        if bc:
-            barrier_categories.add(bc)
-
-    result = {
-        "symbol": symbol,
-        "contract_types": sorted(types),
-        "durations": durations,
-        "duration_units": list(durations.keys()),
-        "barriers": sorted(barrier_categories),
-        "has_barrier": len(barrier_categories) > 0,
-        "product_type": product_type or "basic",
-        "currency": resolved_currency,
-        "landing_company": None if resolved_lc == "any" else resolved_lc,
-    }
-
-    _contracts_cache[cache_key] = {"_ts": now, "data": result}
-    return result
-
-
-@api_router.get("/deriv/contracts_for_smart/{symbol}")
-async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
-    """Smart helper: checks symbol with correct product_type and falls back to 1HZ variant.
-    Extra: quando product_type não é aceito pela Deriv (ou não retorna suporte), tenta novamente com 'basic' e valida se os tipos específicos existem.
-    """
-    base_symbol = symbol
-    tried: List[str] = []
-    results: Dict[str, Any] = {}
-
-    desired = (product_type or "basic").lower()
-
-    def types_match_for_product(res: Dict[str, Any]) -> bool:
-        if not isinstance(res, dict):
-            return False
-        types = {str(t).upper() for t in (res.get("contract_types") or [])}
-        if not types:
-            return False
-        if desired == "accumulator":
-            return "ACCU" in types or "ACCUMULATOR" in types
-        if desired == "turbos":
-            return "TURBOSLONG" in types or "TURBOSSHORT" in types
-        if desired == "multipliers":
-            return "MULTUP" in types or "MULTDOWN" in types
-        return True
-
-    async def query_with_pt_fallback(sym: str):
-        # 1) tentativa com product_type pedido
-        primary: Any = None
-        try:
-            primary = await deriv_contracts_for(sym, currency=currency, product_type=product_type, landing_company=landing_company)
-        except HTTPException as e:
-            primary = {"error": e.detail}
-        # 2) se não suportou, tenta com basic
-        chosen = primary
-        fallback: Any = None
-        if (not types_match_for_product(primary)) and desired in {"accumulator", "turbos", "multipliers"}:
-            try:
-                fallback = await deriv_contracts_for(sym, currency=currency, product_type="basic", landing_company=landing_company)
-                if types_match_for_product(fallback):
-                    chosen = fallback
-            except HTTPException as e2:
-                fallback = {"error": e2.detail}
-        return {"primary": primary, "fallback": fallback, "chosen": chosen}
-
-    # Try provided symbol first
-    res0 = await query_with_pt_fallback(base_symbol)
-    tried.append(base_symbol)
-    results[base_symbol] = res0["chosen"]
-    first_supported = base_symbol if types_match_for_product(res0["chosen"]) else None
-
-    # If not supported, try 1HZ alias
-    if first_supported is None:
-        alt = None
-        if base_symbol.startswith("R_") and not base_symbol.endswith("_1HZ"):
-            alt = f"{base_symbol}_1HZ"
-        if alt:
-            res1 = await query_with_pt_fallback(alt)
-            tried.append(alt)
-            results[alt] = res1["chosen"]
-            if types_match_for_product(res1["chosen"]):
-                first_supported = alt
-
-    return {
-        "tried": tried,
-        "first_supported": first_supported,
-        "results": results,
-        "product_type": product_type or "basic",
-    }
-
-# ---------------- Proposal/Buy -----------------
-
-def build_proposal_payload(req: BuyRequest) -> Dict[str, Any]:
-    base: Dict[str, Any] = {
-        "proposal": 1,
-        "amount": float(req.stake),
-        "basis": "stake",
-        "currency": req.currency,
-        "symbol": req.symbol,
-    }
-    t = (req.type or "CALLPUT").upper()
-    # Default contract_type fallback
-    ct = (req.contract_type or "CALL").upper() if t == "CALLPUT" else (req.contract_type.upper() if req.contract_type else None)
-
-    if t == "CALLPUT":
-        base.update({
-            "contract_type": ct,
-            "duration": int(req.duration or 5),
-            "duration_unit": req.duration_unit or "t",
-        })
-        if req.barrier:
-            base["barrier"] = req.barrier
-    elif t == "ACCUMULATOR":
-        # Accumulator: buy direto com parameters (ACCU). 'price' é o preço máximo aceitável.
-        # Se não vier max_price, use a própria stake como teto para evitar o erro
-        # "Contract's stake amount is more than the maximum purchase price".
-        base = {
-            "buy": 1,
-            "price": float(req.max_price if req.max_price is not None else req.stake),
-            "parameters": {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": "ACCU",
-                "currency": req.currency,
-                "symbol": req.symbol,
-            }
-        }
-        if req.growth_rate is not None:
-            base["parameters"]["growth_rate"] = float(req.growth_rate)
-        if req.limit_order:
-            # ACCU não aceita stop_loss; apenas take_profit é válido
-            lo = {}
-            try:
-                tp = req.limit_order.get("take_profit")
-                if tp is not None:
-                    lo["take_profit"] = float(tp)
-            except Exception:
-                pass
-            if lo:
-                base["parameters"]["limit_order"] = lo
-    elif t == "TURBOS":
-        base = {
-            "buy": 1,
-            "price": float(req.max_price or 0),
-            "parameters": {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": (ct or "TURBOSLONG"),
-                "currency": req.currency,
-                "symbol": req.symbol,
-                "strike": req.strike or "ATM",
-            }
-        }
-    elif t == "MULTIPLIERS":
-        # Para multipliers, o 'price' também é um teto. Se não informado, usar stake por segurança.
-        base = {
-            "buy": 1,
-            "price": float(req.max_price if req.max_price is not None else req.stake),
-            "parameters": {
-                "amount": float(req.stake),
-                "basis": "stake",
-                "contract_type": (ct or "MULTUP"),
-                "currency": req.currency,
-                "symbol": req.symbol,
-            }
-        }
-        if req.multiplier:
-            base["parameters"]["multiplier"] = int(req.multiplier)
-        if req.limit_order:
-            base["parameters"]["limit_order"] = req.limit_order
-    else:
-        # Fallback: send as-is plus extras
-        if ct:
-            base["contract_type"] = ct
-        if req.duration:
-            base["duration"] = int(req.duration)
-        if req.duration_unit:
-            base["duration_unit"] = req.duration_unit
-        if req.barrier:
-            base["barrier"] = req.barrier
-
-    if req.extra:
-        base.update(req.extra)
-    return base
-
-@api_router.post("/deriv/proposal")
-async def deriv_proposal(req: BuyRequest):
-    """Get a pricing proposal for a contract. Supports CALLPUT, ACCUMULATOR, TURBOS, MULTIPLIERS.
-    Note: For ACCUMULATOR/TURBOS/MULTIPLIERS we build a buy parameters payload, but here we only return an error
-    if type isn't CALLPUT since proposal isn't applicable."""
-    if not _deriv.connected:
-        raise HTTPException(status_code=503, detail="Deriv not connected")
-    if (req.type or "CALLPUT").upper() != "CALLPUT":
-        raise HTTPException(status_code=400, detail="proposal only applies to CALL/PUT vanilla options")
-
-    req_id = int(time.time() * 1000)
-    payload = build_proposal_payload(req)
-    if "proposal" not in payload:
-        raise HTTPException(status_code=400, detail="Invalid proposal payload")
-    payload["req_id"] = req_id
-
-    fut = asyncio.get_running_loop().create_future()
-    _deriv.pending[req_id] = fut
-    await _deriv._send(payload)
-    try:
-        data = await asyncio.wait_for(fut, timeout=12)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for proposal")
     if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "Proposal error"))
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "proposal error"))
     p = data.get("proposal", {})
     return {
         "id": p.get("id"),
-        "symbol": p.get("symbol"),
-        "contract_type": p.get("contract_type"),
-        "ask_price": float(p.get("ask_price", 0) or 0),
-        "payout": float(p.get("payout", 0) or 0),
+        "payout": p.get("payout"),
+        "ask_price": p.get("ask_price"),
         "spot": p.get("spot"),
-        "barrier": p.get("barrier"),
     }
 
 @api_router.post("/deriv/buy")
 async def deriv_buy(req: BuyRequest):
     if not _deriv.connected:
         raise HTTPException(status_code=503, detail="Deriv not connected")
-
-    t = (req.type or "CALLPUT").upper()
-    if t == "CALLPUT":
-        # 1) proposal
-        proposal = await deriv_proposal(BuyRequest(**{**req.model_dump(), "type": "CALLPUT"}))
-        # 2) send buy for proposal id
-        req_id = int(time.time() * 1000)
-        fut = asyncio.get_running_loop().create_future()
-        _deriv.pending[req_id] = fut
-        await _deriv._send({
-            "buy": proposal["id"],
-            "price": req.max_price or proposal["ask_price"],
-            "subscribe": 1,
-            "req_id": req_id,
-        })
-        try:
-            data = await asyncio.wait_for(fut, timeout=12)
-        except asyncio.TimeoutError:
-            _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-        b = data.get("buy", {})
-    else:
-        # Direct buy with parameters
-        payload = build_proposal_payload(req)
-        req_id = int(time.time() * 1000)
-        fut = asyncio.get_running_loop().create_future()
-        _deriv.pending[req_id] = fut
-        payload["req_id"] = req_id
-        await _deriv._send(payload)
-        try:
-            data = await asyncio.wait_for(fut, timeout=12)
-        except asyncio.TimeoutError:
-            _deriv.pending.pop(req_id, None)
-            raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-        if data.get("error"):
-            raise HTTPException(status_code=400, detail=data["error"].get("message", "Buy error"))
-        b = data.get("buy", {})
-
-    # Try to prime contract subscription as soon as we know the id
+    # 1) proposal primeiro para obter id
+    prop = await deriv_proposal(req)
+    if not prop.get("id"):
+        raise HTTPException(status_code=400, detail="No proposal id")
+    # 2) buy
+    req_id = int(time.time() * 1000)
+    fut = asyncio.get_running_loop().create_future()
+    _deriv.pending[req_id] = fut
+    await _deriv._send({
+        "buy": prop["id"],
+        "price": req.stake,
+        "req_id": req_id,
+    })
     try:
-        cid = int(b.get("contract_id")) if b.get("contract_id") is not None else None
+        data = await asyncio.wait_for(fut, timeout=12)
+    except asyncio.TimeoutError:
+        _deriv.pending.pop(req_id, None)
+        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
+    if data.get("error"):
+        raise HTTPException(status_code=400, detail=data["error"].get("message", "buy error"))
+    b = data.get("buy", {})
+    cid = b.get("contract_id")
+    # Garante que começaremos a acompanhar o contrato para emitir sinais de expiração/profit
+    try:
         if cid:
             await _deriv.ensure_contract_subscription(cid)
     except Exception:
@@ -761,6 +562,12 @@ class StrategyStatus(BaseModel):
     last_signal: Optional[str] = None
     last_reason: Optional[str] = None
     last_run_at: Optional[int] = None
+    # Global counters (para UI)
+    wins: int = 0
+    losses: int = 0
+    total_trades: int = 0
+    win_rate: float = 0.0
+    global_daily_pnl: float = 0.0
 
 # ---- indicator helpers (python versions) ----
 
@@ -771,6 +578,7 @@ def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
         return None
     seg = arr[i - n:i]
     return sum(seg) / n if seg else None
+
 
 def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
     if len(arr) == 0:
@@ -785,6 +593,7 @@ def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
         ema = arr[i] * k + ema * (1 - k)
         out[i] = ema
     return out
+
 
 def _rsi(close: List[float], period: int = 14) -> List[Optional[float]]:
     n = len(close)
@@ -811,10 +620,12 @@ def _rsi(close: List[float], period: int = 14) -> List[Optional[float]]:
         out[i] = 100 - (100 / (1 + rs))
     return out
 
+
 def _ema_series_from_list(arr: List[Optional[float]], period: int) -> List[Optional[float]]:
     # helper for MACD when there are None values
     clean = [x if x is not None else 0.0 for x in arr]
     return _ema_series(clean, period)
+
 
 def _macd(close: List[float], f: int, s: int, sig: int):
     emaF = _ema_series(close, f)
@@ -833,6 +644,7 @@ def _macd(close: List[float], f: int, s: int, sig: int):
         hist.append((line[i] - s_v) if (line[i] is not None and s_v is not None) else None)
     return {"line": line, "signal": sigSeries, "hist": hist}
 
+
 def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
     n = len(close)
     mid: List[Optional[float]] = [None] * n
@@ -848,8 +660,10 @@ def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
         lower[i] = m - k * sd
     return {"upper": upper, "mid": mid, "lower": lower}
 
+
 def _true_range(h: float, l: float, pc: float) -> float:
     return max(h - l, abs(h - pc), abs(l - pc))
+
 
 def _rma(arr: List[float], p: int) -> List[Optional[float]]:
     if len(arr) == 0:
@@ -864,6 +678,7 @@ def _rma(arr: List[float], p: int) -> List[Optional[float]]:
         prev = prev - prev / p + arr[i]
         out[i] = prev / p
     return out
+
 
 def _adx(high: List[float], low: List[float], close: List[float], period: int = 14) -> List[Optional[float]]:
     if len(high) <= period:
@@ -1100,6 +915,11 @@ class StrategyRunner:
                 else:
                     pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
                 self.daily_pnl += pnl
+                # Atualiza estatísticas globais (paper ou live)
+                try:
+                    _global_stats.add_pnl(pnl)
+                except Exception:
+                    pass
                 logger.info(f"Trade done [{self.params.mode}] side={side} pnl={pnl:.2f} daily={self.daily_pnl:.2f} reason={self.last_reason}")
             except asyncio.CancelledError:
                 break
@@ -1128,6 +948,8 @@ class StrategyRunner:
         self.running = False
 
     def status(self) -> StrategyStatus:
+        # snapshot das métricas globais
+        snap = _global_stats.snapshot()
         return StrategyStatus(
             running=self.running,
             mode=self.mode,
@@ -1138,6 +960,11 @@ class StrategyRunner:
             last_signal=self.last_signal,
             last_reason=self.last_reason,
             last_run_at=self.last_run_at,
+            wins=snap["wins"],
+            losses=snap["losses"],
+            total_trades=snap["total_trades"],
+            win_rate=snap["win_rate"],
+            global_daily_pnl=snap["global_daily_pnl"],
         )
 
 _strategy = StrategyRunner()
