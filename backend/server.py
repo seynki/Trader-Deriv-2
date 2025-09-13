@@ -207,6 +207,7 @@ class DerivWS:
                             cid_int = int(cid) if cid is not None else None
                         except Exception:
                             cid_int = None
+                        # Broadcast to WS subscribers
                         if cid_int is not None and cid_int in self.contract_queues:
                             message = {
                                 "type": "contract",
@@ -227,6 +228,29 @@ class DerivWS:
                             for q in list(self.contract_queues.get(cid_int, [])):
                                 if not q.full():
                                     q.put_nowait(message)
+                        # Online learning (River) pós-trade: quando expira e ainda não aprendemos
+                        try:
+                            if cid_int is not None and bool(poc.get("is_expired")) and not self._river_learned.get(cid_int):
+                                # Extrair label a partir do lucro
+                                profit = float(poc.get("profit") or 0.0)
+                                label = 1 if profit > 0 else 0
+                                # Construir candle sintético a partir de spots do contrato
+                                entry_spot = float(poc.get("entry_spot") or 0.0)
+                                current_spot = float(poc.get("current_spot") or entry_spot)
+                                # Usamos o último spot como "close" do candle final; volume desconhecido -> 0
+                                o = entry_spot if entry_spot else current_spot
+                                h = max(entry_spot, current_spot)
+                                l = min(entry_spot, current_spot)
+                                c = current_spot
+                                v = 0.0
+                                ts = datetime.utcnow().isoformat()
+                                # Atualizar River com (features no momento) + label via next_close
+                                m = _get_river_model()
+                                _ = m.predict_and_update(ts, o, h, l, c, v, next_close=(c + 1e-12 if label == 1 else c - 1e-12))
+                                m.save()
+                                self._river_learned[cid_int] = True
+                        except Exception as le:
+                            logger.warning(f"River post-trade learn failed: {le}")
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
