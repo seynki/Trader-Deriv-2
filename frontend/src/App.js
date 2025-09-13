@@ -315,21 +315,25 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
 
   const isTypeSupported = (type) => {
     if (type === "CALLPUT") {
-      const ct = (support.basic?.contract_types)||[];
-      return ct.includes("CALL") && ct.includes("PUT");
+      const ct = (support.basic?.contract_types) || [];
+      // Quando ainda não carregou o mapa de suporte, não bloqueie CALL/PUT
+      if (!support.basic) return true;
+      if (!Array.isArray(ct) || ct.length === 0) return true; // degrade gracefully
+      // Se ao menos um dos lados existir, deixamos seguir e backend valida
+      return ct.map(String).map((x)=>x.toUpperCase()).some((x)=>x === "CALL" || x === "PUT");
     }
     if (type === "ACCUMULATOR") {
-      const ct = ((support.accumulator?.contract_types)||[]).map((x)=>x.toUpperCase());
+      const ct = ((support.accumulator?.contract_types) || []).map((x) => x.toUpperCase());
       // Aceita ACCU/ACCUMULATOR do product_type=accumulator OU, quando o backend caiu para basic, os tipos aparecerem em basic
-      const basicCt = ((support.basic?.contract_types)||[]).map((x)=>x.toUpperCase());
+      const basicCt = ((support.basic?.contract_types) || []).map((x) => x.toUpperCase());
       return ct.includes("ACCU") || ct.includes("ACCUMULATOR") || basicCt.includes("ACCU") || basicCt.includes("ACCUMULATOR");
     }
     if (type === "TURBOS") {
-      const ct = (support.turbos?.contract_types||[]).map((x)=>x.toUpperCase());
+      const ct = (support.turbos?.contract_types || []).map((x) => x.toUpperCase());
       return ct.includes("TURBOSLONG") || ct.includes("TURBOSSHORT");
     }
     if (type === "MULTIPLIERS") {
-      const ct = (support.multipliers?.contract_types||[]).map((x)=>x.toUpperCase());
+      const ct = (support.multipliers?.contract_types || []).map((x) => x.toUpperCase());
       return ct.includes("MULTUP") || ct.includes("MULTDOWN");
     }
     return false;
