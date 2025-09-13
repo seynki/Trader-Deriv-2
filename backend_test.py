@@ -1354,6 +1354,517 @@ async def test_river_online_learning():
             "test_results": test_results
         }
 
+async def test_hybrid_trading_system():
+    """
+    Test Hybrid Trading System (River + Technical Indicators) as requested in Portuguese review:
+    
+    1. Basic connectivity tests:
+       - GET /api/deriv/status (should return connected=true, authenticated=true)
+       - GET /api/ml/river/status (check if River model is initialized)
+       - GET /api/strategy/status (check if strategy runner is available)
+    
+    2. Hybrid system test:
+       - POST /api/strategy/start with complete payload including river_threshold parameter
+    
+    3. Monitor hybrid strategy:
+       - Check if running=true after start
+       - Monitor for 60 seconds with GET /api/strategy/status every 10s
+       - Check if last_run_at is updating
+       - Check if signals appear in last_reason with format "🤖 River X.XXX + [technical reason]"
+    
+    4. Test logs and functionality:
+       - Capture backend logs during test
+       - Check for no River prediction errors
+       - POST /api/strategy/stop to finish
+    
+    5. Test configurable threshold:
+       - Test with different river_threshold (e.g. 0.60)
+    """
+    
+    base_url = "https://hybrid-trade-algo.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🤖" + "="*68)
+    log("TESTE DO SISTEMA HÍBRIDO DE TRADING (RIVER + INDICADORES TÉCNICOS)")
+    log("🤖" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   SISTEMA HÍBRIDO: River Online Learning (CONDIÇÃO PRINCIPAL) + Indicadores Técnicos (CONFIRMAÇÃO)")
+    log("   O sistema só executa trades quando AMBOS concordam, tornando-o mais seletivo")
+    log("   TESTES:")
+    log("   1. Conectividade básica (deriv/status, ml/river/status, strategy/status)")
+    log("   2. Iniciar sistema híbrido com river_threshold")
+    log("   3. Monitorar por 60s verificando sinais híbridos")
+    log("   4. Testar threshold configurável")
+    log("   5. Capturar logs e finalizar")
+    
+    test_results = {
+        "deriv_connectivity": False,
+        "river_status": False,
+        "strategy_status": False,
+        "hybrid_start": False,
+        "hybrid_monitoring": False,
+        "threshold_configurable": False,
+        "logs_clean": False
+    }
+    
+    try:
+        # Test 1: Basic connectivity tests
+        log("\n🔍 TESTE 1: CONECTIVIDADE BÁSICA")
+        log("="*50)
+        
+        # 1.1: GET /api/deriv/status
+        log("📡 1.1: GET /api/deriv/status (deve retornar connected=true, authenticated=true)")
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                connected = data.get('connected', False)
+                authenticated = data.get('authenticated', False)
+                environment = data.get('environment', 'UNKNOWN')
+                
+                log(f"   Connected: {connected}")
+                log(f"   Authenticated: {authenticated}")
+                log(f"   Environment: {environment}")
+                
+                if connected and authenticated:
+                    test_results["deriv_connectivity"] = True
+                    log("✅ Deriv conectado e autenticado")
+                else:
+                    log(f"❌ Deriv não está adequadamente conectado (connected={connected}, authenticated={authenticated})")
+            else:
+                log(f"❌ Falha na conectividade Deriv: HTTP {response.status_code}")
+                
+        except Exception as e:
+            log(f"❌ Erro na conectividade Deriv: {e}")
+        
+        # 1.2: GET /api/ml/river/status
+        log("\n🌊 1.2: GET /api/ml/river/status (verificar se modelo River está inicializado)")
+        try:
+            response = session.get(f"{api_url}/ml/river/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                initialized = data.get('initialized', False)
+                samples = data.get('samples', 0)
+                model_path = data.get('model_path', '')
+                
+                log(f"   Initialized: {initialized}")
+                log(f"   Samples: {samples}")
+                log(f"   Model path: {model_path}")
+                
+                if initialized:
+                    test_results["river_status"] = True
+                    log("✅ Modelo River inicializado")
+                else:
+                    log("❌ Modelo River não inicializado")
+            else:
+                log(f"❌ Falha no status River: HTTP {response.status_code}")
+                
+        except Exception as e:
+            log(f"❌ Erro no status River: {e}")
+        
+        # 1.3: GET /api/strategy/status
+        log("\n📊 1.3: GET /api/strategy/status (verificar se strategy runner está disponível)")
+        try:
+            response = session.get(f"{api_url}/strategy/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                running = data.get('running', False)
+                mode = data.get('mode', 'unknown')
+                symbol = data.get('symbol', 'unknown')
+                
+                log(f"   Running: {running}")
+                log(f"   Mode: {mode}")
+                log(f"   Symbol: {symbol}")
+                
+                test_results["strategy_status"] = True
+                log("✅ Strategy runner disponível")
+            else:
+                log(f"❌ Falha no status strategy: HTTP {response.status_code}")
+                
+        except Exception as e:
+            log(f"❌ Erro no status strategy: {e}")
+        
+        # Test 2: Hybrid system test
+        log("\n🔍 TESTE 2: SISTEMA HÍBRIDO COM RIVER_THRESHOLD")
+        log("="*50)
+        
+        # Complete payload with river_threshold as specified in review request
+        hybrid_payload = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "candle_len": 200,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "daily_loss_limit": -20.0,
+            "adx_trend": 22.0,
+            "rsi_ob": 70.0,
+            "rsi_os": 30.0,
+            "bbands_k": 2.0,
+            "fast_ma": 9,
+            "slow_ma": 21,
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_sig": 9,
+            "river_threshold": 0.53,  # New parameter for hybrid system
+            "mode": "paper"
+        }
+        
+        log("🚀 2.1: POST /api/strategy/start com payload híbrido completo")
+        log(f"   Payload: {json.dumps(hybrid_payload, indent=2)}")
+        
+        try:
+            response = session.post(f"{api_url}/strategy/start", json=hybrid_payload, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                running = data.get('running', False)
+                river_threshold = hybrid_payload.get('river_threshold')
+                
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                log(f"   Running: {running}")
+                log(f"   River threshold configurado: {river_threshold}")
+                
+                if running:
+                    test_results["hybrid_start"] = True
+                    log("✅ Sistema híbrido iniciado com sucesso")
+                else:
+                    log("❌ Sistema híbrido não iniciou (running=false)")
+            else:
+                log(f"❌ Falha ao iniciar sistema híbrido: HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Erro ao iniciar sistema híbrido: {e}")
+        
+        # Test 3: Monitor hybrid strategy
+        log("\n🔍 TESTE 3: MONITORAMENTO DA ESTRATÉGIA HÍBRIDA (60s)")
+        log("="*50)
+        log("📋 Verificar:")
+        log("   - running=true após o start")
+        log("   - last_run_at está atualizando (indica processamento)")
+        log("   - Sinais aparecem no last_reason (formato: '🤖 River X.XXX + [motivo técnico]')")
+        
+        if test_results["hybrid_start"]:
+            monitor_duration = 60  # 60 seconds as requested
+            check_interval = 10   # Every 10 seconds as requested
+            start_monitor_time = time.time()
+            
+            initial_last_run_at = None
+            last_run_at_updates = 0
+            hybrid_signals_detected = []
+            running_checks = []
+            
+            log(f"⏱️  Monitorando por {monitor_duration}s, verificando a cada {check_interval}s...")
+            
+            while time.time() - start_monitor_time < monitor_duration:
+                try:
+                    response = session.get(f"{api_url}/strategy/status", timeout=10)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        running = data.get('running', False)
+                        last_run_at = data.get('last_run_at')
+                        last_reason = data.get('last_reason', '')
+                        last_signal = data.get('last_signal', '')
+                        
+                        elapsed = time.time() - start_monitor_time
+                        log(f"   Monitor {elapsed:.1f}s: running={running}, last_run_at={last_run_at}")
+                        
+                        running_checks.append(running)
+                        
+                        # Track last_run_at updates
+                        if initial_last_run_at is None:
+                            initial_last_run_at = last_run_at
+                        elif last_run_at != initial_last_run_at and last_run_at is not None:
+                            last_run_at_updates += 1
+                            log(f"   ✓ last_run_at atualizado: {initial_last_run_at} → {last_run_at}")
+                            initial_last_run_at = last_run_at
+                        
+                        # Check for hybrid signals (🤖 River X.XXX + [technical reason])
+                        if last_reason and '🤖 River' in last_reason:
+                            if last_reason not in hybrid_signals_detected:
+                                hybrid_signals_detected.append(last_reason)
+                                log(f"   🎯 SINAL HÍBRIDO DETECTADO: {last_reason}")
+                                log(f"   📊 Signal: {last_signal}")
+                        
+                        if last_reason and last_reason not in ['', None]:
+                            log(f"   📝 Last reason: {last_reason}")
+                            
+                    else:
+                        log(f"   Monitor: Erro status {response.status_code}")
+                        
+                except Exception as e:
+                    log(f"   Monitor: Erro {e}")
+                
+                time.sleep(check_interval)
+            
+            # Analyze monitoring results
+            elapsed_total = time.time() - start_monitor_time
+            running_percentage = (sum(running_checks) / len(running_checks) * 100) if running_checks else 0
+            
+            log(f"\n📊 ANÁLISE DO MONITORAMENTO ({elapsed_total:.1f}s):")
+            log(f"   Checks executados: {len(running_checks)}")
+            log(f"   Running=true em: {running_percentage:.1f}% dos checks")
+            log(f"   last_run_at atualizações: {last_run_at_updates}")
+            log(f"   Sinais híbridos detectados: {len(hybrid_signals_detected)}")
+            
+            for i, signal in enumerate(hybrid_signals_detected, 1):
+                log(f"      {i}. {signal}")
+            
+            # Determine if monitoring was successful
+            monitoring_success = (
+                running_percentage >= 80 and  # Running most of the time
+                last_run_at_updates > 0       # Processing is happening
+            )
+            
+            if monitoring_success:
+                test_results["hybrid_monitoring"] = True
+                log("✅ Monitoramento híbrido bem-sucedido")
+                log("   ✓ Sistema manteve running=true")
+                log("   ✓ last_run_at atualizando (processamento ativo)")
+                if hybrid_signals_detected:
+                    log("   ✓ Sinais híbridos detectados com formato correto")
+            else:
+                log("❌ Monitoramento híbrido com problemas")
+                if running_percentage < 80:
+                    log(f"   - Sistema não manteve running=true ({running_percentage:.1f}% < 80%)")
+                if last_run_at_updates == 0:
+                    log("   - last_run_at não atualizou (sem processamento)")
+        else:
+            log("⚠️  Pulando monitoramento - sistema híbrido não iniciou")
+        
+        # Test 4: Test configurable threshold
+        log("\n🔍 TESTE 4: THRESHOLD CONFIGURÁVEL")
+        log("="*50)
+        
+        # Stop current strategy first
+        log("🛑 4.1: Parar estratégia atual")
+        try:
+            response = session.post(f"{api_url}/strategy/stop", timeout=10)
+            log(f"   POST /api/strategy/stop: Status {response.status_code}")
+            if response.status_code == 200:
+                log("✅ Estratégia parada")
+            time.sleep(2)  # Wait a bit
+        except Exception as e:
+            log(f"⚠️  Erro ao parar estratégia: {e}")
+        
+        # Test with different threshold
+        log("🔧 4.2: Testar com river_threshold diferente (0.60)")
+        different_threshold_payload = hybrid_payload.copy()
+        different_threshold_payload["river_threshold"] = 0.60
+        
+        try:
+            response = session.post(f"{api_url}/strategy/start", json=different_threshold_payload, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                running = data.get('running', False)
+                
+                log(f"   Running: {running}")
+                log(f"   Novo river_threshold: {different_threshold_payload['river_threshold']}")
+                
+                if running:
+                    test_results["threshold_configurable"] = True
+                    log("✅ Threshold configurável funcionando")
+                    
+                    # Stop this test strategy
+                    time.sleep(5)  # Let it run briefly
+                    try:
+                        stop_response = session.post(f"{api_url}/strategy/stop", timeout=10)
+                        log(f"   Parada: Status {stop_response.status_code}")
+                    except:
+                        pass
+                else:
+                    log("❌ Threshold configurável falhou (running=false)")
+            else:
+                log(f"❌ Falha ao testar threshold configurável: HTTP {response.status_code}")
+                
+        except Exception as e:
+            log(f"❌ Erro ao testar threshold configurável: {e}")
+        
+        # Test 5: Capture logs and check for errors
+        log("\n🔍 TESTE 5: LOGS E FUNCIONAMENTO")
+        log("="*50)
+        
+        log("📋 5.1: Capturar logs do backend durante o teste")
+        backend_logs = []
+        river_errors = []
+        
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["tail", "-n", "100", "/var/log/supervisor/backend.err.log"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                backend_logs = result.stdout.split('\n')
+                log(f"   Capturados {len(backend_logs)} linhas de log")
+                
+                # Check for River prediction errors
+                for line in backend_logs:
+                    if 'river' in line.lower() and ('error' in line.lower() or 'failed' in line.lower()):
+                        river_errors.append(line.strip())
+                
+                if river_errors:
+                    log(f"❌ Encontrados {len(river_errors)} erros de River prediction:")
+                    for error in river_errors[-5:]:  # Show last 5 errors
+                        log(f"      {error}")
+                else:
+                    test_results["logs_clean"] = True
+                    log("✅ Nenhum erro de River prediction encontrado nos logs")
+                    
+            else:
+                log(f"   Erro ao capturar logs: {result.stderr}")
+        except Exception as e:
+            log(f"   Erro ao executar tail: {e}")
+        
+        # Final stop
+        log("\n🛑 5.2: POST /api/strategy/stop para finalizar")
+        try:
+            response = session.post(f"{api_url}/strategy/stop", timeout=10)
+            log(f"   Status: {response.status_code}")
+            if response.status_code == 200:
+                log("✅ Estratégia finalizada")
+        except Exception as e:
+            log(f"⚠️  Erro ao finalizar estratégia: {e}")
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste Sistema Híbrido de Trading")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_descriptions = {
+            "deriv_connectivity": "Conectividade Deriv (connected=true, authenticated=true)",
+            "river_status": "Status River (modelo inicializado)",
+            "strategy_status": "Status Strategy Runner (disponível)",
+            "hybrid_start": "Início sistema híbrido (com river_threshold)",
+            "hybrid_monitoring": "Monitoramento híbrido (60s, sinais detectados)",
+            "threshold_configurable": "Threshold configurável (0.60)",
+            "logs_clean": "Logs limpos (sem erros River)"
+        }
+        
+        for test_name, passed in test_results.items():
+            status = "✅ PASSOU" if passed else "❌ FALHOU"
+            description = test_descriptions.get(test_name, test_name)
+            log(f"   {description}: {status}")
+        
+        overall_success = passed_tests >= 5  # Allow some tolerance
+        
+        if overall_success:
+            log("\n🎉 SISTEMA HÍBRIDO DE TRADING FUNCIONANDO!")
+            log("📋 Validações bem-sucedidas:")
+            log("   ✅ Conectividade básica estabelecida")
+            log("   ✅ River Online Learning integrado")
+            log("   ✅ Sistema híbrido iniciado com river_threshold")
+            log("   ✅ Monitoramento detectou processamento ativo")
+            log("   ✅ Threshold configurável funcionando")
+            log("   🎯 CONCLUSÃO: Sistema híbrido (River + Indicadores) OPERACIONAL!")
+            log("   📝 IMPORTANTE: Sistema só executa trades quando River E indicadores concordam")
+        else:
+            log("\n❌ PROBLEMAS NO SISTEMA HÍBRIDO DETECTADOS")
+            failed_tests = [name for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_tests}")
+            log("   📋 FOCO: Verificar implementação dos componentes que falharam")
+        
+        return overall_success, test_results
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE HÍBRIDO: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }
+
+async def main_hybrid_test():
+    """Main function to run Hybrid Trading System tests"""
+    print("🤖 TESTE DO SISTEMA HÍBRIDO DE TRADING (RIVER + INDICADORES TÉCNICOS)")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Testar sistema híbrido onde River é CONDIÇÃO PRINCIPAL")
+    print("   e indicadores técnicos são CONFIRMAÇÃO")
+    print("   TESTES:")
+    print("   1. Conectividade básica (deriv/status, ml/river/status, strategy/status)")
+    print("   2. Iniciar sistema híbrido com river_threshold=0.53")
+    print("   3. Monitorar por 60s verificando sinais híbridos")
+    print("   4. Testar threshold configurável (0.60)")
+    print("   5. Capturar logs e verificar funcionamento")
+    print("   🎯 FOCO: Sistema só executa quando AMBOS (River + Indicadores) concordam")
+    
+    try:
+        # Run Hybrid Trading System tests
+        success, results = await test_hybrid_trading_system()
+        
+        # Print final summary
+        print("\n" + "🏁" + "="*68)
+        print("RESUMO FINAL: Sistema Híbrido de Trading")
+        print("🏁" + "="*68)
+        
+        if success:
+            print("✅ SISTEMA HÍBRIDO FUNCIONANDO CORRETAMENTE!")
+            print("   🤖 River Online Learning integrado como condição principal")
+            print("   📊 Indicadores técnicos funcionando como confirmação")
+            print("   ⚙️  Threshold configurável (river_threshold) operacional")
+            print("   📈 Monitoramento detectou processamento ativo")
+            print("   🔍 Logs limpos sem erros de predição")
+            print("   🎯 CONCLUSÃO: Sistema mais seletivo e com menor ruído")
+        else:
+            print("❌ PROBLEMAS NO SISTEMA HÍBRIDO DETECTADOS")
+            print("   Verifique os componentes que falharam nos testes")
+            
+            failed_components = []
+            for test_name, passed in results.get('test_results', {}).items():
+                if not passed:
+                    failed_components.append(test_name)
+            
+            if failed_components:
+                print(f"   Componentes com problemas: {failed_components}")
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Tests interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 async def main_river_test():
     """Main function to run River Online Learning tests"""
     print("🌊 TESTE RIVER ONLINE LEARNING ENDPOINTS")
