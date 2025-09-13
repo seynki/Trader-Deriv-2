@@ -299,7 +299,7 @@ class DerivWS:
                                 ts = datetime.utcnow().isoformat()
                                 # Atualizar River com (features no momento) + label via next_close
                                 m = _get_river_model()
-                                _ = m.predict_and_update(ts, o, h, l, c, v, next_close=(c + 1e-12 if label == 1 else c - 1e-12))
+                                _ = m.predict_and_update(ts, o, h, low_spot, c, v, next_close=(c + 1e-12 if label == 1 else c - 1e-12))
                                 m.save()
                                 self._river_learned[cid_int] = True
                         except Exception as le:
