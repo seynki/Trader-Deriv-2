@@ -921,7 +921,7 @@ class StrategyRunner:
                 # Ou se há momentum de alta mesmo em range
                 elif (last_macd is not None and last_sig is not None and last_macd > last_sig):
                     indicators_confirm = True
-                    technical_reason = f"Range: MACD↑ momentum"
+                    technical_reason = "Range: MACD↑ momentum"
                     
         elif river_signal == "FALL":
             # River quer PUT/FALL - verificar se indicadores confirmam baixa
@@ -941,7 +941,7 @@ class StrategyRunner:
                 # Ou se há momentum de baixa mesmo em range
                 elif (last_macd is not None and last_sig is not None and last_macd < last_sig):
                     indicators_confirm = True
-                    technical_reason = f"Range: MACD↓ momentum"
+                    technical_reason = "Range: MACD↓ momentum"
         
         # === PASSO 4: DECISÃO FINAL (AMBOS DEVEM CONCORDAR) ===
         if indicators_confirm:
