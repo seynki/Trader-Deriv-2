@@ -821,6 +821,59 @@ class StrategyRunner:
         self.day: date = date.today()
 
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+        """
+        LÓGICA HÍBRIDA: River Online Learning (condição principal) + Indicadores Técnicos (confirmação)
+        1. River analisa o último candle e dá prob_up
+        2. Se River sinalizar (prob_up >= threshold para CALL ou prob_up <= 1-threshold para PUT)
+        3. Então verificamos se os indicadores técnicos confirmam o sinal
+        4. Só executa trade se AMBOS concordarem
+        """
+        if len(candles) == 0:
+            return None
+        
+        # === PASSO 1: CONSULTAR RIVER (CONDIÇÃO PRINCIPAL) ===
+        last_candle = candles[-1]
+        try:
+            # Obter modelo River
+            river_model = _get_river_model()
+            
+            # Preparar dados do último candle para River
+            timestamp = last_candle.get("epoch") or datetime.utcnow().timestamp()
+            if isinstance(timestamp, (int, float)):
+                timestamp = datetime.fromtimestamp(float(timestamp)).isoformat()
+                
+            # Fazer predição River (sem atualizar modelo)
+            river_info = river_model.predict_and_update(
+                timestamp=timestamp,
+                o=float(last_candle.get("open", 0)),
+                h=float(last_candle.get("high", 0)),
+                l=float(last_candle.get("low", 0)),
+                c=float(last_candle.get("close", 0)),
+                v=float(last_candle.get("volume", 0)),
+                next_close=None  # Não atualizar, apenas predizer
+            )
+            
+            prob_up = float(river_info.get("prob_up", 0.5))
+            river_signal = None
+            river_confidence = 0.0
+            
+            # Verificar se River dá sinal forte
+            if prob_up >= self.params.river_threshold:
+                river_signal = "RISE"
+                river_confidence = prob_up
+            elif prob_up <= (1.0 - self.params.river_threshold):
+                river_signal = "FALL" 
+                river_confidence = 1.0 - prob_up
+                
+            # Se River não dá sinal forte, não prosseguir
+            if river_signal is None:
+                return None
+                
+        except Exception as e:
+            logger.warning(f"River prediction failed: {e}")
+            return None
+        
+        # === PASSO 2: VERIFICAR INDICADORES TÉCNICOS (CONFIRMAÇÃO) ===
         close = [float(c.get("close")) for c in candles]
         high = [float(c.get("high")) for c in candles]
         low = [float(c.get("low")) for c in candles]
@@ -845,21 +898,57 @@ class StrategyRunner:
         last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
 
         trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
-
-        if trending:
-            bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
-            bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None and ma_slow is not None and last_macd is not None and last_sig is not None and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
-            if bull_cross:
-                return {"side": "RISE", "reason": f"Trend↑ ADX {last_adx:.1f} + MA/MACD"}
-            if bear_cross:
-                return {"side": "FALL", "reason": f"Trend↓ ADX {last_adx:.1f} + MA/MACD"}
-        else:
-            touch_upper = (last_upper is not None and last_price >= last_upper)
-            touch_lower = (last_lower is not None and last_price <= last_lower)
-            if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
-                return {"side": "FALL", "reason": f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"}
-            if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
-                return {"side": "RISE", "reason": f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"}
+        
+        # === PASSO 3: CONFIRMAR COM INDICADORES TÉCNICOS ===
+        indicators_confirm = False
+        technical_reason = ""
+        
+        if river_signal == "RISE":
+            # River quer CALL/RISE - verificar se indicadores confirmam alta
+            if trending:
+                bull_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None 
+                             and ma_slow is not None and last_macd is not None and last_sig is not None 
+                             and prev_fast < prev_slow and ma_fast > ma_slow and last_macd > last_sig)
+                if bull_cross:
+                    indicators_confirm = True
+                    technical_reason = f"Trend↑ ADX {last_adx:.1f} + MA/MACD"
+            else:
+                # Em range, confirmar se toca banda inferior + RSI oversold
+                touch_lower = (last_lower is not None and last_price <= last_lower)
+                if touch_lower and (last_rsi is not None) and last_rsi <= self.params.rsi_os:
+                    indicators_confirm = True
+                    technical_reason = f"Range: BB↓ + RSI {int(last_rsi)} (reversão)"
+                # Ou se há momentum de alta mesmo em range
+                elif (last_macd is not None and last_sig is not None and last_macd > last_sig):
+                    indicators_confirm = True
+                    technical_reason = f"Range: MACD↑ momentum"
+                    
+        elif river_signal == "FALL":
+            # River quer PUT/FALL - verificar se indicadores confirmam baixa
+            if trending:
+                bear_cross = (prev_fast is not None and prev_slow is not None and ma_fast is not None 
+                             and ma_slow is not None and last_macd is not None and last_sig is not None 
+                             and prev_fast > prev_slow and ma_fast < ma_slow and last_macd < last_sig)
+                if bear_cross:
+                    indicators_confirm = True
+                    technical_reason = f"Trend↓ ADX {last_adx:.1f} + MA/MACD"
+            else:
+                # Em range, confirmar se toca banda superior + RSI overbought
+                touch_upper = (last_upper is not None and last_price >= last_upper)
+                if touch_upper and (last_rsi is not None) and last_rsi >= self.params.rsi_ob:
+                    indicators_confirm = True
+                    technical_reason = f"Range: BB↑ + RSI {int(last_rsi)} (reversão)"
+                # Ou se há momentum de baixa mesmo em range
+                elif (last_macd is not None and last_sig is not None and last_macd < last_sig):
+                    indicators_confirm = True
+                    technical_reason = f"Range: MACD↓ momentum"
+        
+        # === PASSO 4: DECISÃO FINAL (AMBOS DEVEM CONCORDAR) ===
+        if indicators_confirm:
+            final_reason = f"🤖 River {river_confidence:.3f} + {technical_reason}"
+            return {"side": river_signal, "reason": final_reason}
+        
+        # Se chegou aqui, River sinalizou mas indicadores não confirmaram
         return None
 
     async def _get_candles(self, symbol: str, granularity: int, count: int) -> List[Dict[str, Any]]:
