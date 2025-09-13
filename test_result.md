@@ -318,6 +318,21 @@
 ##   -message: "COMPLETED NON-INVASIVE TESTING: ✅ /api/deriv/status (connected=true, authenticated=true), ✅ /api/deriv/proposal (R_100 CALL working, returns valid proposal), ✅ /api/deriv/contracts_for/R_100 (returns contract_types but empty durations - minor parsing issue). Core Deriv backend integration is working correctly. Fixed minor shutdown bug. Ready for frontend testing or user approval."
 ## backend:
 ##   - task: "River Online Learning (OHLCV): endpoints status/train_csv/upload/predict/decide_trade"
+##   - task: "CALL/PUT R_100 suporte na UI (não bloquear sem contracts_for)"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/frontend/src/App.js"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: false
+##       -agent: "user"
+##       -comment: "Erro: Tipo CALLPUT não suportado para R_100 ao tentar operar automação."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Ajustei validação isTypeSupported: para CALL/PUT, se suporte ainda não carregou ou lista vazia, permitir tentativa (degrade graceful) e deixar backend validar. Isso evita falso negativo para R_100/R_75/R_50. Solicito reteste: Automação ligada em R_100 com Tipo=CALL/PUT, duração 5 ticks/seg/min e stake 1; verificar que não aparece mais bloqueio e que proposta/compra é enviada pelo backend."
+
 ##     implemented: true
 ##     working: true
 ##     file: "/app/backend/server.py, /app/backend/river_online_model.py"
