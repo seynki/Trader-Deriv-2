@@ -319,15 +319,18 @@
 ## backend:
 ##   - task: "River Online Learning (OHLCV): endpoints status/train_csv/upload/predict/decide_trade"
 ##     implemented: true
-##     working: "NA"
+##     working: true
 ##     file: "/app/backend/server.py, /app/backend/river_online_model.py"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: true
+##     needs_retesting: false
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Adicionados endpoints: GET /api/ml/river/status, POST /api/ml/river/train_csv (body {csv_text}), POST /api/ml/river/train_csv_upload (multipart file), POST /api/ml/river/predict (candle único), POST /api/ml/river/decide_trade (usa Deriv CALL/PUT quando dry_run=false). Modelo único (LogReg online via River) para Long/Short usando label 1 se close[t+1] > close[t]."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "🎉 RIVER ONLINE LEARNING TESTING COMPLETADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 5 ENDPOINTS TESTADOS COM 100% DE SUCESSO - Executado conforme review request português: 1) GET /api/ml/river/status (baseline) ✅ retorna 200 com initialized=true, samples=0, acc=null, logloss=null, model_path='/app/backend/ml_models/river_online_model.pkl' 2) POST /api/ml/river/train_csv ✅ processa CSV com 6 candles OHLCV, retorna 200 com message='treino online finalizado', samples=5, acc=0.6, logloss=0.691 3) GET /api/ml/river/status (após treino) ✅ mostra samples=5 > 0, initialized=true, métricas atualizadas 4) POST /api/ml/river/predict ✅ retorna 200 com prob_up=0.461, pred_class=0, signal='SHORT', features com 13 campos (open,high,low,close,volume,ret_1,sma,std,vol_mean,tod_sin,tod_cos,hl_range,body) 5) POST /api/ml/river/decide_trade (dry_run=true) ✅ retorna 200 com decision='PUT', prob_up=0.444, signal='SHORT', dry_run=true. RESULTADO FINAL: River Online Learning funcionando PERFEITAMENTE - todos os endpoints respondem corretamente, modelo treina com CSV, faz predições válidas, e decide trades em modo dry_run. Backend continua saudável (connected=true, authenticated=true) após todos os testes. Taxa de sucesso: 100% (5/5 testes passaram)."
 
 ## agent_communication:
 ##   -agent: "main"
