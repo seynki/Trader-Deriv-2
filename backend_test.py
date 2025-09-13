@@ -1384,6 +1384,389 @@ async def main_river_test():
         traceback.print_exc()
         sys.exit(1)
 
+async def test_global_metrics_contract_expiry():
+    """
+    Test global metrics update when Deriv contracts expire as requested in Portuguese review:
+    
+    Verificar que o backend agora fornece métricas globais no /api/strategy/status e que são atualizadas quando ocorrem contratos Deriv expirados, além de paper trades. Passos:
+    1) Esperar 6s para garantir que o WS da Deriv iniciou
+    2) GET /api/deriv/status → validar connected=true (usar DEMO). Se authenticated=false tudo bem.
+    3) GET /api/strategy/status → checar presença dos campos: running, mode, symbol, in_position, daily_pnl, day, last_signal, last_reason, last_run_at, wins, losses, total_trades, win_rate, global_daily_pnl
+    4) Disparar uma compra pequena em DEMO: POST /api/deriv/buy com body {symbol:"R_10", type:"CALLPUT", contract_type:"CALL", duration:5, duration_unit:"t", stake:1, currency:"USD"} e capturar contract_id
+    5) Aguardar 70s consultando GET /api/strategy/status a cada 10s até observar incremento em total_trades (de +1) e ajuste em wins/losses e global_daily_pnl após expiração do contrato
+    6) Validar consistência: wins+losses == total_trades e win_rate == round((wins/total_trades)*100)
+    7) Retornar um resumo com os valores finais observados e se o PnL bate com lucro/perda do contrato (aproximação, aceitando diferença de ±0.01).
+    """
+    
+    base_url = "https://deriv-trade-bot-2.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "📊" + "="*68)
+    log("TESTE MÉTRICAS GLOBAIS - ATUALIZAÇÃO APÓS EXPIRAÇÃO DE CONTRATO")
+    log("📊" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   1) Esperar 6s para garantir que o WS da Deriv iniciou")
+    log("   2) GET /api/deriv/status → validar connected=true (DEMO)")
+    log("   3) GET /api/strategy/status → checar presença dos campos globais")
+    log("   4) POST /api/deriv/buy → disparar compra pequena em DEMO")
+    log("   5) Aguardar 70s consultando status a cada 10s até incremento")
+    log("   6) Validar consistência: wins+losses == total_trades")
+    log("   7) Verificar se PnL bate com lucro/perda do contrato")
+    
+    # Variables to track
+    initial_metrics = {}
+    final_metrics = {}
+    contract_id = None
+    contract_buy_price = 0
+    contract_payout = 0
+    trade_detected = False
+    
+    try:
+        # Step 1: Wait 6s for Deriv WS to start
+        log("\n🔍 STEP 1: Aguardar 6s para garantir que o WS da Deriv iniciou")
+        log("   Aguardando 6 segundos...")
+        time.sleep(6)
+        log("✅ Aguardou 6 segundos conforme solicitado")
+        
+        # Step 2: GET /api/deriv/status - validate connected=true (DEMO)
+        log("\n🔍 STEP 2: GET /api/deriv/status → validar connected=true (DEMO)")
+        
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                connected = data.get('connected', False)
+                authenticated = data.get('authenticated', False)
+                environment = data.get('environment', 'UNKNOWN')
+                
+                log(f"   Connected: {connected}")
+                log(f"   Authenticated: {authenticated}")
+                log(f"   Environment: {environment}")
+                
+                if not connected:
+                    log("❌ CRITICAL: Deriv não está conectado")
+                    return False, {"error": "deriv_not_connected", "data": data}
+                
+                if environment != "DEMO":
+                    log(f"⚠️  WARNING: Ambiente não é DEMO: {environment}")
+                
+                log("✅ Deriv conectado com sucesso (authenticated=false tudo bem)")
+            else:
+                log(f"❌ CRITICAL: Falha ao verificar status Deriv: {response.status_code}")
+                return False, {"error": "deriv_status_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao verificar status Deriv: {e}")
+            return False, {"error": "deriv_status_exception", "details": str(e)}
+        
+        # Step 3: GET /api/strategy/status - check presence of global fields
+        log("\n🔍 STEP 3: GET /api/strategy/status → checar presença dos campos globais")
+        
+        required_fields = [
+            'running', 'mode', 'symbol', 'in_position', 'daily_pnl', 'day',
+            'last_signal', 'last_reason', 'last_run_at', 'wins', 'losses',
+            'total_trades', 'win_rate', 'global_daily_pnl'
+        ]
+        
+        try:
+            response = session.get(f"{api_url}/strategy/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Check presence of required fields
+                missing_fields = []
+                for field in required_fields:
+                    if field not in data:
+                        missing_fields.append(field)
+                
+                if missing_fields:
+                    log(f"❌ CRITICAL: Campos obrigatórios ausentes: {missing_fields}")
+                    return False, {"error": "missing_fields", "missing": missing_fields}
+                
+                # Store initial metrics
+                initial_metrics = {
+                    'wins': data.get('wins', 0),
+                    'losses': data.get('losses', 0),
+                    'total_trades': data.get('total_trades', 0),
+                    'win_rate': data.get('win_rate', 0.0),
+                    'global_daily_pnl': data.get('global_daily_pnl', 0.0)
+                }
+                
+                log("✅ Todos os campos obrigatórios presentes")
+                log(f"   Métricas iniciais: {initial_metrics}")
+            else:
+                log(f"❌ CRITICAL: Falha ao obter status da estratégia: {response.status_code}")
+                return False, {"error": "strategy_status_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao obter status da estratégia: {e}")
+            return False, {"error": "strategy_status_exception", "details": str(e)}
+        
+        # Step 4: POST /api/deriv/buy - trigger small buy in DEMO
+        log("\n🔍 STEP 4: POST /api/deriv/buy → disparar compra pequena em DEMO")
+        
+        buy_payload = {
+            "symbol": "R_10",
+            "type": "CALLPUT",
+            "contract_type": "CALL",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "currency": "USD"
+        }
+        
+        try:
+            response = session.post(f"{api_url}/deriv/buy", json=buy_payload, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                contract_id = data.get('contract_id')
+                contract_buy_price = float(data.get('buy_price', 0))
+                contract_payout = float(data.get('payout', 0))
+                
+                if contract_id:
+                    log(f"✅ Compra executada com sucesso")
+                    log(f"   Contract ID: {contract_id}")
+                    log(f"   Buy Price: {contract_buy_price}")
+                    log(f"   Payout: {contract_payout}")
+                else:
+                    log("❌ CRITICAL: Contract ID não retornado")
+                    return False, {"error": "no_contract_id", "data": data}
+            else:
+                log(f"❌ CRITICAL: Falha ao executar compra: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                return False, {"error": "buy_failed", "status": response.status_code}
+                
+        except Exception as e:
+            log(f"❌ CRITICAL: Erro ao executar compra: {e}")
+            return False, {"error": "buy_exception", "details": str(e)}
+        
+        # Step 5: Wait 70s polling GET /api/strategy/status every 10s until increment
+        log("\n🔍 STEP 5: Aguardar 70s consultando status a cada 10s até incremento")
+        log(f"   Monitorando contrato {contract_id} por até 70 segundos...")
+        
+        max_wait_time = 70  # 70 seconds as requested
+        check_interval = 10  # Check every 10 seconds
+        start_monitor_time = time.time()
+        checks_performed = 0
+        
+        while time.time() - start_monitor_time < max_wait_time:
+            try:
+                response = session.get(f"{api_url}/strategy/status", timeout=10)
+                checks_performed += 1
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    current_metrics = {
+                        'wins': data.get('wins', 0),
+                        'losses': data.get('losses', 0),
+                        'total_trades': data.get('total_trades', 0),
+                        'win_rate': data.get('win_rate', 0.0),
+                        'global_daily_pnl': data.get('global_daily_pnl', 0.0)
+                    }
+                    
+                    elapsed = time.time() - start_monitor_time
+                    log(f"   Check #{checks_performed} ({elapsed:.1f}s): {current_metrics}")
+                    
+                    # Check if total_trades increased
+                    if current_metrics['total_trades'] > initial_metrics['total_trades']:
+                        trade_detected = True
+                        final_metrics = current_metrics
+                        log(f"✅ INCREMENTO DETECTADO! total_trades aumentou de {initial_metrics['total_trades']} para {current_metrics['total_trades']}")
+                        log(f"   Wins: {initial_metrics['wins']} → {current_metrics['wins']}")
+                        log(f"   Losses: {initial_metrics['losses']} → {current_metrics['losses']}")
+                        log(f"   Global PnL: {initial_metrics['global_daily_pnl']} → {current_metrics['global_daily_pnl']}")
+                        break
+                else:
+                    log(f"   Check #{checks_performed}: Erro status {response.status_code}")
+                    
+            except Exception as e:
+                log(f"   Check #{checks_performed}: Erro {e}")
+            
+            time.sleep(check_interval)
+        
+        if not trade_detected:
+            elapsed = time.time() - start_monitor_time
+            log(f"⚠️  Nenhum incremento detectado após {elapsed:.1f}s de monitoramento")
+            log("   Capturando métricas finais mesmo assim...")
+            
+            # Get final metrics anyway
+            try:
+                response = session.get(f"{api_url}/strategy/status", timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    final_metrics = {
+                        'wins': data.get('wins', 0),
+                        'losses': data.get('losses', 0),
+                        'total_trades': data.get('total_trades', 0),
+                        'win_rate': data.get('win_rate', 0.0),
+                        'global_daily_pnl': data.get('global_daily_pnl', 0.0)
+                    }
+            except Exception as e:
+                log(f"   Erro ao capturar métricas finais: {e}")
+                final_metrics = initial_metrics.copy()
+        
+        # Step 6: Validate consistency: wins+losses == total_trades and win_rate calculation
+        log("\n🔍 STEP 6: Validar consistência: wins+losses == total_trades")
+        
+        wins = final_metrics.get('wins', 0)
+        losses = final_metrics.get('losses', 0)
+        total_trades = final_metrics.get('total_trades', 0)
+        win_rate = final_metrics.get('win_rate', 0.0)
+        global_daily_pnl = final_metrics.get('global_daily_pnl', 0.0)
+        
+        # Check consistency
+        trades_sum_consistent = (wins + losses) == total_trades
+        expected_win_rate = round((wins / total_trades * 100)) if total_trades > 0 else 0.0
+        win_rate_consistent = abs(win_rate - expected_win_rate) < 0.1  # Allow small floating point differences
+        
+        log(f"   Wins: {wins}")
+        log(f"   Losses: {losses}")
+        log(f"   Total trades: {total_trades}")
+        log(f"   Win rate: {win_rate}%")
+        log(f"   Global daily PnL: {global_daily_pnl}")
+        log(f"   Trades sum consistent: {trades_sum_consistent} ({wins} + {losses} == {total_trades})")
+        log(f"   Win rate consistent: {win_rate_consistent} ({win_rate}% ≈ {expected_win_rate}%)")
+        
+        # Step 7: Check if PnL matches contract profit/loss (approximation ±0.01)
+        log("\n🔍 STEP 7: Verificar se PnL bate com lucro/perda do contrato")
+        
+        pnl_change = global_daily_pnl - initial_metrics.get('global_daily_pnl', 0.0)
+        expected_profit = contract_payout - contract_buy_price if wins > initial_metrics.get('wins', 0) else -contract_buy_price
+        pnl_matches = abs(pnl_change - expected_profit) <= 0.01
+        
+        log(f"   PnL change: {pnl_change}")
+        log(f"   Expected profit: {expected_profit}")
+        log(f"   PnL matches contract: {pnl_matches} (diferença: {abs(pnl_change - expected_profit):.4f} <= 0.01)")
+        
+        # Final assessment
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste Métricas Globais - Atualização Após Expiração")
+        log("🏁" + "="*68)
+        
+        success = trade_detected and trades_sum_consistent and win_rate_consistent
+        
+        if success:
+            log("✅ TESTE PASSOU: Métricas globais atualizadas corretamente após expiração")
+            log(f"   ✓ Trade detectado: incremento de {initial_metrics['total_trades']} para {total_trades}")
+            log(f"   ✓ Consistência: wins({wins}) + losses({losses}) = total_trades({total_trades})")
+            log(f"   ✓ Win rate: {win_rate}% = {expected_win_rate}%")
+            log(f"   ✓ PnL change: {pnl_change} {'≈' if pnl_matches else '≠'} expected {expected_profit}")
+        else:
+            log("❌ TESTE FALHOU: Problemas detectados nas métricas globais")
+            if not trade_detected:
+                log("   - Trade não foi detectado (total_trades não aumentou)")
+            if not trades_sum_consistent:
+                log(f"   - Inconsistência: wins({wins}) + losses({losses}) ≠ total_trades({total_trades})")
+            if not win_rate_consistent:
+                log(f"   - Win rate inconsistente: {win_rate}% ≠ {expected_win_rate}%")
+            if not pnl_matches:
+                log(f"   - PnL não bate: {pnl_change} vs esperado {expected_profit}")
+        
+        return success, {
+            "trade_detected": trade_detected,
+            "contract_id": contract_id,
+            "contract_buy_price": contract_buy_price,
+            "contract_payout": contract_payout,
+            "initial_metrics": initial_metrics,
+            "final_metrics": final_metrics,
+            "trades_sum_consistent": trades_sum_consistent,
+            "win_rate_consistent": win_rate_consistent,
+            "pnl_matches": pnl_matches,
+            "pnl_change": pnl_change,
+            "expected_profit": expected_profit,
+            "checks_performed": checks_performed
+        }
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "contract_id": contract_id,
+            "initial_metrics": initial_metrics,
+            "final_metrics": final_metrics,
+            "trade_detected": trade_detected
+        }
+
+async def main_global_metrics_test():
+    """Main function to run global metrics contract expiry test"""
+    print("📊 TESTE MÉTRICAS GLOBAIS - ATUALIZAÇÃO APÓS EXPIRAÇÃO DE CONTRATO")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Verificar que métricas globais são atualizadas quando contratos Deriv expiram")
+    print("   PASSOS:")
+    print("   1) Esperar 6s para garantir que o WS da Deriv iniciou")
+    print("   2) GET /api/deriv/status → validar connected=true (DEMO)")
+    print("   3) GET /api/strategy/status → checar presença dos campos globais")
+    print("   4) POST /api/deriv/buy → disparar compra pequena em DEMO")
+    print("   5) Aguardar 70s consultando status a cada 10s até incremento")
+    print("   6) Validar consistência: wins+losses == total_trades")
+    print("   7) Verificar se PnL bate com lucro/perda do contrato")
+    print("   🎯 FOCO: Validar atualização automática das métricas globais")
+    
+    try:
+        # Run global metrics test
+        success, results = await test_global_metrics_contract_expiry()
+        
+        # Print final summary
+        print("\n" + "🏁" + "="*68)
+        print("RESULTADO FINAL: Teste Métricas Globais - Atualização Após Expiração")
+        print("🏁" + "="*68)
+        
+        if success:
+            print("✅ TESTE PASSOU: Métricas globais atualizadas corretamente!")
+            print(f"   Contract ID: {results.get('contract_id')}")
+            print(f"   Trade detectado: {results.get('trade_detected')}")
+            print(f"   Métricas iniciais: {results.get('initial_metrics')}")
+            print(f"   Métricas finais: {results.get('final_metrics')}")
+            print(f"   PnL change: {results.get('pnl_change')}")
+            print(f"   Expected profit: {results.get('expected_profit')}")
+            print(f"   Checks realizados: {results.get('checks_performed')}")
+        else:
+            print("❌ TESTE FALHOU: Problemas nas métricas globais")
+            print(f"   Contract ID: {results.get('contract_id')}")
+            print(f"   Trade detectado: {results.get('trade_detected')}")
+            print(f"   Métricas iniciais: {results.get('initial_metrics')}")
+            print(f"   Métricas finais: {results.get('final_metrics')}")
+            
+            if results.get('error'):
+                print(f"   Erro: {results.get('error')}")
+                if results.get('details'):
+                    print(f"   Detalhes: {results.get('details')}")
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Test interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 if __name__ == "__main__":
     # Check which test to run based on command line arguments
     if len(sys.argv) > 1:
@@ -1391,9 +1774,11 @@ if __name__ == "__main__":
             asyncio.run(main_online_learning_test())
         elif sys.argv[1] == "river":
             asyncio.run(main_river_test())
+        elif sys.argv[1] == "global_metrics":
+            asyncio.run(main_global_metrics_test())
         else:
-            print("Available test modes: online_learning, river")
-            print("Usage: python backend_test.py [online_learning|river]")
+            print("Available test modes: online_learning, river, global_metrics")
+            print("Usage: python backend_test.py [online_learning|river|global_metrics]")
             print("Default: WebSocket tests")
             asyncio.run(main())
     else:
