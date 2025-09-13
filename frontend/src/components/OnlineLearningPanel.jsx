@@ -163,6 +163,7 @@ export default function OnlineLearningPanel() {
         <CardTitle className="flex items-center justify-between">
           <span>🧠 Aprendizado Online</span>
           <div className="flex items-center gap-3">
+            {/* Chip antigo (gerenciador clássico) */}
             {onlineProgress && (
               <Badge variant="secondary">
                 {String(onlineProgress.active_models || 0)} modelo(s) ativo(s)
@@ -170,6 +171,13 @@ export default function OnlineLearningPanel() {
             )}
             <Badge variant={onlineProgress?.total_updates > 0 ? "default" : "outline"}>
               {String(onlineProgress?.total_updates || 0)} atualizações
+            </Badge>
+            {/* Novo chip baseado no River */}
+            <Badge variant={riverStatus?.samples > 0 ? "default" : "outline"} className="gap-2">
+              <span className="opacity-80">River</span>
+              <span className="font-semibold">upd: {String(riverStatus?.samples ?? 0)}</span>
+              <span className="hidden md:inline">• acc: {riverStatus?.acc != null ? Number(riverStatus.acc).toFixed(2) : "–"}</span>
+              <span className="hidden md:inline">• logloss: {riverStatus?.logloss != null ? Number(riverStatus.logloss).toFixed(3) : "–"}</span>
             </Badge>
           </div>
         </CardTitle>
