@@ -1537,6 +1537,19 @@ async def test_hybrid_trading_system():
                 log(f"   Running: {running}")
                 log(f"   River threshold configurado: {river_threshold}")
                 
+                # Wait a moment and check again, as strategy may take time to start
+                if not running:
+                    log("   Aguardando 3s para estratégia inicializar...")
+                    time.sleep(3)
+                    try:
+                        check_response = session.get(f"{api_url}/strategy/status", timeout=10)
+                        if check_response.status_code == 200:
+                            check_data = check_response.json()
+                            running = check_data.get('running', False)
+                            log(f"   Após 3s - Running: {running}")
+                    except Exception as e:
+                        log(f"   Erro ao verificar status após delay: {e}")
+                
                 if running:
                     test_results["hybrid_start"] = True
                     log("✅ Sistema híbrido iniciado com sucesso")
