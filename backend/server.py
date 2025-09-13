@@ -633,6 +633,7 @@ class StrategyParams(BaseModel):
     macd_fast: int = 12
     macd_slow: int = 26
     macd_sig: int = 9
+    river_threshold: float = 0.53  # Threshold mínimo para filtro River (prob_up >= para CALL, prob_up <= 1-threshold para PUT)
     mode: str = "paper"  # paper | live
 
 class StrategyStatus(BaseModel):
