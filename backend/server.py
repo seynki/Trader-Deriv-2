@@ -127,6 +127,8 @@ class DerivWS:
         self.last_authorize: Dict[str, Any] = {}
         self.landing_company_name: Optional[str] = None
         self.currency: Optional[str] = None
+        # avoid double-learning per contract
+        self._river_learned: Dict[int, bool] = {}
 
     def _build_uri(self) -> str:
         if not self.app_id:
