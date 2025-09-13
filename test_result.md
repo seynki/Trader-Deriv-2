@@ -316,6 +316,23 @@
 ##   -message: "Favor testar apenas GET /api/deriv/status, GET /api/deriv/contracts_for/R_100 e POST /api/deriv/proposal (CALL, stake=1, duration=5, unit=t). NÃO executar /api/deriv/buy sem autorização explícita do usuário (pode gerar trade real)."
 ##   -agent: "testing"
 ##   -message: "COMPLETED NON-INVASIVE TESTING: ✅ /api/deriv/status (connected=true, authenticated=true), ✅ /api/deriv/proposal (R_100 CALL working, returns valid proposal), ✅ /api/deriv/contracts_for/R_100 (returns contract_types but empty durations - minor parsing issue). Core Deriv backend integration is working correctly. Fixed minor shutdown bug. Ready for frontend testing or user approval."
+## backend:
+##   - task: "River Online Learning (OHLCV): endpoints status/train_csv/upload/predict/decide_trade"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py, /app/backend/river_online_model.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Adicionados endpoints: GET /api/ml/river/status, POST /api/ml/river/train_csv (body {csv_text}), POST /api/ml/river/train_csv_upload (multipart file), POST /api/ml/river/predict (candle único), POST /api/ml/river/decide_trade (usa Deriv CALL/PUT quando dry_run=false). Modelo único (LogReg online via River) para Long/Short usando label 1 se close[t+1] > close[t]."
+
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor testar apenas os novos endpoints River: 1) GET /api/ml/river/status (baseline) 2) POST /api/ml/river/train_csv com um CSV mínimo (5-20 candles) no campo csv_text com colunas exatamente: datetime,open,high,low,close,volume (ISO-8601 p/ datetime) 3) GET /api/ml/river/status (deve mostrar samples > 0 após treino) 4) POST /api/ml/river/predict com um candle válido 5) POST /api/ml/river/decide_trade com dry_run=true para não executar ordem real. NÃO executar dry_run=false sem autorização explícita do usuário."
+
 ##   -agent: "testing"
 ##   -message: "BACKEND TESTING COMPLETED PER USER REQUEST: ✅ All requested endpoints tested successfully. Key findings: 1) GET /api/deriv/status returns connected=true, authenticated=true ✅ 2) GET /api/deriv/contracts_for/R_10?product_type=accumulator returns 400 validation error (expected - Deriv API only supports 'basic' product_type) ✅ 3) GET /api/deriv/contracts_for_smart/R_10?product_type=accumulator returns proper structure with tried=[], first_supported=null, results={} ✅ 4) GET /api/deriv/contracts_for/R_10?product_type=turbos and multipliers both return 400 validation errors (expected) ✅. IMPORTANT: The Deriv API for this account only accepts product_type='basic', but includes all contract types (ACCU, TURBOSLONG, TURBOSSHORT, MULTUP, MULTDOWN) within the basic type. All endpoints behaving correctly - validation errors are proper Deriv API responses."
 ##   -agent: "testing"
