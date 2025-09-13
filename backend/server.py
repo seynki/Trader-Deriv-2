@@ -661,8 +661,8 @@ def _bollinger(close: List[float], period: int = 20, k: float = 2.0):
     return {"upper": upper, "mid": mid, "lower": lower}
 
 
-def _true_range(h: float, l: float, pc: float) -> float:
-    return max(h - l, abs(h - pc), abs(l - pc))
+def _true_range(h: float, low: float, pc: float) -> float:
+    return max(h - low, abs(h - pc), abs(low - pc))
 
 
 def _rma(arr: List[float], p: int) -> List[Optional[float]]:
