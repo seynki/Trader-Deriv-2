@@ -293,7 +293,7 @@ class DerivWS:
                                 # Usamos o último spot como "close" do candle final; volume desconhecido -> 0
                                 o = entry_spot if entry_spot else current_spot
                                 h = max(entry_spot, current_spot)
-                                l = min(entry_spot, current_spot)
+                                low_spot = min(entry_spot, current_spot)
                                 c = current_spot
                                 v = 0.0
                                 ts = datetime.utcnow().isoformat()
