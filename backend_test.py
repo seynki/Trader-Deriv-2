@@ -51,7 +51,7 @@ import websockets
 from datetime import datetime
 
 class DerivWebSocketTester:
-    def __init__(self, base_url="https://partial-fit-fix.preview.emergentagent.com"):
+    def __init__(self, base_url="https://smart-trader-ml.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
@@ -636,7 +636,7 @@ async def test_online_learning_update_count():
     Produza um relatório detalhando: model_id testado, count0, count1, estado da estratégia, se houve trade paper, mensagens-chave de log encontradas.
     """
     
-    base_url = "https://partial-fit-fix.preview.emergentagent.com"
+    base_url = "https://smart-trader-ml.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
