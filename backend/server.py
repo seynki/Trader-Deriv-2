@@ -410,30 +410,113 @@ async def deriv_status():
     )
 
 @api_router.get("/deriv/contracts_for/{symbol}")
-async def deriv_contracts_for(symbol: str):
-    # Minimal contracts_for for CALL/PUT (basic)
+async def deriv_contracts_for(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
+    """Wrapper para Deriv contracts_for: retorna apenas lista de contract_types.
+    Aceita product_type opcional (basic/multipliers/turbos/accumulator). Muitas contas DEMO aceitam apenas 'basic'.
+    """
     req_id = int(time.time() * 1000)
     fut = asyncio.get_running_loop().create_future()
     _deriv.pending[req_id] = fut
-    await _deriv._send({
+    payload = {
         "contracts_for": symbol,
-        "product_type": "basic",
         "req_id": req_id,
-    })
+    }
+    if product_type:
+        payload["product_type"] = product_type
+    if currency:
+        payload["currency"] = currency
+    await _deriv._send(payload)
     try:
-        data = await asyncio.wait_for(fut, timeout=10)
+        data = await asyncio.wait_for(fut, timeout=12)
     except asyncio.TimeoutError:
         _deriv.pending.pop(req_id, None)
         raise HTTPException(status_code=504, detail="Timeout waiting for contracts_for")
     if data.get("error"):
         raise HTTPException(status_code=400, detail=data["error"].get("message", "contracts_for error"))
-    # Parse only what we need for UI (CALL/PUT availability)
     cfor = data.get("contracts_for", {})
-    available = []
-    for c in (cfor.get("available") or []):
-        if c.get("contract_category") == "callput":
-            available.extend([t.get("name") for t in (c.get("contract_types") or []) if t.get("name") in ("CALL", "PUT")])
-    return {"contract_types": sorted(list(set(available)))}
+    types: List[str] = []
+    for item in (cfor.get("available") or []):
+        for t in (item.get("contract_types") or []):
+            n = (t.get("name") or t.get("value") or "").upper()
+            if n:
+                types.append(n)
+    return {
+        "symbol": symbol,
+        "contract_types": sorted(list(set(types))),
+        "product_type": product_type or "basic",
+    }
+
+@api_router.get("/deriv/contracts_for_smart/{symbol}")
+async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None, product_type: Optional[str] = None, landing_company: Optional[str] = None):
+    """Smart helper: tenta com o product_type pedido; se rejeitado ou sem tipos esperados,
+    faz fallback automático para 'basic' e/ou para o alias _1HZ do símbolo.
+    Retorna estrutura com tried, first_supported e results.
+    """
+    desired = (product_type or "basic").lower()
+
+    def types_match_for_product(res: Dict[str, Any]) -> bool:
+        if not isinstance(res, dict):
+            return False
+        types = {str(t).upper() for t in (res.get("contract_types") or [])}
+        if not types:
+            return False
+        if desired == "accumulator":
+            return "ACCU" in types or "ACCUMULATOR" in types
+        if desired == "turbos":
+            return "TURBOSLONG" in types or "TURBOSSHORT" in types
+        if desired == "multipliers":
+            return "MULTUP" in types or "MULTDOWN" in types
+        # basic
+        return True
+
+    async def query(sym: str) -> Dict[str, Any]:
+        try:
+            return await deriv_contracts_for(sym, currency=currency, product_type=product_type, landing_company=landing_company)
+        except HTTPException as e:
+            return {"error": e.detail}
+
+    async def query_basic(sym: str) -> Dict[str, Any]:
+        try:
+            return await deriv_contracts_for(sym, currency=currency, product_type="basic", landing_company=landing_company)
+        except HTTPException as e:
+            return {"error": e.detail}
+
+    tried: List[str] = []
+    results: Dict[str, Any] = {}
+
+    # 1) símbolo solicitado
+    res0 = await query(symbol)
+    tried.append(symbol)
+    results[symbol] = res0
+    chosen_symbol: Optional[str] = symbol if types_match_for_product(res0) else None
+
+    # 2) fallback: basic
+    if chosen_symbol is None and desired in {"accumulator", "turbos", "multipliers"}:
+        res_basic = await query_basic(symbol)
+        results[symbol + "#basic"] = res_basic
+        if types_match_for_product(res_basic):
+            chosen_symbol = symbol
+
+    # 3) fallback: _1HZ
+    if chosen_symbol is None and symbol.startswith("R_") and not symbol.endswith("_1HZ"):
+        alt = f"{symbol}_1HZ"
+        res_alt = await query(alt)
+        tried.append(alt)
+        results[alt] = res_alt
+        if types_match_for_product(res_alt):
+            chosen_symbol = alt
+        elif desired in {"accumulator", "turbos", "multipliers"}:
+            res_alt_basic = await query_basic(alt)
+            results[alt + "#basic"] = res_alt_basic
+            if types_match_for_product(res_alt_basic):
+                chosen_symbol = alt
+
+    return {
+        "tried": tried,
+        "first_supported": chosen_symbol,
+        "results": results,
+        "product_type": product_type or "basic",
+    }
 
 @api_router.post("/deriv/proposal")
 async def deriv_proposal(req: BuyRequest):
