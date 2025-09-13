@@ -1156,21 +1156,28 @@ async def strategy_stop():
 async def strategy_status():
     return _strategy.status()
 
-# WebSocket endpoint to push ticks to clients
+# WebSocket endpoint to push ticks to clients (suporta querystring symbols=R_100,R_75 ou payload inicial JSON)
 @app.websocket("/api/ws/ticks")
 async def ws_ticks(websocket: WebSocket):
     await websocket.accept()
     queues: Dict[str, asyncio.Queue] = {}
     try:
-        # Wait for a subscribe message
-        init = await websocket.receive_text()
-        try:
-            msg = json.loads(init)
-        except json.JSONDecodeError:
-            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON"}))
-            await websocket.close()
-            return
-        symbols = msg.get("symbols") or []
+        # 1) Primeiro tenta via querystring (?symbols=A,B,C)
+        symbols_qs = websocket.query_params.get("symbols") if hasattr(websocket, "query_params") else None
+        symbols: List[str] = []
+        if symbols_qs:
+            symbols = [s.strip() for s in symbols_qs.split(",") if s.strip()]
+        # 2) Se não vier por query, espera payload inicial JSON {symbols:[]}
+        if not symbols:
+            try:
+                init = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+                try:
+                    msg = json.loads(init)
+                    symbols = msg.get("symbols") or []
+                except json.JSONDecodeError:
+                    pass
+            except asyncio.TimeoutError:
+                symbols = []
         if not symbols:
             await websocket.send_text(json.dumps({"type": "error", "message": "No symbols provided"}))
             await websocket.close()
@@ -1189,7 +1196,7 @@ async def ws_ticks(websocket: WebSocket):
                 p.cancel()
             if not done:
                 # heartbeat
-                await websocket.send_text(json.dumps({"type": "ping"}))
+                await websocket.send_text(json.dumps({"type": "ping", "symbols": list(queues.keys())}))
                 continue
             for d in done:
                 try:
