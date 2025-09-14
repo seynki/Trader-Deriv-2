@@ -29,16 +29,18 @@ logger = logging.getLogger(__name__)
 SYMBOLS = ["R_100", "R_75", "R_50", "R_25", "R_10"]  # símbolos a avaliar
 # timeframes: representados como ('type','value') where type in {'ticks','s','m'}
 TIMEFRAMES = [
+    ("ticks", 1),        # janela de 1 tick (ultra rápido)
+    ("ticks", 5),        # janela de 5 ticks
     ("ticks", 10),       # janela de 10 ticks
-    ("ticks", 25),       # janela de 25 ticks  
-    ("ticks", 50),       # janela de 50 ticks
-    ("ticks", 100),      # janela de 100 ticks
-    ("s", 1),            # 1 segundo
-    ("s", 5),            # 5 segundos
+    ("s", 15),           # 15 segundos (mínimo Deriv)
     ("s", 30),           # 30 segundos
+    ("s", 60),           # 1 minuto em segundos
+    ("s", 120),          # 2 minutos em segundos
+    ("s", 300),          # 5 minutos em segundos
     ("m", 1),            # 1 minuto
     ("m", 3),            # 3 minutos
     ("m", 5),            # 5 minutos
+    ("m", 10),           # 10 minutos
 ]
 
 SIM_WINDOW_SECONDS = 60  # janela de histórico (em segundos) usada para simular performance
