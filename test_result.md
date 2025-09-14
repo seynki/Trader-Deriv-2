@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-## user_problem_statement: "Bot de trading Deriv: expandir timeframes (2 ticks, 25 ticks, 50 ticks, 2min, 15min, 30min), dar mais peso para timeframes 2-10min (conservadores), ser mais assertivo com critérios rigorosos (winrate > 75%, PnL positivo, trades suficientes), melhorar performance com outros timeframes além de 1 tick."
+## user_problem_statement: "Remover seções específicas do robô de trading: remover aba 'Aprendizado Online' (mantendo 'River upd'), remover 'Modelo atual (ML)' e suas funções, remover 'Bot automático' e suas funções. Mover 'River upd' para o painel 'Estratégia (ADX/RSI/MACD/BB)' junto com 'Modo: paper • Símbolo: R_100'."
 
 ## backend:
 ##   - task: "Auto-Bot: timeframes expandidos + modo conservador"
