@@ -1647,7 +1647,7 @@ async def start_auto_bot(config: Optional[AutoBotConfig] = None):
             auto_bot.update_config(config)
         
         # Define referência para API da Deriv para execução de trades reais
-        auto_bot.set_deriv_api(deriv_ws)
+        auto_bot.set_deriv_api(_deriv)
         
         await auto_bot.start()
         return {"message": "Bot de seleção automática iniciado com sucesso", "status": auto_bot.get_status()}
