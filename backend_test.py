@@ -3049,11 +3049,13 @@ if __name__ == "__main__":
             asyncio.run(main_global_metrics_test())
         elif sys.argv[1] == "river_threshold":
             asyncio.run(main_river_threshold_test())
+        elif sys.argv[1] == "auto_bot":
+            asyncio.run(main())
         else:
-            print("Available test modes: hybrid, online_learning, river, global_metrics, river_threshold")
-            print("Usage: python backend_test.py [hybrid|online_learning|river|global_metrics|river_threshold]")
-            print("Default: River Threshold tests")
-            asyncio.run(main_river_threshold_test())
+            print("Available test modes: hybrid, online_learning, river, global_metrics, river_threshold, auto_bot")
+            print("Usage: python backend_test.py [hybrid|online_learning|river|global_metrics|river_threshold|auto_bot]")
+            print("Default: Auto-Bot tests")
+            asyncio.run(main())
     else:
-        # Default to River Threshold test as requested in review
-        asyncio.run(main_river_threshold_test())
+        # Default to Auto-Bot test as requested in current review
+        asyncio.run(main())
