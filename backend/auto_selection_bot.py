@@ -488,42 +488,53 @@ class AutoSelectionBot:
             return
             
         try:
-            # Verifica se o resultado é bom o suficiente para executar
+            # Verifica se o resultado atende aos critérios de execução
             best = self.status.best_combo
             
-            # Critério relaxado para teste: winrate >= 50% e pelo menos 2 trades na simulação
-            if (best.get('winrate', 0) or 0) >= 0.50 and best.get('trades', 0) >= 2:
+            # Usa critérios mais rigorosos
+            if not best.get('meets_criteria', False):
+                logger.info(f"Melhor combo não atende critérios: winrate={best.get('winrate', 0):.1%}, trades={best.get('trades', 0)}, net={best.get('net', 0):.2f}")
+                return
                 
-                # Determina direção baseada no último sinal
-                symbol = best['symbol']
-                ticks_recent = list(ticks_store.get(symbol, []))
-                cutoff_ts = time.time() - self.config.sim_window_seconds
-                ticks_filtered = [(ts, p) for ts, p in ticks_recent if ts >= cutoff_ts]
+            # Log dos critérios
+            logger.info(f"Executando trade - Critérios atendidos: winrate={best.get('winrate', 0):.1%} (min: {self.config.min_winrate:.1%}), trades={best.get('trades', 0)} (min: {self.config.min_trades_sample}), score={best.get('combined_score', 0):.3f}")
                 
-                if ticks_filtered:
-                    candles = self._aggregate_to_candles(ticks_filtered, best['tf_type'], best['tf_val'])
-                    df = self._compute_simple_indicators(candles, STRAT.ma_short, STRAT.ma_long)
+            # Determina direção baseada no último sinal
+            symbol = best['symbol']
+            ticks_recent = list(ticks_store.get(symbol, []))
+            cutoff_ts = time.time() - self.config.sim_window_seconds
+            ticks_filtered = [(ts, p) for ts, p in ticks_recent if ts >= cutoff_ts]
+            
+            if ticks_filtered:
+                candles = self._aggregate_to_candles(ticks_filtered, best['tf_type'], best['tf_val'])
+                df = self._compute_simple_indicators(candles, STRAT.ma_short, STRAT.ma_long)
+                
+                if not df.empty:
+                    last_diff = df['ma_diff'].iloc[-1]
+                    direction = "CALL" if last_diff > 0 else "PUT"
                     
-                    if not df.empty:
-                        last_diff = df['ma_diff'].iloc[-1]
-                        direction = "CALL" if last_diff > 0 else "PUT"
+                    logger.info(f"Executando trade: {symbol} {direction} stake={self.config.sim_trade_stake} [TF: {best['timeframe_desc']}, Score: {best.get('combined_score', 0):.3f}]")
+                    
+                    # Executa trade via API da Deriv (simulação aqui)
+                    trade_result = await self._execute_real_trade(symbol, direction, self.config.sim_trade_stake)
+                    
+                    if trade_result:
+                        self.status.trades_executed += 1
+                        self.status.last_trade = {
+                            "timestamp": datetime.utcnow(),
+                            "symbol": symbol,
+                            "direction": direction,
+                            "stake": self.config.sim_trade_stake,
+                            "reason": f"Best combo: {best['timeframe_desc']} winrate={best.get('winrate', 0):.1%} score={best.get('combined_score', 0):.3f}",
+                            "performance_metrics": {
+                                "winrate": best.get('winrate', 0),
+                                "net_pnl": best.get('net', 0),
+                                "trades_sample": best.get('trades', 0),
+                                "combined_score": best.get('combined_score', 0)
+                            },
+                            **trade_result
+                        }
                         
-                        logger.info(f"Executando trade: {symbol} {direction} stake={self.config.sim_trade_stake}")
-                        
-                        # Executa trade via API da Deriv (simulação aqui)
-                        trade_result = await self._execute_real_trade(symbol, direction, self.config.sim_trade_stake)
-                        
-                        if trade_result:
-                            self.status.trades_executed += 1
-                            self.status.last_trade = {
-                                "timestamp": datetime.utcnow(),
-                                "symbol": symbol,
-                                "direction": direction,
-                                "stake": self.config.sim_trade_stake,
-                                "reason": f"Best combo: {best['tf_type']}{best['tf_val']} winrate={best.get('winrate', 0):.2%}",
-                                **trade_result
-                            }
-                            
         except Exception as e:
             logger.error(f"Erro ao executar trade automático: {e}")
             
