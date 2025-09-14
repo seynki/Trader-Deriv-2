@@ -1621,9 +1621,9 @@ async def get_river_performance():
                 "losses": global_stats.get("losses", 0),
                 "daily_pnl": _global_pnl.get(),
             },
-            "is_running": strategy_runner.running,
-            "last_signal": strategy_runner.last_signal,
-            "last_reason": strategy_runner.last_reason,
+            "is_running": _strategy.running,
+            "last_signal": _strategy.last_signal,
+            "last_reason": _strategy.last_reason,
             "timestamp": int(time.time())
         }
         
