@@ -40,25 +40,40 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
     symbols: ["R_100", "R_75", "R_50", "R_25", "R_10"],
     timeframes: [
       ["ticks", 1],
+      ["ticks", 2],    // NOVO
       ["ticks", 5],
       ["ticks", 10],
+      ["ticks", 25],   // NOVO
+      ["ticks", 50],   // NOVO
       ["s", 15],
       ["s", 30],
       ["s", 60],
       ["s", 120],
       ["s", 300],
       ["m", 1],
+      ["m", 2],        // NOVO
       ["m", 3],
       ["m", 5],
-      ["m", 10]
+      ["m", 10],
+      ["m", 15],       // NOVO
+      ["m", 30]        // NOVO
     ],
     sim_window_seconds: 60,
     sim_trade_stake: 1.0,
     auto_execute: false,
     evaluation_interval: 5,
-    min_winrate: 0.70,
-    min_trades_sample: 5,
-    use_combined_score: true
+    min_winrate: 0.75,           // MAIS RIGOROSO (75% vs 70%)
+    min_trades_sample: 8,        // MAIS RIGOROSO (8 vs 5)
+    min_pnl_positive: 0.5,       // NOVO critério
+    use_combined_score: true,
+    conservative_mode: true,     // NOVO
+    prefer_longer_timeframes: true,  // NOVO
+    score_weights: {             // NOVO
+      winrate: 0.5,              // Maior peso para winrate
+      pnl: 0.3,
+      volume: 0.1,
+      timeframe: 0.1
+    }
   });
 
   const [results, setResults] = useState(null);
