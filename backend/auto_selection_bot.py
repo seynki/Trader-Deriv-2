@@ -439,33 +439,53 @@ class AutoSelectionBot:
             
     async def _execute_real_trade(self, symbol: str, direction: str, stake: float) -> Optional[Dict]:
         """
-        Executa trade real via API da Deriv
-        Esta é uma função stub - deve ser implementada com integração real
+        Executa trade real via API da Deriv usando o endpoint interno /deriv/buy
         """
-        logger.warning(f"execute_real_trade() chamado — função é STUB para {symbol} {direction} stake={stake}")
-        
-        # Se auto_execute estiver habilitado e tivermos referência da API, executar
-        if self.deriv_api and hasattr(self.deriv_api, 'buy_contract'):
-            try:
-                # Exemplo de chamada para API real (ajustar conforme sua implementação)
-                result = await self.deriv_api.buy_contract(
-                    symbol=symbol, 
-                    contract_type=direction,
-                    duration=5,
-                    duration_unit="t",
-                    stake=stake
-                )
-                return result
-            except Exception as e:
-                logger.error(f"Erro ao executar trade real: {e}")
+        if not self.deriv_api or not self.deriv_api.connected:
+            logger.error(f"API Deriv não conectada - não é possível executar trade real")
+            return None
+            
+        try:
+            # Importa BuyRequest do módulo principal
+            import sys
+            import os
+            sys.path.append(os.path.dirname(__file__))
+            from server import BuyRequest, deriv_buy
+            
+            # Cria requisição de compra
+            buy_request = BuyRequest(
+                symbol=symbol,
+                type="CALLPUT",
+                contract_type=direction,  # "CALL" ou "PUT"
+                duration=5,
+                duration_unit="t",
+                stake=stake,
+                currency="USD"
+            )
+            
+            logger.info(f"Executando trade REAL via Deriv API: {symbol} {direction} stake={stake}")
+            
+            # Executa trade real usando endpoint interno
+            result = await deriv_buy(buy_request)
+            
+            if result:
+                logger.info(f"Trade REAL executado com sucesso: contract_id={result.get('contract_id')}, buy_price={result.get('buy_price')}")
+                return {
+                    "status": "executed",
+                    "contract_id": result.get("contract_id"),
+                    "buy_price": result.get("buy_price"),
+                    "payout": result.get("payout"),
+                    "symbol": symbol,
+                    "direction": direction,
+                    "stake": stake
+                }
+            else:
+                logger.error(f"Falha ao executar trade real - resultado vazio")
                 return None
-        else:
-            # Simulação
-            return {
-                "status": "simulated",
-                "contract_id": f"sim_{int(time.time())}",
-                "message": f"Trade simulado: {symbol} {direction} stake={stake}"
-            }
+                
+        except Exception as e:
+            logger.error(f"Erro ao executar trade real: {e}")
+            return None
 
 # Instância global do bot
 auto_bot = AutoSelectionBot()
