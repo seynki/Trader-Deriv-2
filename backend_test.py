@@ -1690,13 +1690,6 @@ async def test_ultra_conservative_auto_bot():
             "details": str(e),
             "test_results": test_results
         }
-                    
-        except Exception as e:
-            log(f"❌ Conectividade FALHOU - Exception: {e}")
-        
-        # Test 2: Status do Bot (inicial)
-        log("\n🔍 TEST 2: STATUS DO BOT - NOVOS CAMPOS")
-        log("   Objetivo: GET /api/auto-bot/status com min_winrate=0.70, use_combined_score=true, evaluation_stats")
         
         try:
             response = session.get(f"{api_url}/auto-bot/status", timeout=10)
