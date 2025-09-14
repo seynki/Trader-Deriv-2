@@ -239,30 +239,18 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "Minor: TESTED: GET /api/deriv/contracts_for/R_100 ✅ returns 200 with contract_types list (34 types including CALL/PUT), but durations/duration_units are empty due to parsing logic not finding min/max_duration fields in Deriv API response. Core functionality works, minor parsing issue."
-## frontend:
-##   - task: "Strategy Runner (ADX/RSI/MACD/BB + paper/live)"
+## frontend:  
+##   - task: "Auto-Bot Panel: interface conservadora + timeframes expandidos"
 ##     implemented: true
-##     working: true
-##     file: "/app/backend/server.py"
+##     working: "NA"
+##     file: "/app/frontend/src/components/AutoSelectionBotPanel.jsx"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
-##       -comment: "Implementado StrategyRunner no backend com indicadores (SMA/EMA, RSI, MACD, Bollinger, ADX) e laço de execução. Endpoints: POST /api/strategy/start (params com defaults; modo=paper por padrão), POST /api/strategy/stop, GET /api/strategy/status. Paper-trade usa ticks e payout 0.95 simulado; live utiliza /api/deriv/buy CALL/PUT. Respeita DAILY_LOSS_LIMIT e cooldown. Sem mudanças no frontend ainda."
-##       -working: true
-##       -agent: "testing"
-##       -comment: "STRATEGY RUNNER PAPER MODE TESTING COMPLETED: ✅ GET /api/strategy/status returns running=false initially ✅ POST /api/strategy/start with exact payload (symbol=R_100, granularity=60, candle_len=200, duration=5, duration_unit=t, stake=1, daily_loss_limit=-20, adx_trend=22, rsi_ob=70, rsi_os=30, bbands_k=2, mode=paper) successfully starts strategy ✅ Strategy shows activity with last_run_at timestamp updating ✅ POST /api/strategy/stop successfully stops strategy ✅ All endpoints working correctly in paper mode. Live mode NOT tested as requested."
-##       -working: "NA"
-##       -agent: "user"
-##       -comment: "Feedback: PnL exibido estava negativo incorretamente com stake fixo 100 e payout 94,2%. Desejo que paper alimente Win/Erros/Total também. Tela: Estratégia (PnL dia)."
-##       -working: "NA"
-##       -agent: "main"
-##       -comment: "FIX: Paper agora atualiza estatísticas globais (wins/losses/total_trades) e PnL global via _global_stats.add_paper_trade_result e _global_pnl.add(). Não alterei o payout default (permanece 0.95) nem stake default. Necessário retestar start/stop (paper) e consistência dos contadores e PnL no card da Estratégia."
-##       -working: true
-##       -agent: "testing"
-##       -comment: "STRATEGY PnL/COUNTERS PAPER MODE TESTING COMPLETED (2025-08-30): ✅ CORE FUNCTIONALITY WORKING - Executado conforme review request: 1) GET /api/strategy/status (baseline) ✅ retorna running=false inicialmente, total_trades=0, wins=0, losses=0, daily_pnl=0.0, global_daily_pnl=0.0 com consistência wins+losses=total_trades 2) POST /api/strategy/start com payload exato (symbol=R_100, granularity=60, candle_len=200, duration=5, duration_unit=t, stake=1, daily_loss_limit=-20, adx_trend=22, rsi_ob=70, rsi_os=30, bbands_k=2, mode=paper) ✅ inicia estratégia com running=true 3) Monitoramento por 60s ✅ running=true consistente, last_run_at atualizando (estratégia ativa) 4) POST /api/strategy/stop ✅ para estratégia com running=false. OBSERVAÇÃO: Nenhum trade foi executado durante o teste (total_trades permaneceu 0), indicando que as condições de mercado não atenderam aos critérios da estratégia (ADX/RSI/MACD/BB). Isso é comportamento normal - a estratégia só executa trades quando detecta sinais válidos. INFRAESTRUTURA FUNCIONANDO: endpoints start/stop/status, paper mode, global stats integration, PnL tracking preparados para quando trades ocorrerem."
+##       -comment: "INTERFACE CONSERVADORA IMPLEMENTADA: 1) Timeframes expandidos na configuração: 18 timeframes (vs 12 anteriores) incluindo 2 ticks, 25 ticks, 50 ticks, 2min, 15min, 30min 2) Configurações conservadoras: winrate mínimo 75%, trades mínimos 8, PnL mínimo positivo 0.5, switches para modo conservador e preferir timeframes longos 3) Nova aba 'Timeframes': análise detalhada por tipo (ticks/segundos/minutos), badges para timeframes conservadores (🛡️) e novos (●), critérios conservadores detalhados 4) Status visual melhorado: badges para modo conservador, timeframes longos, indicadores visuais para critérios rigorosos 5) Score combinado configurável com pesos conservadores (50% winrate, 30% PnL, 10% volume, 10% timeframe)."
 ##   - task: "ML: source=deriv + grid + calibração + walk-forward"
 ##     implemented: true
 ##     working: true
