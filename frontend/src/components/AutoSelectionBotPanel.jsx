@@ -264,6 +264,12 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
               <Badge variant={botStatus.auto_execute ? "destructive" : "outline"}>
                 {botStatus.auto_execute ? "Execução Real" : "Simulação"}
               </Badge>
+              <Badge variant={botStatus.conservative_mode ? "default" : "outline"}>
+                {botStatus.conservative_mode ? "🛡️ Conservador" : "Normal"}
+              </Badge>
+              <Badge variant={botStatus.prefer_longer_timeframes ? "default" : "outline"}>
+                {botStatus.prefer_longer_timeframes ? "⏱️ TF Longos" : "TF Mistos"}
+              </Badge>
             </div>
           </div>
 
