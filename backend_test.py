@@ -1690,64 +1690,6 @@ async def test_ultra_conservative_auto_bot():
             "details": str(e),
             "test_results": test_results
         }
-        
-        try:
-            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
-            log(f"   Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                log(f"   Response: {json.dumps(data, indent=2)}")
-                
-                running = data.get('running', None)
-                min_winrate = data.get('min_winrate', None)
-                use_combined_score = data.get('use_combined_score', None)
-                evaluation_stats = data.get('evaluation_stats', None)
-                
-                log(f"   📊 Análise dos novos campos:")
-                log(f"      running: {running}")
-                log(f"      min_winrate: {min_winrate} (esperado: 0.70)")
-                log(f"      use_combined_score: {use_combined_score} (esperado: true)")
-                log(f"      evaluation_stats: {evaluation_stats} (pode ser null inicialmente)")
-                
-                # Validar novos campos
-                if (min_winrate == 0.70 and use_combined_score is True and 
-                    'evaluation_stats' in data):  # evaluation_stats pode ser null inicialmente
-                    test_results["bot_status_initial"] = True
-                    log(f"✅ Status inicial OK: novos campos presentes e corretos")
-                else:
-                    log(f"❌ Status inicial FALHOU: campos incorretos ou ausentes")
-                    log(f"   min_winrate: {min_winrate} (esperado: 0.70)")
-                    log(f"   use_combined_score: {use_combined_score} (esperado: true)")
-            else:
-                log(f"❌ Status inicial FALHOU - HTTP {response.status_code}")
-                    
-        except Exception as e:
-            log(f"❌ Status inicial FALHOU - Exception: {e}")
-        
-        # Test 3: Configuração Avançada
-        log("\n🔍 TEST 3: CONFIGURAÇÃO AVANÇADA")
-        log("   Objetivo: POST /api/auto-bot/config com payload das novas configurações")
-        
-        advanced_config = {
-            "min_winrate": 0.75,
-            "min_trades_sample": 8,
-            "use_combined_score": True,
-            "timeframes": [["ticks", 10], ["ticks", 25], ["s", 1], ["s", 5], ["m", 1]],
-            "auto_execute": False
-        }
-        
-        try:
-            log(f"   Payload: {json.dumps(advanced_config, indent=2)}")
-            response = session.post(f"{api_url}/auto-bot/config", json=advanced_config, timeout=15)
-            log(f"   Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                log(f"   Response: {json.dumps(data, indent=2)}")
-                
-                # Verificar se configuração foi aceita
-                success = data.get('success', False) or 'success' in data.get('message', '').lower()
                 
                 if success or response.status_code == 200:
                     test_results["advanced_config"] = True
