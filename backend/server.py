@@ -1609,7 +1609,7 @@ async def get_river_performance():
                 logger.warning(f"Erro ao carregar modelo River: {e}")
         
         # Obter estatísticas globais atuais
-        global_stats = _global_stats.get_stats()
+        global_stats = _global_stats.snapshot()
         
         return {
             "current_threshold": _strategy.params.river_threshold,
