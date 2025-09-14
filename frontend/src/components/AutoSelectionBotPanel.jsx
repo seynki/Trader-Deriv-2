@@ -624,27 +624,31 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                 </p>
               </div>
 
-              {/* Winrate Mínimo com Slider */}
+              {/* Winrate Mínimo com Slider - MAIS RIGOROSO */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Sliders className="h-4 w-4" />
                   <Label>Winrate Mínimo para Executar Trades: {(config.min_winrate * 100).toFixed(0)}%</Label>
+                  <Badge variant={config.min_winrate >= 0.75 ? "default" : "secondary"}>
+                    {config.min_winrate >= 0.75 ? "Conservador" : "Normal"}
+                  </Badge>
                 </div>
                 <Slider
                   value={[config.min_winrate * 100]}
                   onValueChange={(value) => setConfig({...config, min_winrate: value[0] / 100})}
                   max={90}
-                  min={50}
+                  min={60}
                   step={1}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>50%</span>
+                  <span>60%</span>
+                  <span className="text-orange-600">75% (Recomendado)</span>
                   <span>90%</span>
                 </div>
               </div>
 
-              {/* Switches */}
+              {/* NOVO: Switches Conservadores */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -660,7 +664,23 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                     checked={config.use_combined_score}
                     onCheckedChange={(checked) => setConfig({...config, use_combined_score: checked})}
                   />
-                  <Label htmlFor="combined_score">Usar Score Combinado (Winrate + PnL + Volume)</Label>
+                  <Label htmlFor="combined_score">Usar Score Combinado</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="conservative_mode"
+                    checked={config.conservative_mode !== false}
+                    onCheckedChange={(checked) => setConfig({...config, conservative_mode: checked})}
+                  />
+                  <Label htmlFor="conservative_mode">🛡️ Modo Conservador (Critérios Rigorosos)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="prefer_longer_tf"
+                    checked={config.prefer_longer_timeframes !== false}
+                    onCheckedChange={(checked) => setConfig({...config, prefer_longer_timeframes: checked})}
+                  />
+                  <Label htmlFor="prefer_longer_tf">⏱️ Preferir Timeframes Longos (2-10min)</Label>
                 </div>
               </div>
 
