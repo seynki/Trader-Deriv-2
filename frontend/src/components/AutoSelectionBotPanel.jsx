@@ -498,32 +498,69 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
             </CardContent>
           </Card>
 
-          {/* Configurações Atuais */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações Ativas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <Label className="text-sm text-muted-foreground">Winrate Mínimo</Label>
-                  <p className="font-bold text-lg">{(botStatus.min_winrate * 100).toFixed(0)}%</p>
-                </div>
-                <div>
-                  <Label className="text-sm text-muted-foreground">Score Combinado</Label>
-                  <Badge variant={botStatus.use_combined_score ? "default" : "secondary"}>
-                    {botStatus.use_combined_score ? "Ativo" : "Inativo"}
-                  </Badge>
-                </div>
-                <div>
-                  <Label className="text-sm text-muted-foreground">Execução Automática</Label>
-                  <Badge variant={botStatus.auto_execute ? "destructive" : "outline"}>
-                    {botStatus.auto_execute ? "Ativa" : "Simulação"}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Configurações Conservadoras Atuais */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🛡️ Configurações Conservadoras Ativas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Winrate Mínimo</Label>
+                      <p className="font-bold text-lg">{((botStatus.min_winrate || 0.75) * 100).toFixed(0)}%</p>
+                      <Badge variant={(botStatus.min_winrate || 0.75) >= 0.75 ? "default" : "secondary"} className="text-xs">
+                        {(botStatus.min_winrate || 0.75) >= 0.75 ? "Conservador" : "Normal"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Trades Mínimos</Label>
+                      <p className="font-bold text-lg">{botStatus.min_trades_sample || 8}</p>
+                      <Badge variant={(botStatus.min_trades_sample || 8) >= 8 ? "default" : "secondary"} className="text-xs">
+                        {(botStatus.min_trades_sample || 8) >= 8 ? "Rigoroso" : "Normal"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">PnL Mínimo</Label>
+                      <p className="font-bold text-lg">{(botStatus.min_pnl_positive || 0.5).toFixed(1)}</p>
+                      <Badge variant="outline" className="text-xs">Obrigatório</Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Modo</Label>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={botStatus.conservative_mode ? "default" : "secondary"} className="text-xs">
+                          {botStatus.conservative_mode ? "🛡️ Conservador" : "Normal"}
+                        </Badge>
+                        <Badge variant={botStatus.prefer_longer_timeframes ? "default" : "outline"} className="text-xs">
+                          {botStatus.prefer_longer_timeframes ? "⏱️ TF Longos" : "TF Mistos"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Configurações Atuais Antigas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Outras Configurações</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Score Combinado</Label>
+                      <Badge variant={botStatus.use_combined_score ? "default" : "secondary"}>
+                        {botStatus.use_combined_score ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Execução Automática</Label>
+                      <Badge variant={botStatus.auto_execute ? "destructive" : "outline"}>
+                        {botStatus.auto_execute ? "Ativa" : "Simulação"}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
           {/* Último Trade com Métricas Detalhadas */}
           {botStatus.last_trade && botStatus.last_trade.performance_metrics && (
