@@ -1690,33 +1690,8 @@ async def test_ultra_conservative_auto_bot():
             "details": str(e),
             "test_results": test_results
         }
-                
-                if success or response.status_code == 200:
-                    test_results["advanced_config"] = True
-                    log("✅ Configuração avançada aplicada com sucesso")
-                    
-                    # Verificar se configuração foi realmente aplicada
-                    verify_response = session.get(f"{api_url}/auto-bot/status", timeout=10)
-                    if verify_response.status_code == 200:
-                        verify_data = verify_response.json()
-                        new_min_winrate = verify_data.get('min_winrate', None)
-                        log(f"   Verificação: min_winrate atualizado para {new_min_winrate}")
-                else:
-                    log(f"❌ Configuração FALHOU: resposta não indica sucesso")
-            else:
-                log(f"❌ Configuração FALHOU - HTTP {response.status_code}")
-                try:
-                    error_data = response.json()
-                    log(f"   Error: {error_data}")
-                except:
-                    log(f"   Error text: {response.text}")
-                    
-        except Exception as e:
-            log(f"❌ Configuração FALHOU - Exception: {e}")
-        
-        # Test 4: Teste de Funcionamento
-        log("\n🔍 TEST 4: TESTE DE FUNCIONAMENTO")
-        log("   Objetivo: start → aguardar 10s → verificar status → stop")
+
+async def main():
         
         functionality_success = True
         
