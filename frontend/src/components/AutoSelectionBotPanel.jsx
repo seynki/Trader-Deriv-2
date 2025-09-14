@@ -609,6 +609,21 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                 </div>
               </div>
 
+              {/* NOVO: PnL Mínimo Positivo */}
+              <div>
+                <Label htmlFor="min_pnl">PnL Mínimo Positivo</Label>
+                <Input
+                  id="min_pnl"
+                  type="number"
+                  step="0.1"
+                  value={config.min_pnl_positive || 0.5}
+                  onChange={(e) => setConfig({...config, min_pnl_positive: parseFloat(e.target.value)})}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  PnL mínimo que uma combinação deve ter para ser considerada válida
+                </p>
+              </div>
+
               {/* Winrate Mínimo com Slider */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
