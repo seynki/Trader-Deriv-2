@@ -421,7 +421,8 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                 Configurações do Bot
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Configurações Básicas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="sim_window">Janela de Simulação (segundos)</Label>
@@ -451,6 +452,39 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                     onChange={(e) => setConfig({...config, evaluation_interval: parseInt(e.target.value)})}
                   />
                 </div>
+                <div>
+                  <Label htmlFor="min_trades">Mínimo de Trades na Amostra</Label>
+                  <Input
+                    id="min_trades"
+                    type="number"
+                    value={config.min_trades_sample}
+                    onChange={(e) => setConfig({...config, min_trades_sample: parseInt(e.target.value)})}
+                  />
+                </div>
+              </div>
+
+              {/* Winrate Mínimo com Slider */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4" />
+                  <Label>Winrate Mínimo para Executar Trades: {(config.min_winrate * 100).toFixed(0)}%</Label>
+                </div>
+                <Slider
+                  value={[config.min_winrate * 100]}
+                  onValueChange={(value) => setConfig({...config, min_winrate: value[0] / 100})}
+                  max={90}
+                  min={50}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>50%</span>
+                  <span>90%</span>
+                </div>
+              </div>
+
+              {/* Switches */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="auto_execute"
@@ -458,6 +492,14 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                     onCheckedChange={(checked) => setConfig({...config, auto_execute: checked})}
                   />
                   <Label htmlFor="auto_execute">Execução Automática de Trades</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="combined_score"
+                    checked={config.use_combined_score}
+                    onCheckedChange={(checked) => setConfig({...config, use_combined_score: checked})}
+                  />
+                  <Label htmlFor="combined_score">Usar Score Combinado (Winrate + PnL + Volume)</Label>
                 </div>
               </div>
 
@@ -471,7 +513,7 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
               </div>
 
               <div>
-                <Label>Timeframes</Label>
+                <Label>Timeframes Disponíveis</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {config.timeframes.map((tf, index) => (
                     <Badge key={index} variant="outline">{formatTimeframe(tf)}</Badge>
