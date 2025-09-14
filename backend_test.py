@@ -580,32 +580,353 @@ class DerivWebSocketTester:
         else:
             self.log("⚠️  SOME INDIVIDUAL TESTS FAILED")
 
-async def main():
-    """Main function to run WebSocket tests"""
-    print("🔌 TESTE DE WEBSOCKET DERIV - ESTABILIDADE E PERFORMANCE")
-    print("=" * 70)
-    print("📋 Conforme solicitado na review request:")
-    print("   OBJETIVO: Testar somente BACKEND WebSocket")
-    print("   TESTES:")
-    print("   1. Aguardar 5s pós-start")
-    print("   2. GET /api/deriv/status (connected=true)")
-    print("   3. WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 por 30s:")
-    print("      - Mensagens >= 45 em 30s (≈1.5 msg/s)")
-    print("      - Validar type:'tick' com symbol e price")
-    print("      - Validar heartbeats")
-    print("      - Conexão estável")
-    print("   4. (Opcional) WebSocket /api/ws/contract/123456 heartbeat")
-    print("   🎯 FOCO: Backend WS estável e performático (~1.5 msg/s)")
+async def test_auto_bot_endpoints():
+    """
+    Test Auto-Bot endpoints as requested in Portuguese review:
     
-    # Use the URL from frontend/.env as specified
-    tester = DerivWebSocketTester()
+    1. GET /api/auto-bot/status - deve retornar o status inicial do bot (running=false)
+    2. POST /api/auto-bot/start - deve iniciar o bot de seleção automática
+    3. GET /api/auto-bot/status (após start) - deve mostrar running=true e collecting_ticks=true
+    4. GET /api/auto-bot/results - deve retornar resultados de avaliação (pode estar vazio inicialmente)
+    5. POST /api/auto-bot/stop - deve parar o bot
+    6. GET /api/auto-bot/status (após stop) - deve mostrar running=false
+    
+    IMPORTANTE: 
+    - Use os endpoints com prefixo /api exatamente como especificado
+    - NÃO execute trades reais - o bot está em modo simulação por padrão
+    - Aguarde alguns segundos entre start e verificação do status para dar tempo do WebSocket conectar
+    - Teste também o endpoint GET /api/deriv/status para garantir que a conexão com Deriv está funcionando
+    """
+    
+    base_url = "https://autotrader-deriv-1.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🤖" + "="*68)
+    log("TESTE DOS NOVOS ENDPOINTS DO BOT DE SELEÇÃO AUTOMÁTICA")
+    log("🤖" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   1. GET /api/auto-bot/status (status inicial - running=false)")
+    log("   2. POST /api/auto-bot/start (iniciar bot)")
+    log("   3. GET /api/auto-bot/status (após start - running=true, collecting_ticks=true)")
+    log("   4. GET /api/auto-bot/results (resultados de avaliação)")
+    log("   5. POST /api/auto-bot/stop (parar bot)")
+    log("   6. GET /api/auto-bot/status (após stop - running=false)")
+    log("   + GET /api/deriv/status (verificar conexão Deriv)")
+    
+    test_results = {
+        "deriv_status": False,
+        "auto_bot_status_initial": False,
+        "auto_bot_start": False,
+        "auto_bot_status_after_start": False,
+        "auto_bot_results": False,
+        "auto_bot_stop": False,
+        "auto_bot_status_after_stop": False
+    }
     
     try:
-        # Run WebSocket tests
-        success, results = await tester.run_websocket_tests()
+        # Test 0: GET /api/deriv/status (verificar conexão Deriv)
+        log("\n🔍 TEST 0: GET /api/deriv/status (verificar conexão Deriv)")
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                connected = data.get('connected', False)
+                authenticated = data.get('authenticated', False)
+                environment = data.get('environment', 'UNKNOWN')
+                
+                if connected:
+                    test_results["deriv_status"] = True
+                    log(f"✅ Deriv conectado: connected={connected}, authenticated={authenticated}, environment={environment}")
+                else:
+                    log(f"❌ Deriv não conectado: connected={connected}")
+            else:
+                log(f"❌ Deriv status FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Deriv status FALHOU - Exception: {e}")
         
-        # Print summary
-        tester.print_summary()
+        # Test 1: GET /api/auto-bot/status (initial)
+        log("\n🔍 TEST 1: GET /api/auto-bot/status (status inicial)")
+        try:
+            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                running = data.get('running', None)
+                collecting_ticks = data.get('collecting_ticks', None)
+                
+                if running is False:  # Explicitly check for False
+                    test_results["auto_bot_status_initial"] = True
+                    log(f"✅ Status inicial OK: running={running}")
+                    if collecting_ticks is not None:
+                        log(f"   collecting_ticks={collecting_ticks}")
+                else:
+                    log(f"❌ Status inicial FALHOU: running={running} (esperado False)")
+            else:
+                log(f"❌ Status inicial FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Status inicial FALHOU - Exception: {e}")
+        
+        # Test 2: POST /api/auto-bot/start
+        log("\n🔍 TEST 2: POST /api/auto-bot/start (iniciar bot)")
+        try:
+            response = session.post(f"{api_url}/auto-bot/start", json={}, timeout=15)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                message = data.get('message', '')
+                status = data.get('status', {})
+                
+                if 'iniciado' in message.lower() or 'started' in message.lower():
+                    test_results["auto_bot_start"] = True
+                    log("✅ Bot iniciado com sucesso")
+                    log(f"   Message: {message}")
+                    if status:
+                        log(f"   Status retornado: {status}")
+                else:
+                    log(f"❌ Start FALHOU: message='{message}'")
+            else:
+                log(f"❌ Start FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Start FALHOU - Exception: {e}")
+        
+        # Wait a few seconds for WebSocket to connect
+        log("\n⏱️  Aguardando alguns segundos para WebSocket conectar...")
+        time.sleep(5)
+        
+        # Test 3: GET /api/auto-bot/status (after start)
+        log("\n🔍 TEST 3: GET /api/auto-bot/status (após start)")
+        try:
+            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                running = data.get('running', None)
+                collecting_ticks = data.get('collecting_ticks', None)
+                
+                if running is True and collecting_ticks is True:
+                    test_results["auto_bot_status_after_start"] = True
+                    log(f"✅ Status após start OK: running={running}, collecting_ticks={collecting_ticks}")
+                else:
+                    log(f"❌ Status após start FALHOU: running={running}, collecting_ticks={collecting_ticks}")
+                    log("   Esperado: running=true, collecting_ticks=true")
+                    
+                # Log additional status info
+                for key, value in data.items():
+                    if key not in ['running', 'collecting_ticks']:
+                        log(f"   {key}: {value}")
+            else:
+                log(f"❌ Status após start FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Status após start FALHOU - Exception: {e}")
+        
+        # Test 4: GET /api/auto-bot/results
+        log("\n🔍 TEST 4: GET /api/auto-bot/results (resultados de avaliação)")
+        try:
+            response = session.get(f"{api_url}/auto-bot/results", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Results can be empty initially, just check if endpoint works
+                test_results["auto_bot_results"] = True
+                log("✅ Results endpoint OK (pode estar vazio inicialmente)")
+                
+                # Log some info about results
+                if isinstance(data, dict):
+                    if 'results' in data:
+                        results_count = len(data.get('results', []))
+                        log(f"   Resultados encontrados: {results_count}")
+                    if 'evaluations' in data:
+                        eval_count = len(data.get('evaluations', []))
+                        log(f"   Avaliações encontradas: {eval_count}")
+                elif isinstance(data, list):
+                    log(f"   Lista de resultados: {len(data)} items")
+            else:
+                log(f"❌ Results FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Results FALHOU - Exception: {e}")
+        
+        # Test 5: POST /api/auto-bot/stop
+        log("\n🔍 TEST 5: POST /api/auto-bot/stop (parar bot)")
+        try:
+            response = session.post(f"{api_url}/auto-bot/stop", json={}, timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                message = data.get('message', '')
+                status = data.get('status', {})
+                
+                if 'parado' in message.lower() or 'stopped' in message.lower():
+                    test_results["auto_bot_stop"] = True
+                    log("✅ Bot parado com sucesso")
+                    log(f"   Message: {message}")
+                    if status:
+                        log(f"   Status retornado: {status}")
+                else:
+                    log(f"❌ Stop FALHOU: message='{message}'")
+            else:
+                log(f"❌ Stop FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Stop FALHOU - Exception: {e}")
+        
+        # Test 6: GET /api/auto-bot/status (after stop)
+        log("\n🔍 TEST 6: GET /api/auto-bot/status (após stop)")
+        try:
+            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
+            log(f"   Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                running = data.get('running', None)
+                
+                if running is False:  # Explicitly check for False
+                    test_results["auto_bot_status_after_stop"] = True
+                    log(f"✅ Status após stop OK: running={running}")
+                else:
+                    log(f"❌ Status após stop FALHOU: running={running} (esperado False)")
+                    
+                # Log additional status info
+                for key, value in data.items():
+                    if key != 'running':
+                        log(f"   {key}: {value}")
+            else:
+                log(f"❌ Status após stop FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Status após stop FALHOU - Exception: {e}")
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste Auto-Bot Endpoints")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "deriv_status": "GET /api/deriv/status",
+            "auto_bot_status_initial": "GET /api/auto-bot/status (inicial)",
+            "auto_bot_start": "POST /api/auto-bot/start",
+            "auto_bot_status_after_start": "GET /api/auto-bot/status (após start)",
+            "auto_bot_results": "GET /api/auto-bot/results",
+            "auto_bot_stop": "POST /api/auto-bot/stop",
+            "auto_bot_status_after_stop": "GET /api/auto-bot/status (após stop)"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ PASSOU" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        overall_success = passed_tests == total_tests
+        
+        if overall_success:
+            log("\n🎉 TODOS OS TESTES AUTO-BOT PASSARAM!")
+            log("📋 Validações bem-sucedidas:")
+            log("   ✅ GET /api/deriv/status - conexão Deriv funcionando")
+            log("   ✅ GET /api/auto-bot/status - status inicial running=false")
+            log("   ✅ POST /api/auto-bot/start - bot iniciado com sucesso")
+            log("   ✅ GET /api/auto-bot/status - após start running=true, collecting_ticks=true")
+            log("   ✅ GET /api/auto-bot/results - endpoint funcionando (pode estar vazio)")
+            log("   ✅ POST /api/auto-bot/stop - bot parado com sucesso")
+            log("   ✅ GET /api/auto-bot/status - após stop running=false")
+            log("   🎯 CONCLUSÃO: Bot de seleção automática funcionando PERFEITAMENTE!")
+        else:
+            log("\n❌ ALGUNS TESTES AUTO-BOT FALHARAM")
+            failed_tests = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_tests}")
+            log("   📋 FOCO: Verificar implementação dos endpoints que falharam")
+        
+        return overall_success, test_results
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE AUTO-BOT: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }
+
+async def main():
+    """Main function to run Auto-Bot tests"""
+    print("🤖 TESTE DOS NOVOS ENDPOINTS DO BOT DE SELEÇÃO AUTOMÁTICA")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Testar os novos endpoints do bot de seleção automática")
+    print("   TESTES:")
+    print("   1. GET /api/auto-bot/status (status inicial - running=false)")
+    print("   2. POST /api/auto-bot/start (iniciar bot)")
+    print("   3. GET /api/auto-bot/status (após start - running=true, collecting_ticks=true)")
+    print("   4. GET /api/auto-bot/results (resultados de avaliação)")
+    print("   5. POST /api/auto-bot/stop (parar bot)")
+    print("   6. GET /api/auto-bot/status (após stop - running=false)")
+    print("   + GET /api/deriv/status (verificar conexão Deriv)")
+    print("   🎯 FOCO: Bot em modo simulação, não executa trades reais")
+    
+    try:
+        # Run Auto-Bot tests
+        success, results = await test_auto_bot_endpoints()
         
         # Exit with appropriate code
         sys.exit(0 if success else 1)
