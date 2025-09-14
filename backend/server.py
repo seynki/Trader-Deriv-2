@@ -1973,15 +1973,15 @@ async def ml_engine_decide_trade(request: MLEngineDecisionRequest):
             "model_used": model_key,
             "prediction": pred_data,
             "decision": {
-                "direction": decision["direction"],
-                "probability": decision["prob"],
-                "confidence": decision["conf"],
-                "should_trade": decision["do_trade"],
-                "recommended_stake": decision["stake"],
-                "kelly_fraction": decision["fraction"],
-                "min_confidence_met": decision["conf"] >= request.min_conf
+                "direction": str(decision["direction"]),
+                "probability": float(decision["prob"]),
+                "confidence": float(decision["conf"]),
+                "should_trade": bool(decision["do_trade"]),
+                "recommended_stake": float(decision["stake"]),
+                "kelly_fraction": float(decision["fraction"]),
+                "min_confidence_met": bool(decision["conf"] >= request.min_conf)
             },
-            "dry_run": request.dry_run,
+            "dry_run": bool(request.dry_run),
             "timestamp": datetime.utcnow().isoformat()
         }
         
