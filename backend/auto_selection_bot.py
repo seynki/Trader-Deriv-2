@@ -117,6 +117,13 @@ class AutoSelectionBot:
         """Atualiza configuração do bot"""
         self.config = config
         self.status.auto_execute = config.auto_execute
+        self.status.min_winrate = config.min_winrate
+        self.status.use_combined_score = config.use_combined_score
+        
+        # Atualiza parâmetros da estratégia
+        global STRAT
+        STRAT.min_winrate = config.min_winrate
+        STRAT.min_trades_sample = config.min_trades_sample
         
         # Reinitializa ticks_store com novos símbolos se necessário
         global ticks_store
