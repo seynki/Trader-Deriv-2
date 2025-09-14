@@ -102,10 +102,10 @@ class AutoBotConfig(BaseModel):
     
     # Pesos para score combinado conservador
     score_weights: dict = {
-        "winrate": 0.5,      # Maior peso para winrate (50% vs 40%)
-        "pnl": 0.3,          # Menor peso para PnL (30% vs 40%)
-        "volume": 0.1,       # Menor peso para volume (10% vs 20%)
-        "timeframe": 0.1     # Novo peso para tipo de timeframe (10%)
+        "winrate": 0.7,      # PESO MÁXIMO para winrate (70% vs 50%) - FOCO TOTAL
+        "pnl": 0.15,         # Peso menor para PnL (15% vs 30%)
+        "volume": 0.05,      # Peso mínimo para volume (5% vs 10%)
+        "timeframe": 0.1     # Peso para tipo de timeframe (10%)
     }
 
 class AutoBotStatus(BaseModel):
