@@ -70,6 +70,9 @@ class AutoBotConfig(BaseModel):
     strategy_params: dict = None
     auto_execute: bool = False  # se True, executa trades reais automaticamente
     evaluation_interval: int = 5  # intervalo de avaliação em segundos
+    min_winrate: float = 0.70  # winrate mínimo para executar trades (70%)
+    min_trades_sample: int = 5  # mínimo de trades na amostra
+    use_combined_score: bool = True  # usar score combinado (winrate + pnl + volume)
 
 class AutoBotStatus(BaseModel):
     running: bool = False
