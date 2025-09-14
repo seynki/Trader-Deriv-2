@@ -1716,6 +1716,372 @@ async def get_symbol_ticks(symbol: str, limit: int = 100):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# =============================================
+# ML ENGINE ENDPOINTS (TRANSFORMER + LGB ENSEMBLE)
+# =============================================
+
+class MLEngineTrainRequest(BaseModel):
+    symbol: str = "R_100"
+    timeframe: str = "1m"  # 1m, 5m, 15m
+    count: int = 2000
+    horizon: int = 3
+    seq_len: int = 32
+    epochs: int = 6
+    batch_size: int = 64
+    min_conf: float = 0.2
+
+class MLEngineStatus(BaseModel):
+    initialized: bool
+    models_trained: bool
+    symbol: Optional[str] = None
+    seq_len: int
+    features_count: Optional[int] = None
+    last_training: Optional[str] = None
+    transformer_available: bool
+    lgb_available: bool
+
+class MLEnginePredictRequest(BaseModel):
+    symbol: str = "R_100"
+    count: int = 100  # últimos N candles para predição
+
+class MLEngineDecisionRequest(BaseModel):
+    symbol: str = "R_100"
+    count: int = 100
+    stake: float = 1.0
+    duration: int = 5
+    duration_unit: str = "t"
+    currency: str = "USD"
+    dry_run: bool = True
+    min_conf: float = 0.2
+    bankroll: float = 1000.0
+
+# Global ML Engine model storage
+_ml_engine_models: Dict[str, ml_engine.TrainedModels] = {}
+_ml_engine_config = ml_engine.MLConfig()
+
+@api_router.get("/ml/engine/status")
+async def ml_engine_status() -> MLEngineStatus:
+    """Status do ML Engine (Transformer + LGB)"""
+    try:
+        models_available = len(_ml_engine_models) > 0
+        last_model_key = list(_ml_engine_models.keys())[-1] if models_available else None
+        last_model = _ml_engine_models.get(last_model_key) if last_model_key else None
+        
+        return MLEngineStatus(
+            initialized=True,
+            models_trained=models_available,
+            symbol=last_model_key.split("_")[0] if last_model_key else None,
+            seq_len=_ml_engine_config.seq_len,
+            features_count=len(last_model.features) if last_model and last_model.features else None,
+            last_training=datetime.utcnow().isoformat() if models_available else None,
+            transformer_available=bool(last_model and last_model.transformer) if last_model else False,
+            lgb_available=bool(last_model and last_model.lgb_model) if last_model else False
+        )
+    except Exception as e:
+        logging.error(f"ML Engine status error: {e}")
+        return MLEngineStatus(
+            initialized=False,
+            models_trained=False,
+            seq_len=_ml_engine_config.seq_len,
+            transformer_available=False,
+            lgb_available=False
+        )
+
+@api_router.post("/ml/engine/train")
+async def ml_engine_train(request: MLEngineTrainRequest):
+    """Treina modelos ML Engine (Transformer + LGB) usando dados da Deriv"""
+    try:
+        logging.info(f"Iniciando treinamento ML Engine para {request.symbol}")
+        
+        # Buscar dados históricos da Deriv
+        granularity = 60 if request.timeframe == "1m" else (300 if request.timeframe == "5m" else 900)
+        candles_data = await _strategy._get_candles(request.symbol, granularity, request.count)
+        
+        if not candles_data or len(candles_data) < request.seq_len * 2:
+            raise HTTPException(status_code=400, detail=f"Dados insuficientes. Precisa de pelo menos {request.seq_len * 2} candles, obteve {len(candles_data) if candles_data else 0}")
+        
+        # Converter para DataFrame
+        df = pd.DataFrame(candles_data)
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        
+        # Garantir que todas as colunas existem
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = df.get('close', 0) if col in ['open', 'high', 'low'] else 1
+        
+        # Converter colunas para float
+        for col in required_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Usar timestamp como index
+        if 'timestamp' in df.columns:
+            df.index = pd.to_datetime(df['timestamp'], unit='s')
+        elif 'epoch' in df.columns:
+            df.index = pd.to_datetime(df['epoch'], unit='s')
+        else:
+            df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+        
+        # Atualizar config para este treinamento
+        config = ml_engine.MLConfig()
+        config.seq_len = request.seq_len
+        
+        logging.info(f"Treinando com {len(df)} candles, seq_len={config.seq_len}")
+        
+        # Treinar modelos
+        trained_models = ml_engine.fit_models_from_candles(df, config, horizon=request.horizon)
+        
+        # Armazenar modelos treinados
+        model_key = f"{request.symbol}_{request.timeframe}_h{request.horizon}"
+        _ml_engine_models[model_key] = trained_models
+        
+        # Salvar modelos no disco
+        model_path = f"/app/backend/ml_models/ml_engine_{model_key}"
+        ml_engine.save_trained_models(trained_models, model_path)
+        
+        # Teste rápido de predição
+        test_pred = ml_engine.predict_from_models(df.tail(config.seq_len + 10), trained_models, config)
+        
+        logging.info(f"Treinamento ML Engine concluído para {model_key}")
+        
+        return {
+            "success": True,
+            "model_key": model_key,
+            "candles_used": len(df),
+            "features_count": len(trained_models.features) if trained_models.features else 0,
+            "seq_len": config.seq_len,
+            "horizon": request.horizon,
+            "transformer_trained": trained_models.transformer is not None,
+            "lgb_trained": trained_models.lgb_model is not None,
+            "test_prediction": {
+                "prob": test_pred["prob"],
+                "prob_transformer": test_pred["prob_trans"],
+                "prob_lgb": test_pred["prob_lgb"],
+                "confidence": test_pred["conf"],
+                "direction": test_pred["direction"]
+            },
+            "saved_path": model_path
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ML Engine training error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro no treinamento ML Engine: {str(e)}")
+
+@api_router.post("/ml/engine/predict")
+async def ml_engine_predict(request: MLEnginePredictRequest):
+    """Faz predição usando ML Engine treinado"""
+    try:
+        # Encontrar modelo treinado para o símbolo
+        available_models = [k for k in _ml_engine_models.keys() if k.startswith(request.symbol)]
+        if not available_models:
+            raise HTTPException(status_code=404, detail=f"Nenhum modelo ML Engine treinado encontrado para {request.symbol}")
+        
+        # Usar o modelo mais recente
+        model_key = available_models[-1]
+        trained_models = _ml_engine_models[model_key]
+        
+        # Buscar dados recentes da Deriv
+        granularity = 60  # 1 minuto por padrão
+        candles_data = await _strategy._get_candles(request.symbol, granularity, request.count)
+        
+        if not candles_data or len(candles_data) < _ml_engine_config.seq_len:
+            raise HTTPException(status_code=400, detail=f"Dados insuficientes para predição. Precisa de pelo menos {_ml_engine_config.seq_len} candles")
+        
+        # Converter para DataFrame (mesmo processo do treinamento)
+        df = pd.DataFrame(candles_data)
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = df.get('close', 0) if col in ['open', 'high', 'low'] else 1
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        if 'timestamp' in df.columns:
+            df.index = pd.to_datetime(df['timestamp'], unit='s')
+        elif 'epoch' in df.columns:
+            df.index = pd.to_datetime(df['epoch'], unit='s')
+        else:
+            df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+        
+        # Fazer predição
+        prediction = ml_engine.predict_from_models(df, trained_models, _ml_engine_config)
+        
+        return {
+            "model_used": model_key,
+            "candles_analyzed": len(df),
+            "prediction": {
+                "probability": prediction["prob"],
+                "prob_transformer": prediction["prob_trans"],
+                "prob_lgb": prediction["prob_lgb"],
+                "confidence": prediction["conf"],
+                "direction": prediction["direction"],
+                "signal": "STRONG" if prediction["conf"] > 0.3 else "WEAK"
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ML Engine prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na predição ML Engine: {str(e)}")
+
+@api_router.post("/ml/engine/decide_trade")
+async def ml_engine_decide_trade(request: MLEngineDecisionRequest):
+    """Decide trade usando ML Engine e opcionalmente executa via Deriv"""
+    try:
+        # Primeiro fazer predição
+        pred_request = MLEnginePredictRequest(symbol=request.symbol, count=request.count)
+        prediction = await ml_engine_predict(pred_request)
+        
+        pred_data = prediction["prediction"]
+        
+        # Calcular decisão de trade usando Kelly e confidence
+        available_models = [k for k in _ml_engine_models.keys() if k.startswith(request.symbol)]
+        if not available_models:
+            raise HTTPException(status_code=404, detail=f"Modelo não encontrado para {request.symbol}")
+        
+        model_key = available_models[-1]
+        trained_models = _ml_engine_models[model_key]
+        
+        # Buscar dados para decisão
+        candles_data = await _strategy._get_candles(request.symbol, 60, request.count)
+        df = pd.DataFrame(candles_data)
+        
+        # Preparar DataFrame
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = df.get('close', 0) if col in ['open', 'high', 'low'] else 1
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        if 'timestamp' in df.columns:
+            df.index = pd.to_datetime(df['timestamp'], unit='s')
+        elif 'epoch' in df.columns:
+            df.index = pd.to_datetime(df['epoch'], unit='s')
+        else:
+            df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+        
+        # Usar função de decisão do ML Engine
+        decision = ml_engine.ml_decide_and_size(
+            df, trained_models, _ml_engine_config, 
+            bankroll=request.bankroll, min_conf=request.min_conf
+        )
+        
+        response = {
+            "model_used": model_key,
+            "prediction": pred_data,
+            "decision": {
+                "direction": decision["direction"],
+                "probability": decision["prob"],
+                "confidence": decision["conf"],
+                "should_trade": decision["do_trade"],
+                "recommended_stake": decision["stake"],
+                "kelly_fraction": decision["fraction"],
+                "min_confidence_met": decision["conf"] >= request.min_conf
+            },
+            "dry_run": request.dry_run,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Se não é dry_run e deve executar trade
+        if not request.dry_run and decision["do_trade"]:
+            try:
+                # Executar trade real via Deriv
+                buy_payload = BuyRequest(
+                    symbol=request.symbol,
+                    type="CALLPUT",
+                    contract_type=decision["direction"],
+                    duration=request.duration,
+                    duration_unit=request.duration_unit,
+                    stake=min(request.stake, decision["stake"]),  # Usar menor valor entre solicitado e recomendado
+                    currency=request.currency,
+                )
+                
+                trade_result = await deriv_buy(buy_payload)
+                response["executed"] = True
+                response["trade_result"] = trade_result
+                
+            except Exception as e:
+                response["executed"] = False
+                response["execution_error"] = str(e)
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ML Engine trade decision error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na decisão de trade ML Engine: {str(e)}")
+
+@api_router.post("/ml/engine/backtest")
+async def ml_engine_backtest(request: MLEngineTrainRequest):
+    """Executa backtest walk-forward usando ML Engine"""
+    try:
+        # Buscar dados históricos
+        granularity = 60 if request.timeframe == "1m" else (300 if request.timeframe == "5m" else 900)
+        candles_data = await _strategy._get_candles(request.symbol, granularity, request.count)
+        
+        if not candles_data or len(candles_data) < 1000:
+            raise HTTPException(status_code=400, detail="Dados insuficientes para backtest (mínimo 1000 candles)")
+        
+        # Converter para DataFrame
+        df = pd.DataFrame(candles_data)
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = df.get('close', 0) if col in ['open', 'high', 'low'] else 1
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        if 'timestamp' in df.columns:
+            df.index = pd.to_datetime(df['timestamp'], unit='s')
+        elif 'epoch' in df.columns:
+            df.index = pd.to_datetime(df['epoch'], unit='s')
+        else:
+            df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+        
+        # Configurar backtest
+        config = ml_engine.MLConfig()
+        config.seq_len = request.seq_len
+        
+        logging.info(f"Iniciando backtest walk-forward para {request.symbol} com {len(df)} candles")
+        
+        # Executar walk-forward backtest
+        backtest_results = ml_engine.walk_forward_backtest(
+            df, 
+            train_window_sec=600,  # 10 minutos de treino
+            test_window_sec=120,   # 2 minutos de teste
+            step_sec=120,          # Passo de 2 minutos
+            cfg=config
+        )
+        
+        return {
+            "symbol": request.symbol,
+            "timeframe": request.timeframe,
+            "total_candles": len(df),
+            "backtest_results": {
+                "net_pnl": backtest_results["net"],
+                "total_trades": backtest_results["trades"],
+                "win_rate": backtest_results["winrate"],
+                "avg_pnl_per_trade": backtest_results["net"] / backtest_results["trades"] if backtest_results["trades"] > 0 else 0
+            },
+            "config": {
+                "seq_len": config.seq_len,
+                "train_window_sec": 600,
+                "test_window_sec": 120,
+                "step_sec": 120
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"ML Engine backtest error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no backtest ML Engine: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
