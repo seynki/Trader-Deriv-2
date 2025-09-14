@@ -325,7 +325,7 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                 <CardTitle className="text-lg">Melhor Combinação Atual</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <Label className="text-sm text-muted-foreground">Símbolo</Label>
                     <p className="font-bold">{botStatus.best_combo.symbol}</p>
@@ -346,6 +346,25 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                       {botStatus.best_combo.net?.toFixed(2) || '0.00'}
                     </p>
                   </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Score Combinado</Label>
+                    <p className="font-bold text-blue-600">
+                      {botStatus.best_combo.combined_score ? (botStatus.best_combo.combined_score * 100).toFixed(1) : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Indicadores de Status */}
+                <div className="mt-4 flex gap-2">
+                  <Badge variant={botStatus.best_combo.meets_criteria ? "default" : "destructive"}>
+                    {botStatus.best_combo.meets_criteria ? "✓ Critérios Atendidos" : "✗ Critérios Não Atendidos"}
+                  </Badge>
+                  <Badge variant="outline">
+                    Trades: {botStatus.best_combo.trades || 0}
+                  </Badge>
+                  <Badge variant="outline">
+                    Candles: {botStatus.best_combo.candles_count || 0}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
