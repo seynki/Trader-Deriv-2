@@ -85,6 +85,9 @@ class AutoBotStatus(BaseModel):
     auto_execute: bool = False
     trades_executed: int = 0
     last_trade: Optional[Dict[str, Any]] = None
+    min_winrate: float = 0.70
+    use_combined_score: bool = True
+    evaluation_stats: Optional[Dict[str, Any]] = None
 
 class AutoBotResults(BaseModel):
     timestamp: datetime
