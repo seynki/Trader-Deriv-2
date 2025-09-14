@@ -56,6 +56,8 @@ class StrategyParams:
     take_profit: float = 0.8  # lucro hipotético relativo p/ considerar como win (simulação)
     stop_loss: float = -1.0   # perda hipotética relativa
     direction_threshold: float = 0.0  # se MA_short - MA_long > threshold => CALL
+    min_winrate: float = 0.70  # winrate mínimo para executar trades (70%)
+    min_trades_sample: int = 5  # mínimo de trades na amostra para considerar válido
 
 STRAT = StrategyParams()
 
