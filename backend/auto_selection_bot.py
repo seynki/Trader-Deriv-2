@@ -401,8 +401,8 @@ class AutoSelectionBot:
             # Verifica se o resultado é bom o suficiente para executar
             best = self.status.best_combo
             
-            # Exemplo de critério: winrate >= 55% e pelo menos 5 trades na simulação
-            if (best.get('winrate', 0) or 0) >= 0.55 and best.get('trades', 0) >= 5:
+            # Critério relaxado para teste: winrate >= 50% e pelo menos 2 trades na simulação
+            if (best.get('winrate', 0) or 0) >= 0.50 and best.get('trades', 0) >= 2:
                 
                 # Determina direção baseada no último sinal
                 symbol = best['symbol']
