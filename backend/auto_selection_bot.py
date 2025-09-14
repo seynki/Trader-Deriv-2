@@ -453,33 +453,35 @@ class AutoSelectionBot:
             return 0.5  # Neutro se não preferir timeframes longos
             
         if tf_type == "ticks":
-            # Ticks são mais arriscados, menor bonus
-            if tf_val <= 5:
-                return 0.1  # Muito baixo para 1-5 ticks
+            # Ticks são MUITO arriscados, bonus MUITO baixo
+            if tf_val <= 10:
+                return 0.05  # MUITO baixo para até 10 ticks
             elif tf_val <= 25:
-                return 0.3  # Baixo para 10-25 ticks
+                return 0.1   # Muito baixo para até 25 ticks
             else:
-                return 0.4  # Médio para 50+ ticks
+                return 0.2   # Baixo para 50+ ticks
                 
         elif tf_type == "s":
-            # Segundos - bonus baseado na duração
-            if tf_val <= 30:
-                return 0.4  # Médio para até 30s
+            # Segundos - bonus baixo, preferir minutos
+            if tf_val <= 60:
+                return 0.2  # Baixo para até 1 min
             elif tf_val <= 120:
-                return 0.6  # Bom para 1-2 min
+                return 0.4  # Médio para 2 min
             else:
-                return 0.7  # Muito bom para 5+ min
+                return 0.5  # Médio-bom para 5+ min
                 
         elif tf_type == "m":
-            # Minutos - MAIOR BONUS para 2-10min (mais conservadores)
+            # Minutos - BONUS MÁXIMO (aqui está o foco!)
             if tf_val == 1:
-                return 0.7  # Bom para 1 min
-            elif 2 <= tf_val <= 10:
-                return 1.0  # MÁXIMO bonus para 2-10 min (CONSERVADOR)
+                return 0.8  # Muito bom para 1 min
+            elif 2 <= tf_val <= 5:
+                return 1.0  # MÁXIMO ABSOLUTO para 2-5 min
+            elif 6 <= tf_val <= 10:
+                return 0.95 # Quase máximo para 6-10 min
             elif 15 <= tf_val <= 30:
-                return 0.8  # Muito bom para 15-30 min
+                return 0.9  # Excelente para 15-30 min
             else:
-                return 0.6  # Bom para outros
+                return 0.7  # Bom para outros
                 
         return 0.5  # Default neutro
         
