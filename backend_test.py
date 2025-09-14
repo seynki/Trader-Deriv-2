@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Testing for Ultra Conservative Auto-Bot
-Tests the ultra conservative improvements implemented in the auto-selection bot
+Backend Testing after Frontend Modifications
+Tests backend endpoints after frontend changes to ensure they continue working properly
 """
 
 import requests
