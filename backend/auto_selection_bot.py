@@ -29,10 +29,15 @@ logger = logging.getLogger(__name__)
 SYMBOLS = ["R_100", "R_75", "R_50", "R_25", "R_10"]  # símbolos a avaliar
 # timeframes: representados como ('type','value') where type in {'ticks','s','m'}
 TIMEFRAMES = [
+    ("ticks", 10),       # janela de 10 ticks
+    ("ticks", 25),       # janela de 25 ticks  
     ("ticks", 50),       # janela de 50 ticks
+    ("ticks", 100),      # janela de 100 ticks
     ("s", 1),            # 1 segundo
     ("s", 5),            # 5 segundos
+    ("s", 30),           # 30 segundos
     ("m", 1),            # 1 minuto
+    ("m", 3),            # 3 minutos
     ("m", 5),            # 5 minutos
 ]
 
