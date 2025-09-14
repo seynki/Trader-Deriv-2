@@ -292,7 +292,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Bot de seleção automática melhorado: novos campos e funcionalidades"
+##     - "ML Engine: Transformer + LGB ensemble endpoints"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
