@@ -1576,7 +1576,7 @@ async def river_backtest(request: RiverBacktestRequest):
             "candles_analyzed": len(candles_data),
             "results": results,
             "best_threshold": best_result.threshold if best_result else None,
-            "current_threshold": strategy_runner.params.river_threshold,
+            "current_threshold": _strategy.params.river_threshold,
             "recommendation": {
                 "suggested_threshold": best_result.threshold if best_result else 0.53,
                 "expected_improvement": f"+{((best_result.win_rate - 0.41) * 100):.1f}%" if best_result and best_result.win_rate > 0.41 else "N/A",
@@ -1612,7 +1612,7 @@ async def get_river_performance():
         global_stats = _global_stats.get_stats()
         
         return {
-            "current_threshold": strategy_runner.params.river_threshold,
+            "current_threshold": _strategy.params.river_threshold,
             "river_model": river_stats,
             "strategy_performance": {
                 "win_rate": global_stats.get("win_rate", 0.0),
