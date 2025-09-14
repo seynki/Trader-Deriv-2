@@ -747,6 +747,137 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
           </Card>
         </TabsContent>
 
+        {/* NOVA ABA: Análise de Timeframes */}
+        <TabsContent value="timeframes" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Performance por Tipo de Timeframe
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {botStatus.timeframe_performance ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.entries(botStatus.timeframe_performance).map(([type, stats]) => (
+                    <div key={type} className="p-4 border rounded-lg">
+                      <h3 className="font-bold text-lg capitalize mb-3">
+                        {type === 'ticks' ? '⚡ Ticks' : type === 'seconds' ? '⏱️ Segundos' : '📊 Minutos'}
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Total Combinações:</span>
+                          <span className="font-medium">{stats.total}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Combinações Válidas:</span>
+                          <span className="font-medium text-green-600">{stats.valid}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Atendem Critérios:</span>
+                          <span className="font-medium text-blue-600">{stats.meets_criteria}</span>
+                        </div>
+                        <div className="mt-2 pt-2 border-t">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-muted-foreground">Taxa de Sucesso:</span>
+                            <Badge variant={stats.meets_criteria > 0 ? "default" : "secondary"}>
+                              {stats.total > 0 ? `${((stats.meets_criteria / stats.total) * 100).toFixed(1)}%` : '0%'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Nenhuma avaliação por timeframe realizada ainda.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Lista Completa de Timeframes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Timeframes Disponíveis (Expandidos)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
+                {config.timeframes.map((tf, index) => {
+                  const [type, value] = tf;
+                  const isConservative = type === 'm' && value >= 2 && value <= 10;
+                  const isNew = (
+                    (type === 'ticks' && [2, 25, 50].includes(value)) ||
+                    (type === 'm' && [2, 15, 30].includes(value))
+                  );
+                  return (
+                    <div key={index} className="relative">
+                      <Badge 
+                        variant={isConservative ? "default" : "outline"}
+                        className="w-full justify-center"
+                      >
+                        {formatTimeframe(tf)}
+                      </Badge>
+                      {isNew && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+                      )}
+                      {isConservative && (
+                        <span className="absolute -top-1 -left-1 text-xs">🛡️</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Novos Timeframes</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>🛡️</span>
+                  <span>Conservadores (2-10min)</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Critérios Conservadores Detalhados */}
+          {botStatus.conservative_mode && (
+            <Card>
+              <CardHeader>
+                <CardTitle>🛡️ Critérios Conservadores Ativos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium text-blue-900">Critérios Básicos (Todos os Timeframes)</h4>
+                    <ul className="text-sm text-blue-800 mt-2 space-y-1">
+                      <li>• Winrate ≥ {((botStatus.min_winrate || 0.75) * 100).toFixed(0)}%</li>
+                      <li>• Trades na amostra ≥ {botStatus.min_trades_sample || 8}</li>
+                      <li>• PnL positivo ≥ {(botStatus.min_pnl_positive || 0.5).toFixed(1)}</li>
+                    </ul>
+                  </div>
+                  <div className="p-3 bg-orange-50 rounded-lg">
+                    <h4 className="font-medium text-orange-900">Critérios Extras (Ticks Ultra-Rápidos)</h4>
+                    <ul className="text-sm text-orange-800 mt-2 space-y-1">
+                      <li>• Ticks 1-5: Winrate ≥ 80%</li>
+                      <li>• Ticks: Mínimo 10 trades para validação</li>
+                      <li>• PnL por trade ≥ 0.1</li>
+                    </ul>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <h4 className="font-medium text-green-900">Bonus Conservador (2-10min)</h4>
+                    <ul className="text-sm text-green-800 mt-2 space-y-1">
+                      <li>• Winrate pode ser 5% menor ({((botStatus.min_winrate || 0.75) - 0.05) * 100}%)</li>
+                      <li>• Score combinado recebe peso extra</li>
+                      <li>• Prioridade na seleção automática</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         {/* Aba Dados */}
         <TabsContent value="ticks" className="space-y-4">
           <Card>
