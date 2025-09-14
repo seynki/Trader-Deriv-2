@@ -27,7 +27,7 @@ async def test_call_put_flow_r100():
     - If Deriv doesn't authorize BUY due to lack of token, still validate that PROPOSAL works (pass step 2)
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
     session = requests.Session()

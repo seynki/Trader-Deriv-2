@@ -51,7 +51,7 @@ import websockets
 from datetime import datetime
 
 class DerivWebSocketTester:
-    def __init__(self, base_url="https://deriv-auto-trader.preview.emergentagent.com"):
+    def __init__(self, base_url="https://smart-trade-robot-1.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
@@ -598,7 +598,7 @@ async def test_auto_bot_endpoints():
     - Teste também o endpoint GET /api/deriv/status para garantir que a conexão com Deriv está funcionando
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -927,7 +927,7 @@ async def test_auto_bot_real_execution():
     - Já foi executado 1 trade real: R_75 PUT, contract_id: 294171071248
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -1300,7 +1300,7 @@ async def test_online_learning_update_count():
     Produza um relatório detalhando: model_id testado, count0, count1, estado da estratégia, se houve trade paper, mensagens-chave de log encontradas.
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -1712,7 +1712,7 @@ async def test_river_online_learning():
     5) POST /api/ml/river/decide_trade with dry_run=true - should return trading decision
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -2042,7 +2042,7 @@ async def test_river_threshold_system():
        - GET /api/strategy/status (verificar se river_threshold está sendo usado)
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -2406,7 +2406,7 @@ async def test_hybrid_trading_system():
        - Test with different river_threshold (e.g. 0.60)
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -2960,7 +2960,7 @@ async def test_global_metrics_contract_expiry():
     7) Retornar um resumo com os valores finais observados e se o PnL bate com lucro/perda do contrato (aproximação, aceitando diferença de ±0.01).
     """
     
-    base_url = "https://deriv-auto-trader.preview.emergentagent.com"
+    base_url = "https://smart-trade-robot-1.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
