@@ -28,25 +28,24 @@ logger = logging.getLogger(__name__)
 # --- Configurações do bot ---
 SYMBOLS = ["R_100", "R_75", "R_50", "R_25", "R_10"]  # símbolos a avaliar
 # timeframes: representados como ('type','value') where type in {'ticks','s','m'}
+# FILTRADOS: Removidos 1-2 ticks que causam winrate baixo
 TIMEFRAMES = [
-    ("ticks", 1),        # janela de 1 tick (ultra rápido)
-    ("ticks", 2),        # janela de 2 ticks (novo)
-    ("ticks", 5),        # janela de 5 ticks
+    # REMOVIDOS: ("ticks", 1) e ("ticks", 2) - muito problemáticos para winrate
+    ("ticks", 5),        # janela de 5 ticks (mínimo para ticks)
     ("ticks", 10),       # janela de 10 ticks
-    ("ticks", 25),       # janela de 25 ticks (novo)
-    ("ticks", 50),       # janela de 50 ticks (novo)
-    ("s", 15),           # 15 segundos (mínimo Deriv)
-    ("s", 30),           # 30 segundos
+    ("ticks", 25),       # janela de 25 ticks
+    ("ticks", 50),       # janela de 50 ticks
+    ("s", 30),           # 30 segundos (removido 15s muito rápido)
     ("s", 60),           # 1 minuto em segundos
     ("s", 120),          # 2 minutos em segundos
     ("s", 300),          # 5 minutos em segundos
     ("m", 1),            # 1 minuto
-    ("m", 2),            # 2 minutos (novo)
-    ("m", 3),            # 3 minutos
-    ("m", 5),            # 5 minutos
-    ("m", 10),           # 10 minutos
-    ("m", 15),           # 15 minutos (novo)
-    ("m", 30),           # 30 minutos (novo)
+    ("m", 2),            # 2 minutos - FOCO CONSERVADOR
+    ("m", 3),            # 3 minutos - FOCO CONSERVADOR
+    ("m", 5),            # 5 minutos - FOCO CONSERVADOR
+    ("m", 10),           # 10 minutos - FOCO CONSERVADOR
+    ("m", 15),           # 15 minutos - FOCO CONSERVADOR
+    ("m", 30),           # 30 minutos - FOCO CONSERVADOR
 ]
 
 SIM_WINDOW_SECONDS = 60  # janela de histórico (em segundos) usada para simular performance
