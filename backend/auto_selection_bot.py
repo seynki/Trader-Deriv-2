@@ -55,7 +55,7 @@ SIM_TRADE_STAKE = 1.0    # stake hipotético por simulação (apenas para rankin
 # Websocket endpoint público (Deriv/Binaryws)
 DERIV_WS = f"wss://ws.derivws.com/websockets/v3?app_id={os.environ.get('DERIV_APP_ID', '1089')}"
 
-# parâmetros da estratégia de simulação (EXEMPLO: estratégia de momentum simples)
+# parâmetros da estratégia de simulação (CONSERVADOR: critérios mais rigorosos)
 @dataclass
 class StrategyParams:
     ma_short: int = 3
@@ -64,8 +64,24 @@ class StrategyParams:
     take_profit: float = 0.8  # lucro hipotético relativo p/ considerar como win (simulação)
     stop_loss: float = -1.0   # perda hipotética relativa
     direction_threshold: float = 0.0  # se MA_short - MA_long > threshold => CALL
-    min_winrate: float = 0.70  # winrate mínimo para executar trades (70%)
-    min_trades_sample: int = 5  # mínimo de trades na amostra para considerar válido
+    min_winrate: float = 0.75  # winrate mínimo MAIS RIGOROSO (75% vs 70%)
+    min_trades_sample: int = 8  # mínimo de trades na amostra MAIS RIGOROSO (8 vs 5)
+    min_pnl_positive: float = 0.5  # PnL mínimo positivo para considerar válido
+    conservative_mode: bool = True  # modo conservador ativo
+    
+    # Novos parâmetros para peso por tipo de timeframe
+    timeframe_weight_multipliers: dict = None
+    
+    def __post_init__(self):
+        if self.timeframe_weight_multipliers is None:
+            # Dar mais peso aos timeframes de 2-10 minutos (mais conservadores)
+            self.timeframe_weight_multipliers = {
+                "ticks": 0.3,    # Peso menor para ticks (mais arriscados)
+                "s": 0.7,        # Peso médio para segundos
+                "m_1": 1.0,      # Peso normal para 1 minuto
+                "m_2_10": 1.5,   # PESO MAIOR para 2-10 minutos (mais conservadores)
+                "m_15_30": 1.2,  # Peso bom para 15-30 minutos
+            }
 
 STRAT = StrategyParams()
 
