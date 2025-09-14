@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Progress } from './ui/progress';
+import { Slider } from './ui/slider';
 import { 
   PlayCircle, 
   StopCircle, 
