@@ -172,6 +172,7 @@ function StrategyPanel({ onMlActiveChange }) {
   const { toast } = useToast();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [riverStatus, setRiverStatus] = useState(null);
   const intervalRef = useRef(null);
 
   const defaults = useMemo(() => ({
