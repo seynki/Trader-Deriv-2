@@ -160,12 +160,18 @@ class AutoSelectionBot:
         self.config = config
         self.status.auto_execute = config.auto_execute
         self.status.min_winrate = config.min_winrate
+        self.status.min_trades_sample = config.min_trades_sample
+        self.status.min_pnl_positive = config.min_pnl_positive
         self.status.use_combined_score = config.use_combined_score
+        self.status.conservative_mode = config.conservative_mode
+        self.status.prefer_longer_timeframes = config.prefer_longer_timeframes
         
         # Atualiza parâmetros da estratégia
         global STRAT
         STRAT.min_winrate = config.min_winrate
         STRAT.min_trades_sample = config.min_trades_sample
+        STRAT.min_pnl_positive = config.min_pnl_positive
+        STRAT.conservative_mode = config.conservative_mode
         
         # Reinitializa ticks_store com novos símbolos se necessário
         global ticks_store
