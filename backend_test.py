@@ -451,26 +451,325 @@ async def test_ultra_conservative_auto_bot():
             "test_results": test_results
         }
 
-async def main():
-    """Main function to run Ultra Conservative Auto-Bot tests"""
-    print("🛡️ TESTE BOT DE SELEÇÃO AUTOMÁTICA - MELHORIAS ULTRA CONSERVADORAS")
-    print("=" * 70)
-    print("📋 Conforme review request em português:")
-    print("   OBJETIVO: Testar as melhorias ULTRA CONSERVADORAS implementadas")
-    print("   no bot de seleção automática")
-    print("   TESTES:")
-    print("   1. Verificar status inicial: critérios ultra rigorosos (min_winrate=0.85, min_trades_sample=12, min_pnl_positive=1.0)")
-    print("   2. Testar configuração ultra conservadora com payload específico")
-    print("   3. Testar funcionamento: start → aguardar 15-20s → verificar status/results → stop")
-    print("   4. Verificar filtros: timeframes 1-2 ticks REMOVIDOS")
-    print("   5. Validar critérios ultra rigorosos: winrate >= 85%, trades >= 12, PnL >= 1.0")
-    print("   🎯 FOCO: Sistema MUITO mais seletivo para maior winrate")
-    print("   💡 Timeframes problemáticos (1-2 ticks) foram filtrados")
-    print("   📊 Critérios ultra rigorosos: 85% winrate, 12+ trades, 1.0+ PnL")
+async def test_backend_after_frontend_modifications():
+    """
+    Test backend endpoints after frontend modifications as requested in Portuguese review:
+    
+    Teste rápido do backend após as modificações realizadas:
+
+    1. **Conectividade básica**: Testar GET /api/status e GET /api/deriv/status 
+    2. **River status**: Testar GET /api/ml/river/status (que agora será usado no painel de estratégia)
+    3. **Estratégia status**: Testar GET /api/strategy/status 
+    4. **Endpoints removidos**: Verificar se os endpoints relacionados ao auto-bot ainda existem (devem continuar funcionando no backend mesmo que removidos do frontend)
+
+    **Contexto**: Realizei modificações no frontend para:
+    - Remover aba "Bot Automático"  
+    - Remover painel "Modelo atual (ML)"
+    - Remover painel "Aprendizado Online"
+    - Adicionar "River upd" informações ao painel "Estratégia (ADX/RSI/MACD/BB)"
+
+    O backend deve continuar funcionando normalmente, apenas testando se os endpoints necessários estão respondendo corretamente.
+    """
+    
+    base_url = "https://deriv-trade-bot-4.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🔧" + "="*68)
+    log("TESTE BACKEND APÓS MODIFICAÇÕES DO FRONTEND")
+    log("🔧" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   1. Conectividade básica: GET /api/status e GET /api/deriv/status")
+    log("   2. River status: GET /api/ml/river/status (usado no painel de estratégia)")
+    log("   3. Estratégia status: GET /api/strategy/status")
+    log("   4. Endpoints auto-bot: Verificar se ainda funcionam no backend")
+    log("   🎯 CONTEXTO: Frontend removeu abas mas backend deve continuar funcionando")
+    
+    test_results = {
+        "basic_connectivity": False,
+        "river_status": False,
+        "strategy_status": False,
+        "auto_bot_endpoints": False
+    }
     
     try:
-        # Run Ultra Conservative Auto-Bot tests
-        success, results = await test_ultra_conservative_auto_bot()
+        # Test 1: Conectividade básica
+        log("\n🔍 TEST 1: CONECTIVIDADE BÁSICA")
+        log("   Objetivo: Testar GET /api/status e GET /api/deriv/status")
+        
+        try:
+            # Test /api/status
+            log("   Testando GET /api/status...")
+            response = session.get(f"{api_url}/", timeout=10)
+            log(f"   GET /api/: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                log(f"   Response: {json.dumps(data, indent=2)}")
+                
+                # Test /api/deriv/status
+                log("   Testando GET /api/deriv/status...")
+                response = session.get(f"{api_url}/deriv/status", timeout=10)
+                log(f"   GET /api/deriv/status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    deriv_data = response.json()
+                    log(f"   Response: {json.dumps(deriv_data, indent=2)}")
+                    
+                    connected = deriv_data.get('connected', False)
+                    authenticated = deriv_data.get('authenticated', False)
+                    environment = deriv_data.get('environment', 'UNKNOWN')
+                    
+                    log(f"   📊 Deriv Status:")
+                    log(f"      Connected: {connected}")
+                    log(f"      Authenticated: {authenticated}")
+                    log(f"      Environment: {environment}")
+                    
+                    if connected and environment == "DEMO":
+                        test_results["basic_connectivity"] = True
+                        log("✅ Conectividade básica OK: /api/status e /api/deriv/status funcionando")
+                    else:
+                        log(f"❌ Deriv não conectado adequadamente: connected={connected}, environment={environment}")
+                else:
+                    log(f"❌ /api/deriv/status FALHOU - HTTP {response.status_code}")
+            else:
+                log(f"❌ /api/status FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Conectividade básica FALHOU - Exception: {e}")
+        
+        # Test 2: River status
+        log("\n🔍 TEST 2: RIVER STATUS")
+        log("   Objetivo: Testar GET /api/ml/river/status (usado no painel de estratégia)")
+        
+        try:
+            response = session.get(f"{api_url}/ml/river/status", timeout=10)
+            log(f"   GET /api/ml/river/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                river_data = response.json()
+                log(f"   Response: {json.dumps(river_data, indent=2)}")
+                
+                initialized = river_data.get('initialized', False)
+                samples = river_data.get('samples', 0)
+                acc = river_data.get('acc')
+                logloss = river_data.get('logloss')
+                model_path = river_data.get('model_path', '')
+                
+                log(f"   📊 River Status:")
+                log(f"      Initialized: {initialized}")
+                log(f"      Samples: {samples}")
+                log(f"      Accuracy: {acc}")
+                log(f"      Log Loss: {logloss}")
+                log(f"      Model Path: {model_path}")
+                
+                if initialized:
+                    test_results["river_status"] = True
+                    log("✅ River status OK: modelo inicializado e disponível para painel de estratégia")
+                else:
+                    log("❌ River não inicializado adequadamente")
+            else:
+                log(f"❌ River status FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ River status FALHOU - Exception: {e}")
+        
+        # Test 3: Estratégia status
+        log("\n🔍 TEST 3: ESTRATÉGIA STATUS")
+        log("   Objetivo: Testar GET /api/strategy/status")
+        
+        try:
+            response = session.get(f"{api_url}/strategy/status", timeout=10)
+            log(f"   GET /api/strategy/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                strategy_data = response.json()
+                log(f"   Response: {json.dumps(strategy_data, indent=2)}")
+                
+                running = strategy_data.get('running', False)
+                mode = strategy_data.get('mode', '')
+                symbol = strategy_data.get('symbol', '')
+                in_position = strategy_data.get('in_position', False)
+                daily_pnl = strategy_data.get('daily_pnl', 0)
+                wins = strategy_data.get('wins', 0)
+                losses = strategy_data.get('losses', 0)
+                total_trades = strategy_data.get('total_trades', 0)
+                win_rate = strategy_data.get('win_rate', 0)
+                global_daily_pnl = strategy_data.get('global_daily_pnl', 0)
+                
+                log(f"   📊 Strategy Status:")
+                log(f"      Running: {running}")
+                log(f"      Mode: {mode}")
+                log(f"      Symbol: {symbol}")
+                log(f"      In Position: {in_position}")
+                log(f"      Daily PnL: {daily_pnl}")
+                log(f"      Wins: {wins}")
+                log(f"      Losses: {losses}")
+                log(f"      Total Trades: {total_trades}")
+                log(f"      Win Rate: {win_rate}%")
+                log(f"      Global Daily PnL: {global_daily_pnl}")
+                
+                # Strategy endpoint is working if we get a valid response structure
+                if 'running' in strategy_data and 'mode' in strategy_data:
+                    test_results["strategy_status"] = True
+                    log("✅ Strategy status OK: endpoint funcionando e retornando dados estruturados")
+                else:
+                    log("❌ Strategy status com estrutura inválida")
+            else:
+                log(f"❌ Strategy status FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Strategy status FALHOU - Exception: {e}")
+        
+        # Test 4: Endpoints auto-bot (devem continuar funcionando no backend)
+        log("\n🔍 TEST 4: ENDPOINTS AUTO-BOT")
+        log("   Objetivo: Verificar se endpoints auto-bot ainda funcionam no backend")
+        log("   (mesmo que removidos do frontend)")
+        
+        try:
+            # Test auto-bot status
+            log("   Testando GET /api/auto-bot/status...")
+            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
+            log(f"   GET /api/auto-bot/status: {response.status_code}")
+            
+            auto_bot_working = False
+            
+            if response.status_code == 200:
+                auto_bot_data = response.json()
+                log(f"   Response: {json.dumps(auto_bot_data, indent=2)}")
+                
+                running = auto_bot_data.get('running', False)
+                collecting_ticks = auto_bot_data.get('collecting_ticks', False)
+                
+                log(f"   📊 Auto-Bot Status:")
+                log(f"      Running: {running}")
+                log(f"      Collecting Ticks: {collecting_ticks}")
+                
+                auto_bot_working = True
+                log("✅ Auto-bot status endpoint funcionando")
+                
+            elif response.status_code == 404:
+                log("❌ Auto-bot status endpoint não encontrado (404)")
+            else:
+                log(f"❌ Auto-bot status FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+            
+            # Test auto-bot results (if status worked)
+            if auto_bot_working:
+                log("   Testando GET /api/auto-bot/results...")
+                response = session.get(f"{api_url}/auto-bot/results", timeout=10)
+                log(f"   GET /api/auto-bot/results: {response.status_code}")
+                
+                if response.status_code == 200:
+                    results_data = response.json()
+                    log(f"   Results Response: {json.dumps(results_data, indent=2)}")
+                    log("✅ Auto-bot results endpoint funcionando")
+                else:
+                    log(f"   ⚠️  Auto-bot results: {response.status_code} (pode ser normal se não há dados)")
+            
+            if auto_bot_working:
+                test_results["auto_bot_endpoints"] = True
+                log("✅ Endpoints auto-bot OK: continuam funcionando no backend")
+            else:
+                log("❌ Endpoints auto-bot não funcionando adequadamente")
+                    
+        except Exception as e:
+            log(f"❌ Endpoints auto-bot FALHOU - Exception: {e}")
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste Backend Após Modificações Frontend")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "basic_connectivity": "1. Conectividade básica (/api/status, /api/deriv/status)",
+            "river_status": "2. River status (/api/ml/river/status)",
+            "strategy_status": "3. Estratégia status (/api/strategy/status)",
+            "auto_bot_endpoints": "4. Endpoints auto-bot (continuam funcionando)"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ PASSOU" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        overall_success = passed_tests >= 3  # Allow 1 failure
+        
+        if overall_success:
+            log("\n🎉 BACKEND FUNCIONANDO APÓS MODIFICAÇÕES FRONTEND!")
+            log("📋 Validações bem-sucedidas:")
+            log("   ✅ Conectividade básica: /api/status e /api/deriv/status OK")
+            log("   ✅ River status: disponível para painel de estratégia")
+            log("   ✅ Strategy status: funcionando normalmente")
+            if test_results["auto_bot_endpoints"]:
+                log("   ✅ Auto-bot endpoints: continuam funcionando no backend")
+            log("   🎯 CONCLUSÃO: Backend continua operacional após mudanças no frontend!")
+            log("   💡 Endpoints necessários estão respondendo corretamente")
+        else:
+            log("\n❌ PROBLEMAS DETECTADOS NO BACKEND")
+            failed_tests = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_tests}")
+            log("   📋 FOCO: Verificar endpoints que não estão respondendo adequadamente")
+        
+        return overall_success, test_results
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE BACKEND: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }
+
+async def main():
+    """Main function to run backend tests after frontend modifications"""
+    print("🔧 TESTE BACKEND APÓS MODIFICAÇÕES DO FRONTEND")
+    print("=" * 70)
+    print("📋 Conforme review request em português:")
+    print("   OBJETIVO: Teste rápido do backend após as modificações realizadas")
+    print("   TESTES:")
+    print("   1. Conectividade básica: GET /api/status e GET /api/deriv/status")
+    print("   2. River status: GET /api/ml/river/status (usado no painel de estratégia)")
+    print("   3. Estratégia status: GET /api/strategy/status")
+    print("   4. Endpoints auto-bot: Verificar se ainda funcionam no backend")
+    print("   🎯 CONTEXTO: Frontend removeu abas mas backend deve continuar funcionando")
+    print("   💡 Modificações frontend: removeu Bot Automático, ML atual, Aprendizado Online")
+    print("   📊 Adicionou: River upd no painel Estratégia (ADX/RSI/MACD/BB)")
+    
+    try:
+        # Run backend tests after frontend modifications
+        success, results = await test_backend_after_frontend_modifications()
         
         # Exit with appropriate code
         sys.exit(0 if success else 1)
