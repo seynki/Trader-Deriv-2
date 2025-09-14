@@ -39,16 +39,18 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
   const [config, setConfig] = useState({
     symbols: ["R_100", "R_75", "R_50", "R_25", "R_10"],
     timeframes: [
+      ["ticks", 1],
+      ["ticks", 5],
       ["ticks", 10],
-      ["ticks", 25],
-      ["ticks", 50],
-      ["ticks", 100],
-      ["s", 1],
-      ["s", 5],
+      ["s", 15],
       ["s", 30],
+      ["s", 60],
+      ["s", 120],
+      ["s", 300],
       ["m", 1],
       ["m", 3],
-      ["m", 5]
+      ["m", 5],
+      ["m", 10]
     ],
     sim_window_seconds: 60,
     sim_trade_stake: 1.0,
