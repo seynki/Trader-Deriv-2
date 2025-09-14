@@ -1689,15 +1689,7 @@ async def test_ultra_conservative_auto_bot():
             "error": "critical_test_exception",
             "details": str(e),
             "test_results": test_results
-        } = data.get('environment', 'UNKNOWN')
-                
-                if connected and authenticated:
-                    test_results["basic_connectivity"] = True
-                    log(f"✅ Conectividade OK: connected={connected}, authenticated={authenticated}, environment={environment}")
-                else:
-                    log(f"❌ Conectividade FALHOU: connected={connected}, authenticated={authenticated}")
-            else:
-                log(f"❌ Deriv status FALHOU - HTTP {response.status_code}")
+        }
                     
         except Exception as e:
             log(f"❌ Conectividade FALHOU - Exception: {e}")
