@@ -307,7 +307,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Sistema completo Auto-Bot execução real testado com sucesso - trades reais funcionando"
+##     - "Bot de seleção automática melhorado: novos campos e funcionalidades"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
@@ -316,6 +316,8 @@
 ##   -message: "Favor testar apenas GET /api/deriv/status, GET /api/deriv/contracts_for/R_100 e POST /api/deriv/proposal (CALL, stake=1, duration=5, unit=t). NÃO executar /api/deriv/buy sem autorização explícita do usuário (pode gerar trade real)."
 ##   -agent: "testing"
 ##   -message: "COMPLETED NON-INVASIVE TESTING: ✅ /api/deriv/status (connected=true, authenticated=true), ✅ /api/deriv/proposal (R_100 CALL working, returns valid proposal), ✅ /api/deriv/contracts_for/R_100 (returns contract_types but empty durations - minor parsing issue). Core Deriv backend integration is working correctly. Fixed minor shutdown bug. Ready for frontend testing or user approval."
+##   -agent: "testing"
+##   -message: "🎉 BOT DE SELEÇÃO AUTOMÁTICA MELHORADO TESTADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 5 CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme solicitação portuguesa: 1) CONECTIVIDADE BÁSICA ✅ GET /api/deriv/status retorna connected=true, authenticated=true, environment=DEMO 2) STATUS DO BOT ✅ GET /api/auto-bot/status retorna novos campos: min_winrate=0.70, use_combined_score=true, evaluation_stats=null inicialmente 3) CONFIGURAÇÃO AVANÇADA ✅ POST /api/auto-bot/config aceita payload com min_winrate=0.75, min_trades_sample=8, timeframes=[ticks 10,25; s 1,5; m 1], auto_execute=false e aplica configuração corretamente 4) TESTE DE FUNCIONAMENTO ✅ POST /api/auto-bot/start → aguardado 10s → GET /api/auto-bot/status mostra running=true, collecting_ticks=true, evaluation_stats com 50 combinações (5 símbolos × 10 timeframes), best_combo com combined_score=0.2 e meets_criteria=false → POST /api/auto-bot/stop 5) VALIDAÇÕES ✅ Novos timeframes detectados (ticks10 no best_combo), score combinado ativo (winrate 40% + PnL 40% + volume 20%), critérios min_winrate aplicados. RESULTADO CRÍTICO: Bot melhorado funcionando PERFEITAMENTE em modo simulação - sistema avalia 50 combinações (5 símbolos × 10 timeframes incluindo novos ticks 10,25), calcula score combinado, aplica critérios winrate mínimo, coleta ticks em tempo real. Taxa de sucesso: 100% (5/5 testes passaram). Sistema pronto para seleção automática avançada."
 ## backend:
 ##   - task: "CALL/PUT Flow R_100: proposal/buy + WebSocket contract tracking"
 ##     implemented: true
