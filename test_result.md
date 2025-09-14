@@ -331,6 +331,20 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "🎉 CALL/PUT FLOW R_100 TESTING COMPLETADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 4 STEPS EXECUTADOS CONFORME REVIEW REQUEST - Executado teste rápido do fluxo proposta/compra CALL/PUT para R_100: 1) GET /api/deriv/status ✅ aguardado 5s após start, retorna 200 com connected=true, authenticated=true, environment=DEMO 2) POST /api/deriv/proposal ✅ body {symbol:'R_100', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t', stake:1, currency:'USD'} retorna 200 com id='c3fd60ac-5dca-f9aa-68fd-43c7abab2a44', payout=1.95, ask_price=1 3) POST /api/deriv/buy ✅ mesmo body retorna 200 com contract_id=294074327268, buy_price=1, payout=1.95, transaction_id=585704822568 4) WebSocket /api/ws/contract/294074327268 ✅ conecta em 0.1s, recebe mensagem type:'contract' com status='open', profit=0.93. RESULTADO FINAL: Fluxo CALL/PUT funcionando PERFEITAMENTE - todos os endpoints respondem corretamente, proposta gerada, compra executada, WebSocket tracking ativo. Taxa de sucesso: 100% (4/4 steps passaram). Sistema pronto para operações CALL/PUT em R_100 usando conta DEMO."
+##   - task: "Auto-Bot de seleção automática: endpoints status/start/stop/results"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py, /app/backend/auto_selection_bot.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementados novos endpoints do bot de seleção automática: GET /api/auto-bot/status, POST /api/auto-bot/start, POST /api/auto-bot/stop, GET /api/auto-bot/results. Bot coleta ticks em tempo real via WebSocket, avalia performance por símbolo+timeframe, e seleciona melhor combinação. Modo simulação por padrão, não executa trades reais."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "🎉 AUTO-BOT ENDPOINTS TESTING COMPLETADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 7 TESTES EXECUTADOS CONFORME REVIEW REQUEST - Testados novos endpoints do bot de seleção automática: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO 2) GET /api/auto-bot/status (inicial) ✅ running=false, collecting_ticks=false 3) POST /api/auto-bot/start ✅ bot iniciado com sucesso, message='Bot de seleção automática iniciado com sucesso' 4) GET /api/auto-bot/status (após start) ✅ running=true, collecting_ticks=true, total_evaluations=1, symbols_with_data=['R_100','R_75','R_50','R_25','R_10'], tick_counts={R_100:2, R_75:2, R_50:2, R_25:2, R_10:2} 5) GET /api/auto-bot/results ✅ retorna resultados de avaliação com best_combo={symbol:'R_100', tf_type:'ticks', tf_val:50} 6) POST /api/auto-bot/stop ✅ bot parado com sucesso 7) GET /api/auto-bot/status (após stop) ✅ running=false. RESULTADO CRÍTICO: Bot de seleção automática funcionando PERFEITAMENTE - todos os endpoints respondem corretamente, WebSocket conecta e coleta ticks, avaliações executadas, modo simulação ativo. Taxa de sucesso: 100% (7/7 testes passaram). CORREÇÃO APLICADA: Fixed 'deriv_ws' undefined error alterando para '_deriv' no endpoint start. Sistema pronto para seleção automática de volatility indices + timeframes."
 ##   - task: "River Online Learning (OHLCV): endpoints status/train_csv/upload/predict/decide_trade"
 ##   - task: "CALL/PUT R_100 suporte na UI (não bloquear sem contracts_for)"
 ##     implemented: true
