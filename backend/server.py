@@ -20,6 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 import pandas as pd
 import io
 import river_online_model
+import ml_engine
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
