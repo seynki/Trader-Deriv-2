@@ -504,21 +504,37 @@ class AutoSelectionBot:
         if not basic_criteria:
             return False
             
-        # CRITÉRIOS EXTRAS CONSERVADORES se modo conservador ativo
+        # CRITÉRIOS EXTRAS ULTRA CONSERVADORES se modo conservador ativo
         if self.config.conservative_mode:
             
-            # Critério extra: para timeframes muito rápidos (1-5 ticks), exigir winrate ainda maior
-            if tf_type == "ticks" and tf_val <= 5:
-                if winrate < 0.80:  # 80% winrate para ticks ultra-rápidos
-                    return False
+            # Critério extra: para timeframes de ticks, exigir winrate MUITO maior
+            if tf_type == "ticks":
+                if tf_val <= 10:
+                    if winrate < 0.90:  # 90% winrate para ticks até 10
+                        return False
+                elif tf_val <= 50:
+                    if winrate < 0.88:  # 88% winrate para ticks até 50
+                        return False
+                        
+            # Critério extra: timeframes de segundos também mais rigorosos
+            if tf_type == "s":
+                if tf_val <= 60:
+                    if winrate < 0.87:  # 87% winrate para segundos curtos
+                        return False
                     
-            # Critério extra: preferir timeframes com mais trades para validação
-            if trades < 10 and tf_type == "ticks":
-                return False  # Ticks precisam de mais trades para validação
+            # Critério extra: MUITO mais trades para validação
+            if tf_type == "ticks" and trades < 15:
+                return False  # Ticks precisam de MUITOS mais trades
+            if tf_type == "s" and trades < 12:
+                return False  # Segundos precisam de mais trades
                 
-            # Critério extra: PnL por trade deve ser razoável
+            # Critério extra: PnL por trade deve ser MUITO melhor
             pnl_per_trade = net_pnl / trades if trades > 0 else 0
-            if pnl_per_trade < 0.1:  # Pelo menos 0.1 de PnL por trade
+            if pnl_per_trade < 0.15:  # Pelo menos 0.15 de PnL por trade (vs 0.1)
+                return False
+                
+            # NOVO: Filtro extra para garantir consistência
+            if winrate > 0 and winrate < 0.82:  # Qualquer coisa abaixo de 82% é rejeitada
                 return False
                 
         # BONUS: timeframes conservadores (2-10min) têm critérios ligeiramente relaxados
