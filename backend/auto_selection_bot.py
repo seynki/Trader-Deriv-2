@@ -390,14 +390,17 @@ class AutoSelectionBot:
         
     def _calculate_combined_score(self, sim_result: Dict[str, Any]) -> float:
         """
-        Calcula score combinado baseado em:
-        - Winrate (peso 40%)
-        - PnL normalizado (peso 40%) 
-        - Volume de trades normalizado (peso 20%)
+        Calcula score combinado CONSERVADOR baseado em:
+        - Winrate (peso 50% - maior peso para ser mais conservador)
+        - PnL normalizado (peso 30% - menor peso)
+        - Volume de trades normalizado (peso 10% - menor peso) 
+        - Bonus por tipo de timeframe (peso 10% - prioriza timeframes 2-10min)
         """
         winrate = sim_result.get('winrate', 0) or 0
         net_pnl = sim_result.get('net', 0) or 0
         trades = sim_result.get('trades', 0) or 0
+        tf_type = sim_result.get('tf_type', 'ticks')
+        tf_val = sim_result.get('tf_val', 1)
         
         # Normaliza PnL (assume max possível ±10 para normalizar entre 0-1)
         pnl_normalized = max(0, min(1, (net_pnl + 10) / 20))
@@ -405,14 +408,58 @@ class AutoSelectionBot:
         # Normaliza volume de trades (assume max 20 trades na janela)
         volume_normalized = min(1, trades / 20)
         
-        # Score combinado com pesos
+        # NOVO: Calcula bonus por tipo de timeframe (favorece timeframes conservadores)
+        timeframe_bonus = self._get_timeframe_weight_bonus(tf_type, tf_val)
+        
+        # Score combinado com pesos CONSERVADORES (mais peso para winrate)
+        weights = self.config.score_weights
         combined_score = (
-            winrate * 0.4 +           # 40% winrate
-            pnl_normalized * 0.4 +    # 40% PnL normalizado
-            volume_normalized * 0.2   # 20% volume
+            winrate * weights["winrate"] +           # 50% winrate (vs 40% anterior)
+            pnl_normalized * weights["pnl"] +        # 30% PnL (vs 40% anterior)
+            volume_normalized * weights["volume"] +  # 10% volume (vs 20% anterior)
+            timeframe_bonus * weights["timeframe"]   # 10% bonus timeframe (NOVO)
         )
         
         return combined_score
+        
+    def _get_timeframe_weight_bonus(self, tf_type: str, tf_val: int) -> float:
+        """
+        Calcula bonus de peso baseado no tipo de timeframe.
+        Timeframes mais conservadores (2-10min) recebem bonus maior.
+        """
+        if not self.config.prefer_longer_timeframes:
+            return 0.5  # Neutro se não preferir timeframes longos
+            
+        if tf_type == "ticks":
+            # Ticks são mais arriscados, menor bonus
+            if tf_val <= 5:
+                return 0.1  # Muito baixo para 1-5 ticks
+            elif tf_val <= 25:
+                return 0.3  # Baixo para 10-25 ticks
+            else:
+                return 0.4  # Médio para 50+ ticks
+                
+        elif tf_type == "s":
+            # Segundos - bonus baseado na duração
+            if tf_val <= 30:
+                return 0.4  # Médio para até 30s
+            elif tf_val <= 120:
+                return 0.6  # Bom para 1-2 min
+            else:
+                return 0.7  # Muito bom para 5+ min
+                
+        elif tf_type == "m":
+            # Minutos - MAIOR BONUS para 2-10min (mais conservadores)
+            if tf_val == 1:
+                return 0.7  # Bom para 1 min
+            elif 2 <= tf_val <= 10:
+                return 1.0  # MÁXIMO bonus para 2-10 min (CONSERVADOR)
+            elif 15 <= tf_val <= 30:
+                return 0.8  # Muito bom para 15-30 min
+            else:
+                return 0.6  # Bom para outros
+                
+        return 0.5  # Default neutro
         
     def _meets_execution_criteria(self, sim_result: Dict[str, Any]) -> bool:
         """
