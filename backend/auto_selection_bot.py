@@ -632,21 +632,31 @@ class AutoSelectionBot:
         return {"trades":trades,"wins":wins,"losses":losses,"net":net,"winrate":winrate}
         
     async def _try_execute_trade(self):
-        """Tenta executar trade real baseado na melhor combinação"""
+        """Tenta executar trade real baseado na melhor combinação COM CRITÉRIOS CONSERVADORES"""
         if not self.status.best_combo or not self.deriv_api:
             return
             
         try:
-            # Verifica se o resultado atende aos critérios de execução
+            # Verifica se o resultado atende aos critérios CONSERVADORES de execução
             best = self.status.best_combo
             
-            # Usa critérios mais rigorosos
+            # Usa critérios mais rigorosos - DEVE atender aos critérios conservadores
             if not best.get('meets_criteria', False):
-                logger.info(f"Melhor combo não atende critérios: winrate={best.get('winrate', 0):.1%}, trades={best.get('trades', 0)}, net={best.get('net', 0):.2f}")
+                logger.info(f"❌ Melhor combo NÃO atende critérios conservadores: winrate={best.get('winrate', 0):.1%} (min: {self.config.min_winrate:.1%}), trades={best.get('trades', 0)} (min: {self.config.min_trades_sample}), pnl={best.get('net', 0):.2f} (min: {self.config.min_pnl_positive})")
                 return
                 
-            # Log dos critérios
-            logger.info(f"Executando trade - Critérios atendidos: winrate={best.get('winrate', 0):.1%} (min: {self.config.min_winrate:.1%}), trades={best.get('trades', 0)} (min: {self.config.min_trades_sample}), score={best.get('combined_score', 0):.3f}")
+            # VALIDAÇÃO EXTRA CONSERVADORA: verificar se timeframe é adequado
+            tf_type = best.get('tf_type', 'ticks')
+            tf_val = best.get('tf_val', 1)
+            winrate = best.get('winrate', 0)
+            
+            # Se for timeframe muito rápido (1-5 ticks), exigir winrate ainda maior
+            if tf_type == "ticks" and tf_val <= 5 and winrate < 0.80:
+                logger.info(f"❌ Timeframe ultra-rápido {tf_type}{tf_val} requer winrate >= 80%, atual: {winrate:.1%}")
+                return
+                
+            # Log dos critérios CONSERVADORES atendidos
+            logger.info(f"✅ CRITÉRIOS CONSERVADORES ATENDIDOS - Executando trade: winrate={winrate:.1%} (min: {self.config.min_winrate:.1%}), trades={best.get('trades', 0)} (min: {self.config.min_trades_sample}), pnl={best.get('net', 0):.2f} (min: {self.config.min_pnl_positive}), score={best.get('combined_score', 0):.3f}")
                 
             # Determina direção baseada no último sinal
             symbol = best['symbol']
@@ -662,7 +672,8 @@ class AutoSelectionBot:
                     last_diff = df['ma_diff'].iloc[-1]
                     direction = "CALL" if last_diff > 0 else "PUT"
                     
-                    logger.info(f"Executando trade: {symbol} {direction} stake={self.config.sim_trade_stake} [TF: {best['timeframe_desc']}, Score: {best.get('combined_score', 0):.3f}]")
+                    # LOG DETALHADO para modo conservador
+                    logger.info(f"🎯 EXECUTANDO TRADE CONSERVADOR: {symbol} {direction} stake={self.config.sim_trade_stake} [TF: {best['timeframe_desc']} | Winrate: {winrate:.1%} | PnL: {best.get('net', 0):.2f} | Score: {best.get('combined_score', 0):.3f}]")
                     
                     # Executa trade via API da Deriv com parâmetros automáticos
                     trade_result = await self._execute_real_trade(symbol, direction, self.config.sim_trade_stake, best)
@@ -674,18 +685,27 @@ class AutoSelectionBot:
                             "symbol": symbol,
                             "direction": direction,
                             "stake": self.config.sim_trade_stake,
-                            "reason": f"Best combo: {best['timeframe_desc']} winrate={best.get('winrate', 0):.1%} score={best.get('combined_score', 0):.3f}",
+                            "reason": f"✅ CONSERVADOR: {best['timeframe_desc']} winrate={winrate:.1%} score={best.get('combined_score', 0):.3f}",
+                            "conservative_criteria": {
+                                "min_winrate_met": winrate >= self.config.min_winrate,
+                                "min_trades_met": best.get('trades', 0) >= self.config.min_trades_sample,
+                                "min_pnl_met": best.get('net', 0) >= self.config.min_pnl_positive,
+                                "timeframe_appropriate": not (tf_type == "ticks" and tf_val <= 5 and winrate < 0.80)
+                            },
                             "performance_metrics": {
                                 "winrate": best.get('winrate', 0),
                                 "net_pnl": best.get('net', 0),
                                 "trades_sample": best.get('trades', 0),
-                                "combined_score": best.get('combined_score', 0)
+                                "combined_score": best.get('combined_score', 0),
+                                "timeframe_bonus": self._get_timeframe_weight_bonus(tf_type, tf_val)
                             },
                             **trade_result
                         }
                         
+                        logger.info(f"🎉 TRADE CONSERVADOR EXECUTADO COM SUCESSO: contract_id={trade_result.get('contract_id')}")
+                        
         except Exception as e:
-            logger.error(f"Erro ao executar trade automático: {e}")
+            logger.error(f"❌ Erro ao executar trade conservador: {e}")
             
     async def _execute_real_trade(self, symbol: str, direction: str, stake: float, best_combo: Dict) -> Optional[Dict]:
         """
