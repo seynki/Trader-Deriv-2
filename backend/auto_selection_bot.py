@@ -378,13 +378,36 @@ class AutoSelectionBot:
         else:
             results_sorted = sorted(results, key=lambda x: (x['net'], x['winrate'] if x['winrate'] is not None else -1), reverse=True)
         
-        # Estatísticas da avaliação
+        # Estatísticas da avaliação COM ANÁLISE POR TIMEFRAME
+        timeframe_stats = {
+            "ticks": {"total": 0, "valid": 0, "meets_criteria": 0},
+            "seconds": {"total": 0, "valid": 0, "meets_criteria": 0}, 
+            "minutes": {"total": 0, "valid": 0, "meets_criteria": 0}
+        }
+        
+        for result in results:
+            tf_type = result.get('tf_type', 'ticks')
+            category = "ticks" if tf_type == "ticks" else ("seconds" if tf_type == "s" else "minutes")
+            
+            timeframe_stats[category]["total"] += 1
+            if result.get('trades', 0) > 0:
+                timeframe_stats[category]["valid"] += 1
+            if result.get('meets_criteria', False):
+                timeframe_stats[category]["meets_criteria"] += 1
+        
         self.status.evaluation_stats = {
             "total_combinations": total_combinations,
             "valid_combinations": valid_combinations,
             "symbols_evaluated": len(self.config.symbols),
-            "timeframes_evaluated": len(self.config.timeframes)
+            "timeframes_evaluated": len(self.config.timeframes),
+            "conservative_mode": self.config.conservative_mode,
+            "min_winrate_required": self.config.min_winrate,
+            "min_trades_required": self.config.min_trades_sample,
+            "min_pnl_required": self.config.min_pnl_positive,
         }
+        
+        # Adiciona estatísticas por tipo de timeframe
+        self.status.timeframe_performance = timeframe_stats
         
         return {"results": results_sorted}
         
