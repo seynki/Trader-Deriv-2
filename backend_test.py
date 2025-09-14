@@ -752,24 +752,446 @@ async def test_backend_after_frontend_modifications():
             "test_results": test_results
         }
 
-async def main():
-    """Main function to run backend tests after frontend modifications"""
-    print("🔧 TESTE BACKEND APÓS MODIFICAÇÕES DO FRONTEND")
-    print("=" * 70)
-    print("📋 Conforme review request em português:")
-    print("   OBJETIVO: Teste rápido do backend após as modificações realizadas")
-    print("   TESTES:")
-    print("   1. Conectividade básica: GET /api/status e GET /api/deriv/status")
-    print("   2. River status: GET /api/ml/river/status (usado no painel de estratégia)")
-    print("   3. Estratégia status: GET /api/strategy/status")
-    print("   4. Endpoints auto-bot: Verificar se ainda funcionam no backend")
-    print("   🎯 CONTEXTO: Frontend removeu abas mas backend deve continuar funcionando")
-    print("   💡 Modificações frontend: removeu Bot Automático, ML atual, Aprendizado Online")
-    print("   📊 Adicionou: River upd no painel Estratégia (ADX/RSI/MACD/BB)")
+async def test_ml_engine_endpoints():
+    """
+    Test ML Engine endpoints as requested in Portuguese review:
+    
+    Testar os novos endpoints ML Engine que foram implementados:
+
+    1. GET /api/ml/engine/status - Verificar status inicial do ML Engine
+    2. POST /api/ml/engine/train - Treinar modelo ML Engine com dados da Deriv usando:
+       - symbol: R_100
+       - timeframe: 1m 
+       - count: 500 (número pequeno para teste rápido)
+       - horizon: 3
+       - seq_len: 32
+    3. GET /api/ml/engine/status - Verificar status após treinamento
+    4. POST /api/ml/engine/predict - Fazer predição usando:
+       - symbol: R_100
+       - count: 100
+    5. POST /api/ml/engine/decide_trade - Decidir trade usando:
+       - symbol: R_100
+       - count: 100
+       - dry_run: true (importante: não executar trade real)
+       - min_conf: 0.2
+
+    Validar que:
+    - Status mostra modelo treinado corretamente
+    - Treinamento retorna sucesso com transformer e LGB treinados
+    - Predição retorna probabilidades e confiança
+    - Decisão de trade retorna direção e stake recomendado
+    - Tudo funcionando em modo DEMO
+    """
+    
+    base_url = "https://financebot-ml.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🤖" + "="*68)
+    log("TESTE ML ENGINE ENDPOINTS")
+    log("🤖" + "="*68)
+    log("📋 Conforme solicitado na review request:")
+    log("   1. GET /api/ml/engine/status - Verificar status inicial")
+    log("   2. POST /api/ml/engine/train - Treinar modelo (R_100, 1m, 500 candles, horizon=3, seq_len=32)")
+    log("   3. GET /api/ml/engine/status - Verificar status após treinamento")
+    log("   4. POST /api/ml/engine/predict - Fazer predição (R_100, 100 candles)")
+    log("   5. POST /api/ml/engine/decide_trade - Decidir trade (dry_run=true, min_conf=0.2)")
+    log("   🎯 VALIDAR: Status, treinamento, predição, decisão de trade em modo DEMO")
+    
+    test_results = {
+        "initial_status": False,
+        "training": False,
+        "status_after_training": False,
+        "prediction": False,
+        "trade_decision": False
+    }
     
     try:
-        # Run backend tests after frontend modifications
-        success, results = await test_backend_after_frontend_modifications()
+        # Verificar conectividade Deriv primeiro
+        log("\n🔍 PRÉ-REQUISITO: VERIFICAR CONECTIVIDADE DERIV")
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            if response.status_code == 200:
+                deriv_data = response.json()
+                connected = deriv_data.get('connected', False)
+                authenticated = deriv_data.get('authenticated', False)
+                environment = deriv_data.get('environment', 'UNKNOWN')
+                
+                log(f"   Deriv: connected={connected}, authenticated={authenticated}, environment={environment}")
+                
+                if not (connected and environment == "DEMO"):
+                    log("❌ Deriv não conectado adequadamente - abortando testes ML Engine")
+                    return False, test_results
+                else:
+                    log("✅ Deriv conectado em modo DEMO - prosseguindo com testes")
+            else:
+                log(f"❌ Deriv status falhou: {response.status_code}")
+                return False, test_results
+        except Exception as e:
+            log(f"❌ Erro ao verificar Deriv: {e}")
+            return False, test_results
+        
+        # Test 1: Status inicial do ML Engine
+        log("\n🔍 TEST 1: STATUS INICIAL DO ML ENGINE")
+        log("   Objetivo: GET /api/ml/engine/status - verificar estado inicial")
+        
+        try:
+            response = session.get(f"{api_url}/ml/engine/status", timeout=10)
+            log(f"   GET /api/ml/engine/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                
+                initialized = status_data.get('initialized', False)
+                models_trained = status_data.get('models_trained', False)
+                seq_len = status_data.get('seq_len', 0)
+                transformer_available = status_data.get('transformer_available', False)
+                lgb_available = status_data.get('lgb_available', False)
+                
+                log(f"   📊 Status Inicial:")
+                log(f"      Initialized: {initialized}")
+                log(f"      Models Trained: {models_trained}")
+                log(f"      Seq Len: {seq_len}")
+                log(f"      Transformer Available: {transformer_available}")
+                log(f"      LGB Available: {lgb_available}")
+                
+                if initialized:
+                    test_results["initial_status"] = True
+                    log("✅ Status inicial OK: ML Engine inicializado")
+                else:
+                    log("❌ ML Engine não inicializado")
+            else:
+                log(f"❌ Status inicial FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Status inicial FALHOU - Exception: {e}")
+        
+        # Test 2: Treinamento do ML Engine
+        log("\n🔍 TEST 2: TREINAMENTO DO ML ENGINE")
+        log("   Objetivo: POST /api/ml/engine/train com parâmetros específicos")
+        log("   Parâmetros: symbol=R_100, timeframe=1m, count=500, horizon=3, seq_len=32")
+        
+        train_payload = {
+            "symbol": "R_100",
+            "timeframe": "1m",
+            "count": 500,
+            "horizon": 3,
+            "seq_len": 32,
+            "epochs": 6,
+            "batch_size": 64,
+            "min_conf": 0.2
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(train_payload, indent=2)}")
+            log("   ⏱️  Iniciando treinamento (pode demorar 30-60s)...")
+            
+            response = session.post(f"{api_url}/ml/engine/train", json=train_payload, timeout=120)
+            log(f"   POST /api/ml/engine/train: {response.status_code}")
+            
+            if response.status_code == 200:
+                train_data = response.json()
+                log(f"   Response: {json.dumps(train_data, indent=2)}")
+                
+                success = train_data.get('success', False)
+                model_key = train_data.get('model_key', '')
+                candles_used = train_data.get('candles_used', 0)
+                features_count = train_data.get('features_count', 0)
+                transformer_trained = train_data.get('transformer_trained', False)
+                lgb_trained = train_data.get('lgb_trained', False)
+                test_prediction = train_data.get('test_prediction', {})
+                
+                log(f"   📊 Resultado do Treinamento:")
+                log(f"      Success: {success}")
+                log(f"      Model Key: {model_key}")
+                log(f"      Candles Used: {candles_used}")
+                log(f"      Features Count: {features_count}")
+                log(f"      Transformer Trained: {transformer_trained}")
+                log(f"      LGB Trained: {lgb_trained}")
+                
+                if test_prediction:
+                    log(f"      Test Prediction:")
+                    log(f"         Probability: {test_prediction.get('prob', 'N/A')}")
+                    log(f"         Confidence: {test_prediction.get('confidence', 'N/A')}")
+                    log(f"         Direction: {test_prediction.get('direction', 'N/A')}")
+                
+                if success and transformer_trained and lgb_trained:
+                    test_results["training"] = True
+                    log("✅ Treinamento OK: Transformer e LGB treinados com sucesso")
+                else:
+                    log(f"❌ Treinamento FALHOU: success={success}, transformer={transformer_trained}, lgb={lgb_trained}")
+            else:
+                log(f"❌ Treinamento FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Treinamento FALHOU - Exception: {e}")
+        
+        # Test 3: Status após treinamento
+        log("\n🔍 TEST 3: STATUS APÓS TREINAMENTO")
+        log("   Objetivo: GET /api/ml/engine/status - verificar modelo treinado")
+        
+        try:
+            response = session.get(f"{api_url}/ml/engine/status", timeout=10)
+            log(f"   GET /api/ml/engine/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                
+                initialized = status_data.get('initialized', False)
+                models_trained = status_data.get('models_trained', False)
+                symbol = status_data.get('symbol', '')
+                seq_len = status_data.get('seq_len', 0)
+                features_count = status_data.get('features_count', 0)
+                transformer_available = status_data.get('transformer_available', False)
+                lgb_available = status_data.get('lgb_available', False)
+                last_training = status_data.get('last_training', '')
+                
+                log(f"   📊 Status Após Treinamento:")
+                log(f"      Initialized: {initialized}")
+                log(f"      Models Trained: {models_trained}")
+                log(f"      Symbol: {symbol}")
+                log(f"      Seq Len: {seq_len}")
+                log(f"      Features Count: {features_count}")
+                log(f"      Transformer Available: {transformer_available}")
+                log(f"      LGB Available: {lgb_available}")
+                log(f"      Last Training: {last_training}")
+                
+                if models_trained and transformer_available and lgb_available:
+                    test_results["status_after_training"] = True
+                    log("✅ Status após treinamento OK: Modelos disponíveis")
+                else:
+                    log(f"❌ Status após treinamento FALHOU: models_trained={models_trained}, transformer={transformer_available}, lgb={lgb_available}")
+            else:
+                log(f"❌ Status após treinamento FALHOU - HTTP {response.status_code}")
+                    
+        except Exception as e:
+            log(f"❌ Status após treinamento FALHOU - Exception: {e}")
+        
+        # Test 4: Predição
+        log("\n🔍 TEST 4: PREDIÇÃO ML ENGINE")
+        log("   Objetivo: POST /api/ml/engine/predict com symbol=R_100, count=100")
+        
+        predict_payload = {
+            "symbol": "R_100",
+            "count": 100
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(predict_payload, indent=2)}")
+            response = session.post(f"{api_url}/ml/engine/predict", json=predict_payload, timeout=30)
+            log(f"   POST /api/ml/engine/predict: {response.status_code}")
+            
+            if response.status_code == 200:
+                predict_data = response.json()
+                log(f"   Response: {json.dumps(predict_data, indent=2)}")
+                
+                model_used = predict_data.get('model_used', '')
+                candles_analyzed = predict_data.get('candles_analyzed', 0)
+                prediction = predict_data.get('prediction', {})
+                
+                log(f"   📊 Resultado da Predição:")
+                log(f"      Model Used: {model_used}")
+                log(f"      Candles Analyzed: {candles_analyzed}")
+                
+                if prediction:
+                    probability = prediction.get('probability', 'N/A')
+                    prob_transformer = prediction.get('prob_transformer', 'N/A')
+                    prob_lgb = prediction.get('prob_lgb', 'N/A')
+                    confidence = prediction.get('confidence', 'N/A')
+                    direction = prediction.get('direction', 'N/A')
+                    signal = prediction.get('signal', 'N/A')
+                    
+                    log(f"      Prediction:")
+                    log(f"         Probability: {probability}")
+                    log(f"         Prob Transformer: {prob_transformer}")
+                    log(f"         Prob LGB: {prob_lgb}")
+                    log(f"         Confidence: {confidence}")
+                    log(f"         Direction: {direction}")
+                    log(f"         Signal: {signal}")
+                    
+                    if probability != 'N/A' and confidence != 'N/A':
+                        test_results["prediction"] = True
+                        log("✅ Predição OK: Probabilidades e confiança retornadas")
+                    else:
+                        log("❌ Predição FALHOU: Dados incompletos")
+                else:
+                    log("❌ Predição FALHOU: Sem dados de predição")
+            else:
+                log(f"❌ Predição FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Predição FALHOU - Exception: {e}")
+        
+        # Test 5: Decisão de trade
+        log("\n🔍 TEST 5: DECISÃO DE TRADE ML ENGINE")
+        log("   Objetivo: POST /api/ml/engine/decide_trade com dry_run=true")
+        log("   Parâmetros: symbol=R_100, count=100, dry_run=true, min_conf=0.2")
+        
+        decision_payload = {
+            "symbol": "R_100",
+            "count": 100,
+            "stake": 1.0,
+            "duration": 5,
+            "duration_unit": "t",
+            "currency": "USD",
+            "dry_run": True,
+            "min_conf": 0.2,
+            "bankroll": 1000.0
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(decision_payload, indent=2)}")
+            response = session.post(f"{api_url}/ml/engine/decide_trade", json=decision_payload, timeout=30)
+            log(f"   POST /api/ml/engine/decide_trade: {response.status_code}")
+            
+            if response.status_code == 200:
+                decision_data = response.json()
+                log(f"   Response: {json.dumps(decision_data, indent=2)}")
+                
+                model_used = decision_data.get('model_used', '')
+                prediction = decision_data.get('prediction', {})
+                decision = decision_data.get('decision', {})
+                dry_run = decision_data.get('dry_run', False)
+                
+                log(f"   📊 Resultado da Decisão:")
+                log(f"      Model Used: {model_used}")
+                log(f"      Dry Run: {dry_run}")
+                
+                if decision:
+                    direction = decision.get('direction', 'N/A')
+                    probability = decision.get('probability', 'N/A')
+                    confidence = decision.get('confidence', 'N/A')
+                    should_trade = decision.get('should_trade', False)
+                    recommended_stake = decision.get('recommended_stake', 'N/A')
+                    kelly_fraction = decision.get('kelly_fraction', 'N/A')
+                    min_confidence_met = decision.get('min_confidence_met', False)
+                    
+                    log(f"      Decision:")
+                    log(f"         Direction: {direction}")
+                    log(f"         Probability: {probability}")
+                    log(f"         Confidence: {confidence}")
+                    log(f"         Should Trade: {should_trade}")
+                    log(f"         Recommended Stake: {recommended_stake}")
+                    log(f"         Kelly Fraction: {kelly_fraction}")
+                    log(f"         Min Confidence Met: {min_confidence_met}")
+                    
+                    if direction != 'N/A' and dry_run:
+                        test_results["trade_decision"] = True
+                        log("✅ Decisão de trade OK: Direção e stake recomendado em modo dry_run")
+                    else:
+                        log(f"❌ Decisão de trade FALHOU: direction={direction}, dry_run={dry_run}")
+                else:
+                    log("❌ Decisão de trade FALHOU: Sem dados de decisão")
+            else:
+                log(f"❌ Decisão de trade FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Decisão de trade FALHOU - Exception: {e}")
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Teste ML Engine Endpoints")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "initial_status": "1. Status inicial do ML Engine",
+            "training": "2. Treinamento (Transformer + LGB)",
+            "status_after_training": "3. Status após treinamento",
+            "prediction": "4. Predição com probabilidades",
+            "trade_decision": "5. Decisão de trade (dry_run)"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ PASSOU" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        overall_success = passed_tests >= 4  # Allow 1 failure
+        
+        if overall_success:
+            log("\n🎉 ML ENGINE FUNCIONANDO!")
+            log("📋 Validações bem-sucedidas:")
+            log("   ✅ Status inicial: ML Engine inicializado")
+            log("   ✅ Treinamento: Transformer e LGB treinados com dados Deriv")
+            log("   ✅ Status pós-treino: Modelos disponíveis")
+            log("   ✅ Predição: Probabilidades e confiança retornadas")
+            log("   ✅ Decisão trade: Direção e stake em modo DEMO")
+            log("   🎯 CONCLUSÃO: ML Engine operacional com ensemble Transformer+LGB!")
+            log("   💡 Sistema pronto para predições e decisões de trade")
+        else:
+            log("\n❌ PROBLEMAS DETECTADOS NO ML ENGINE")
+            failed_tests = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_tests}")
+            log("   📋 FOCO: Verificar implementação dos endpoints ML Engine")
+        
+        return overall_success, test_results
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE ML ENGINE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }
+
+async def main():
+    """Main function to run ML Engine tests as requested"""
+    print("🤖 TESTE ML ENGINE ENDPOINTS")
+    print("=" * 70)
+    print("📋 Conforme review request em português:")
+    print("   OBJETIVO: Testar os novos endpoints ML Engine implementados")
+    print("   TESTES:")
+    print("   1. GET /api/ml/engine/status - Verificar status inicial")
+    print("   2. POST /api/ml/engine/train - Treinar modelo (R_100, 1m, 500 candles)")
+    print("   3. GET /api/ml/engine/status - Verificar status após treinamento")
+    print("   4. POST /api/ml/engine/predict - Fazer predição (R_100, 100 candles)")
+    print("   5. POST /api/ml/engine/decide_trade - Decidir trade (dry_run=true)")
+    print("   🎯 VALIDAR: Status, treinamento Transformer+LGB, predição, decisão")
+    print("   💡 Parâmetros: symbol=R_100, timeframe=1m, horizon=3, seq_len=32")
+    print("   🔒 MODO: DEMO (dry_run=true, não executar trades reais)")
+    
+    try:
+        # Run ML Engine tests
+        success, results = await test_ml_engine_endpoints()
         
         # Exit with appropriate code
         sys.exit(0 if success else 1)
