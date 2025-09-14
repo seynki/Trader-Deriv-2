@@ -463,18 +463,49 @@ class AutoSelectionBot:
         
     def _meets_execution_criteria(self, sim_result: Dict[str, Any]) -> bool:
         """
-        Verifica se o resultado atende aos critérios para execução de trades
+        Verifica se o resultado atende aos critérios CONSERVADORES para execução de trades.
+        Critérios mais rigorosos para ser mais assertivo.
         """
         winrate = sim_result.get('winrate', 0) or 0
         trades = sim_result.get('trades', 0) or 0
         net_pnl = sim_result.get('net', 0) or 0
+        tf_type = sim_result.get('tf_type', 'ticks')
+        tf_val = sim_result.get('tf_val', 1)
         
-        # Critérios: winrate >= min_winrate, trades >= min_sample, PnL positivo
-        return (
-            winrate >= self.config.min_winrate and
-            trades >= self.config.min_trades_sample and
-            net_pnl > 0
+        # CRITÉRIOS BÁSICOS CONSERVADORES:
+        basic_criteria = (
+            winrate >= self.config.min_winrate and           # Winrate >= 75% (vs 70%)
+            trades >= self.config.min_trades_sample and      # Trades >= 8 (vs 5) 
+            net_pnl >= self.config.min_pnl_positive          # PnL >= 0.5 (NOVO critério)
         )
+        
+        if not basic_criteria:
+            return False
+            
+        # CRITÉRIOS EXTRAS CONSERVADORES se modo conservador ativo
+        if self.config.conservative_mode:
+            
+            # Critério extra: para timeframes muito rápidos (1-5 ticks), exigir winrate ainda maior
+            if tf_type == "ticks" and tf_val <= 5:
+                if winrate < 0.80:  # 80% winrate para ticks ultra-rápidos
+                    return False
+                    
+            # Critério extra: preferir timeframes com mais trades para validação
+            if trades < 10 and tf_type == "ticks":
+                return False  # Ticks precisam de mais trades para validação
+                
+            # Critério extra: PnL por trade deve ser razoável
+            pnl_per_trade = net_pnl / trades if trades > 0 else 0
+            if pnl_per_trade < 0.1:  # Pelo menos 0.1 de PnL por trade
+                return False
+                
+        # BONUS: timeframes conservadores (2-10min) têm critérios ligeiramente relaxados
+        if self.config.prefer_longer_timeframes and tf_type == "m" and 2 <= tf_val <= 10:
+            # Para timeframes conservadores, aceitar winrate ligeiramente menor
+            if winrate >= (self.config.min_winrate - 0.05) and trades >= self.config.min_trades_sample and net_pnl >= self.config.min_pnl_positive:
+                return True
+        
+        return basic_criteria
         
     def _aggregate_to_candles(self, ticks: List[Tuple[float, float]], tf_type: str, tf_value: int) -> pd.DataFrame:
         """
