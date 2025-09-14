@@ -46,7 +46,7 @@ async def test_ultra_conservative_auto_bot():
     Foco: Confirmar que o sistema agora é MUITO mais seletivo e deve resultar em maior winrate, mesmo que execute menos trades.
     """
     
-    base_url = "https://deriv-trading-bot-9.preview.emergentagent.com"
+    base_url = "https://deriv-trade-bot-4.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
