@@ -1619,7 +1619,7 @@ async def get_river_performance():
                 "total_trades": global_stats.get("total_trades", 0),
                 "wins": global_stats.get("wins", 0),
                 "losses": global_stats.get("losses", 0),
-                "daily_pnl": _global_pnl.get(),
+                "daily_pnl": global_stats.get("global_daily_pnl", 0.0),
             },
             "is_running": _strategy.running,
             "last_signal": _strategy.last_signal,
