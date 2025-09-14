@@ -895,6 +895,10 @@ export default function App() {
             <TabsContent value="river" className="mt-6">
               <RiverThresholdPanel />
             </TabsContent>
+
+            <TabsContent value="ml-comparison" className="mt-6">
+              <MLEngineComparisonPanel />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
