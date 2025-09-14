@@ -494,6 +494,20 @@
 
 
 ## backend:
+##   - task: "Bot de seleção automática melhorado: novos campos e funcionalidades"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py, /app/backend/auto_selection_bot.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementado bot de seleção automática melhorado com novas funcionalidades: 1) Novos campos no status: min_winrate (0.70), use_combined_score (true), evaluation_stats 2) Configuração avançada via POST /api/auto-bot/config com novos timeframes [ticks 10,25; segundos 1,5; minutos 1] 3) Score combinado: winrate (40%) + PnL (40%) + volume (20%) 4) Critérios de execução: min_winrate, min_trades_sample, meets_criteria 5) Sistema funciona em modo simulação por padrão (auto_execute=false)"
+##       -working: true
+##       -agent: "testing"
+##       -comment: "🎉 BOT DE SELEÇÃO AUTOMÁTICA MELHORADO TESTADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 5 TESTES EXECUTADOS CONFORME REVIEW REQUEST PORTUGUÊS - Testado sistema melhorado com novas funcionalidades: 1) CONECTIVIDADE BÁSICA ✅ GET /api/deriv/status retorna connected=true, authenticated=true, environment=DEMO 2) STATUS DO BOT ✅ GET /api/auto-bot/status retorna novos campos: min_winrate=0.70, use_combined_score=true, evaluation_stats=null (inicialmente) 3) CONFIGURAÇÃO AVANÇADA ✅ POST /api/auto-bot/config aceita payload com min_winrate=0.75, min_trades_sample=8, timeframes=[ticks 10,25; s 1,5; m 1], auto_execute=false 4) TESTE DE FUNCIONAMENTO ✅ start → aguardou 10s → status mostra running=true, collecting_ticks=true, evaluation_stats com 50 combinações (5 símbolos × 10 timeframes), best_combo com combined_score=0.2 e meets_criteria=false → stop 5) VALIDAÇÕES ✅ Novos timeframes detectados (ticks10), score combinado ativo, critérios winrate aplicados. RESULTADO CRÍTICO: Bot melhorado funcionando PERFEITAMENTE em modo simulação - novos timeframes (ticks 10,25; segundos 1,5; minutos 1), score combinado calculado (winrate 40% + PnL 40% + volume 20%), critérios min_winrate aplicados corretamente. Taxa de sucesso: 100% (5/5 testes passaram). Sistema pronto para seleção automática avançada de volatility indices + timeframes."
 ##   - task: "WebSocket e Strategy endpoints: conectividade e health check"
 ##     implemented: true
 ##     working: true
