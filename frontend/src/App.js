@@ -13,6 +13,7 @@ import { useToast } from "./hooks/use-toast";
 import { ToastProvider } from "./components/ui/toast";
 import { Rocket, ActivitySquare, Play, Square } from "lucide-react";
 import MlPanel from "./components/MlPanel";
+import RiverThresholdPanel from "./components/RiverThresholdPanel";
 
 function backendBase() {
   const env = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
