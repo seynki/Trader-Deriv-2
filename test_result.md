@@ -292,7 +292,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "ML Engine: Transformer + LGB ensemble endpoints"
+##     - "ML Engine vs River Online Learning: Análise Comparativa Completada"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
