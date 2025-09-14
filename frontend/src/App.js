@@ -830,7 +830,6 @@ export default function App() {
               <TabsTrigger value="ao-vivo"><ActivitySquare size={16}/> Oportunidades ao vivo</TabsTrigger>
               <TabsTrigger value="derived">Derived indices</TabsTrigger>
               <TabsTrigger value="auto">Automação</TabsTrigger>
-              <TabsTrigger value="auto-bot">🤖 Bot Automático</TabsTrigger>
               <TabsTrigger value="river">🎯 River Threshold</TabsTrigger>
             </TabsList>
               <div className="ml-4"><span className="text-xs opacity-70">Modelo:</span></div>
