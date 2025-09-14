@@ -602,19 +602,28 @@ class AutoSelectionBot:
     def _convert_timeframe_to_deriv_params(self, tf_type: str, tf_val: int) -> Tuple[int, str]:
         """
         Converte timeframe interno para parâmetros da API Deriv
+        Aplica limites inteligentes baseados nas limitações da Deriv
         """
         if tf_type == 'ticks':
-            # Ticks: usar valor direto com unidade 't'
-            return tf_val, "t"
+            # Ticks: 1-10 para contratos curtos, limitar valores extremos
+            duration = max(1, min(tf_val, 10))  # Entre 1 e 10 ticks
+            return duration, "t"
         elif tf_type == 's':
-            # Segundos: usar valor direto com unidade 's'  
-            return tf_val, "s"
+            # Segundos: 15s-300s (5min) são os limites típicos da Deriv para segundos
+            if tf_val < 15:
+                duration = 15  # Mínimo 15 segundos
+            elif tf_val > 300:
+                duration = 300  # Máximo 5 minutos em segundos
+            else:
+                duration = tf_val
+            return duration, "s"
         elif tf_type == 'm':
-            # Minutos: usar valor direto com unidade 'm'
-            return tf_val, "m"
+            # Minutos: 1-60 minutos são limites típicos
+            duration = max(1, min(tf_val, 60))  # Entre 1 e 60 minutos
+            return duration, "m"
         else:
             # Fallback para ticks se tipo desconhecido
-            logger.warning(f"Tipo de timeframe desconhecido: {tf_type}, usando fallback para ticks")
+            logger.warning(f"Tipo de timeframe desconhecido: {tf_type}, usando fallback para 5 ticks")
             return 5, "t"
 
 # Instância global do bot
