@@ -217,7 +217,11 @@ function StrategyPanel({ onMlActiveChange }) {
 
   useEffect(() => {
     fetchStatus();
-    intervalRef.current = setInterval(fetchStatus, 3000);
+    fetchRiverStatus();
+    intervalRef.current = setInterval(() => {
+      fetchStatus();
+      fetchRiverStatus();
+    }, 3000);
     return () => { try { clearInterval(intervalRef.current); } catch {} };
   }, []);
 
