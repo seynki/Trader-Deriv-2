@@ -37,16 +37,24 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
   const [config, setConfig] = useState({
     symbols: ["R_100", "R_75", "R_50", "R_25", "R_10"],
     timeframes: [
+      ["ticks", 10],
+      ["ticks", 25],
       ["ticks", 50],
+      ["ticks", 100],
       ["s", 1],
       ["s", 5],
+      ["s", 30],
       ["m", 1],
+      ["m", 3],
       ["m", 5]
     ],
     sim_window_seconds: 60,
     sim_trade_stake: 1.0,
     auto_execute: false,
-    evaluation_interval: 5
+    evaluation_interval: 5,
+    min_winrate: 0.70,
+    min_trades_sample: 5,
+    use_combined_score: true
   });
 
   const [results, setResults] = useState(null);
