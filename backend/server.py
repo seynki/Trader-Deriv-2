@@ -1387,6 +1387,250 @@ async def river_decide_trade(req: RiverDecideTradeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao executar ordem Deriv: {e}")
 
+# ========================
+# RIVER THRESHOLD CONTROL ENDPOINTS  
+# ========================
+
+class RiverThresholdConfig(BaseModel):
+    river_threshold: float = Field(ge=0.5, le=0.95, description="Threshold entre 0.5 e 0.95")
+
+class RiverBacktestRequest(BaseModel):
+    symbol: str = "R_100"
+    timeframe: str = "1m"  # 1m, 3m, 5m, 15m
+    lookback_candles: int = 1000
+    thresholds: List[float] = Field(default=[0.5, 0.53, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8])
+    
+class RiverPerformanceMetrics(BaseModel):
+    threshold: float
+    win_rate: float
+    total_trades: int
+    avg_trades_per_day: float
+    expected_value: float
+    max_drawdown: float
+    sharpe_ratio: Optional[float] = None
+
+@api_router.get("/strategy/river/config")
+async def get_river_config():
+    """Obter configuração atual do river_threshold"""
+    return {
+        "river_threshold": strategy_runner.params.river_threshold,
+        "is_running": strategy_runner.running,
+        "mode": strategy_runner.mode,
+        "last_update": int(time.time())
+    }
+
+@api_router.post("/strategy/river/config")
+async def update_river_config(config: RiverThresholdConfig):
+    """Atualizar river_threshold em tempo real"""
+    old_threshold = strategy_runner.params.river_threshold
+    strategy_runner.params.river_threshold = config.river_threshold
+    
+    return {
+        "success": True,
+        "old_threshold": old_threshold,
+        "new_threshold": config.river_threshold,
+        "updated_at": int(time.time()),
+        "message": f"River threshold alterado de {old_threshold:.3f} para {config.river_threshold:.3f}"
+    }
+
+@api_router.post("/strategy/river/backtest")
+async def river_backtest(request: RiverBacktestRequest):
+    """
+    Backtesting rápido para diferentes river_thresholds
+    Simula como diferentes thresholds afetariam a performance
+    """
+    try:
+        # Buscar dados históricos
+        candles_data = await fetch_candles_from_deriv(
+            request.symbol, 
+            60 if request.timeframe == "1m" else 180,  # granularity em segundos
+            request.lookback_candles
+        )
+        
+        if not candles_data or len(candles_data) < 100:
+            raise HTTPException(status_code=400, detail="Dados insuficientes para backtesting")
+        
+        # Calcular indicadores técnicos para todos os candles
+        close_prices = [float(c["close"]) for c in candles_data]
+        high_prices = [float(c["high"]) for c in candles_data]
+        low_prices = [float(c["low"]) for c in candles_data]
+        
+        adx_values = _adx(high_prices, low_prices, close_prices)
+        rsi_values = _rsi(close_prices)
+        bb_values = _bollinger(close_prices, 20, 2.0)
+        
+        results = []
+        
+        # Testar cada threshold
+        for threshold in request.thresholds:
+            trades = []
+            current_pos = None
+            
+            # Simular River predictions (simplified)
+            for i in range(50, len(candles_data) - 1):  # Skip first 50 for indicators
+                try:
+                    # Simular probabilidade River (simplified - na prática usaria modelo treinado)
+                    current_close = float(candles_data[i]["close"])
+                    prev_close = float(candles_data[i-1]["close"])
+                    next_close = float(candles_data[i+1]["close"])
+                    
+                    # Simulated probability based on price momentum
+                    momentum = (current_close - prev_close) / prev_close
+                    prob_up = 0.5 + (momentum * 2)  # Simple momentum-based probability
+                    prob_up = max(0.1, min(0.9, prob_up))  # Clamp between 0.1 and 0.9
+                    
+                    # Verificar se River dá sinal
+                    river_signal = None
+                    if prob_up >= threshold:
+                        river_signal = "RISE"
+                    elif prob_up <= (1.0 - threshold):
+                        river_signal = "FALL"
+                    
+                    if river_signal is None:
+                        continue
+                        
+                    # Verificar indicadores técnicos
+                    if i < len(adx_values) and i < len(rsi_values):
+                        adx = adx_values[i]
+                        rsi = rsi_values[i]
+                        
+                        if adx is None or rsi is None:
+                            continue
+                            
+                        # Lógica de confirmação (simplificada)
+                        technical_signal = None
+                        if river_signal == "RISE" and rsi < 70 and adx > 22:
+                            technical_signal = "CALL"
+                        elif river_signal == "FALL" and rsi > 30 and adx > 22:
+                            technical_signal = "PUT"
+                            
+                        if technical_signal:
+                            # Simular trade
+                            entry_price = current_close
+                            exit_price = next_close
+                            
+                            if technical_signal == "CALL":
+                                pnl = 0.95 if exit_price > entry_price else -1.0
+                            else:  # PUT
+                                pnl = 0.95 if exit_price < entry_price else -1.0
+                                
+                            trades.append({
+                                "entry_time": candles_data[i]["timestamp"],
+                                "entry_price": entry_price,
+                                "exit_price": exit_price,
+                                "type": technical_signal,
+                                "pnl": pnl,
+                                "river_prob": prob_up
+                            })
+                            
+                except Exception as e:
+                    continue
+            
+            # Calcular métricas
+            if len(trades) > 0:
+                wins = len([t for t in trades if t["pnl"] > 0])
+                win_rate = wins / len(trades)
+                total_pnl = sum(t["pnl"] for t in trades)
+                expected_value = total_pnl / len(trades)
+                
+                # Calcular drawdown
+                cumulative_pnl = 0
+                peak = 0
+                max_dd = 0
+                for trade in trades:
+                    cumulative_pnl += trade["pnl"]
+                    if cumulative_pnl > peak:
+                        peak = cumulative_pnl
+                    drawdown = peak - cumulative_pnl
+                    if drawdown > max_dd:
+                        max_dd = drawdown
+                
+                # Estimar trades por dia (assume 1 minuto candles)
+                time_span_hours = (len(candles_data) * (60 if request.timeframe == "1m" else 180)) / 3600
+                trades_per_day = len(trades) / (time_span_hours / 24) if time_span_hours > 0 else 0
+                
+                results.append(RiverPerformanceMetrics(
+                    threshold=threshold,
+                    win_rate=win_rate,
+                    total_trades=len(trades),
+                    avg_trades_per_day=trades_per_day,
+                    expected_value=expected_value,
+                    max_drawdown=max_dd
+                ))
+            else:
+                results.append(RiverPerformanceMetrics(
+                    threshold=threshold,
+                    win_rate=0.0,
+                    total_trades=0,
+                    avg_trades_per_day=0.0,
+                    expected_value=0.0,
+                    max_drawdown=0.0
+                ))
+        
+        # Encontrar melhor threshold baseado em expected value
+        best_result = max(results, key=lambda x: x.expected_value) if results else None
+        
+        return {
+            "symbol": request.symbol,
+            "timeframe": request.timeframe,
+            "candles_analyzed": len(candles_data),
+            "results": results,
+            "best_threshold": best_result.threshold if best_result else None,
+            "current_threshold": strategy_runner.params.river_threshold,
+            "recommendation": {
+                "suggested_threshold": best_result.threshold if best_result else 0.53,
+                "expected_improvement": f"+{((best_result.win_rate - 0.41) * 100):.1f}%" if best_result and best_result.win_rate > 0.41 else "N/A",
+                "rationale": f"Threshold {best_result.threshold:.2f} mostrou win rate de {best_result.win_rate:.1%} com {best_result.total_trades} trades" if best_result else "Dados insuficientes"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro no backtesting River: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no backtesting: {str(e)}")
+
+@api_router.get("/strategy/river/performance")
+async def get_river_performance():
+    """Obter métricas de performance atuais do River"""
+    try:
+        # Obter status do River
+        river_model_path = "/app/backend/ml_models/river_online_model.pkl"
+        river_stats = {}
+        
+        if os.path.exists(river_model_path):
+            try:
+                from river_online_model import RiverOnlineCandleModel
+                model = RiverOnlineCandleModel.load(river_model_path)
+                river_stats = {
+                    "samples": model.sample_count,
+                    "accuracy": float(model.metric_acc.get()) if model.sample_count > 0 else None,
+                    "logloss": float(model.metric_logloss.get()) if model.sample_count > 0 else None,
+                }
+            except Exception as e:
+                logger.warning(f"Erro ao carregar modelo River: {e}")
+        
+        # Obter estatísticas globais atuais
+        global_stats = _global_stats.get_stats()
+        
+        return {
+            "current_threshold": strategy_runner.params.river_threshold,
+            "river_model": river_stats,
+            "strategy_performance": {
+                "win_rate": global_stats.get("win_rate", 0.0),
+                "total_trades": global_stats.get("total_trades", 0),
+                "wins": global_stats.get("wins", 0),
+                "losses": global_stats.get("losses", 0),
+                "daily_pnl": _global_pnl.get(),
+            },
+            "is_running": strategy_runner.running,
+            "last_signal": strategy_runner.last_signal,
+            "last_reason": strategy_runner.last_reason,
+            "timestamp": int(time.time())
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter performance River: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao obter performance: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
