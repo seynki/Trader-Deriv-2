@@ -1440,12 +1440,9 @@ async def river_backtest(request: RiverBacktestRequest):
     Simula como diferentes thresholds afetariam a performance
     """
     try:
-        # Buscar dados históricos
-        candles_data = await fetch_candles_from_deriv(
-            request.symbol, 
-            60 if request.timeframe == "1m" else 180,  # granularity em segundos
-            request.lookback_candles
-        )
+        # Buscar dados históricos usando o método existente do StrategyRunner
+        granularity = 60 if request.timeframe == "1m" else 180  # granularity em segundos
+        candles_data = await _strategy._get_candles(request.symbol, granularity, request.lookback_candles)
         
         if not candles_data or len(candles_data) < 100:
             raise HTTPException(status_code=400, detail="Dados insuficientes para backtesting")
