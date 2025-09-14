@@ -282,11 +282,12 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
       </Card>
 
       <Tabs defaultValue="status" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="status">Status</TabsTrigger>
           <TabsTrigger value="results">Resultados</TabsTrigger>
           <TabsTrigger value="config">Configuração</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="timeframes">Timeframes</TabsTrigger>
           <TabsTrigger value="ticks">Dados</TabsTrigger>
         </TabsList>
 
