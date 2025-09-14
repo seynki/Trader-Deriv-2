@@ -539,10 +539,11 @@ class AutoSelectionBot:
             if winrate > 0 and winrate < 0.82:  # Qualquer coisa abaixo de 82% é rejeitada
                 return False
                 
-        # BONUS: timeframes conservadores (2-10min) têm critérios ligeiramente relaxados
+        # BONUS: timeframes conservadores (2-10min) têm critérios LIGEIRAMENTE relaxados
         if self.config.prefer_longer_timeframes and tf_type == "m" and 2 <= tf_val <= 10:
-            # Para timeframes conservadores, aceitar winrate ligeiramente menor
-            if winrate >= (self.config.min_winrate - 0.05) and trades >= self.config.min_trades_sample and net_pnl >= self.config.min_pnl_positive:
+            # Para timeframes conservadores, aceitar winrate ligeiramente menor (mas ainda alto!)
+            relaxed_winrate = max(0.82, self.config.min_winrate - 0.03)  # Mínimo 82%, máximo 3% desconto
+            if winrate >= relaxed_winrate and trades >= self.config.min_trades_sample and net_pnl >= self.config.min_pnl_positive:
                 return True
         
         return basic_criteria
