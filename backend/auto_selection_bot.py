@@ -120,9 +120,16 @@ class AutoBotStatus(BaseModel):
     auto_execute: bool = False
     trades_executed: int = 0
     last_trade: Optional[Dict[str, Any]] = None
-    min_winrate: float = 0.70
+    min_winrate: float = 0.75  # winrate mínimo mais rigoroso
+    min_trades_sample: int = 8  # trades mínimos mais rigoroso
+    min_pnl_positive: float = 0.5  # PnL mínimo positivo
     use_combined_score: bool = True
+    conservative_mode: bool = True
+    prefer_longer_timeframes: bool = True
     evaluation_stats: Optional[Dict[str, Any]] = None
+    
+    # Estatísticas de performance por tipo de timeframe
+    timeframe_performance: Optional[Dict[str, Dict[str, Any]]] = None
 
 class AutoBotResults(BaseModel):
     timestamp: datetime
