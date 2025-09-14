@@ -1628,6 +1628,93 @@ async def get_river_performance():
         logger.error(f"Erro ao obter performance River: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao obter performance: {str(e)}")
 
+# =============================================
+# AUTO SELECTION BOT ENDPOINTS
+# =============================================
+
+from auto_selection_bot import auto_bot, AutoBotConfig, AutoBotStatus, AutoBotResults
+
+@api_router.get("/auto-bot/status", response_model=AutoBotStatus)
+async def get_auto_bot_status():
+    """Retorna status atual do bot de seleção automática"""
+    return auto_bot.get_status()
+
+@api_router.post("/auto-bot/start")
+async def start_auto_bot(config: Optional[AutoBotConfig] = None):
+    """Inicia o bot de seleção automática"""
+    try:
+        if config:
+            auto_bot.update_config(config)
+        
+        # Define referência para API da Deriv para execução de trades reais
+        auto_bot.set_deriv_api(deriv_ws)
+        
+        await auto_bot.start()
+        return {"message": "Bot de seleção automática iniciado com sucesso", "status": auto_bot.get_status()}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.post("/auto-bot/stop")
+async def stop_auto_bot():
+    """Para o bot de seleção automática"""
+    try:
+        await auto_bot.stop()
+        return {"message": "Bot de seleção automática parado com sucesso", "status": auto_bot.get_status()}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.post("/auto-bot/config")
+async def update_auto_bot_config(config: AutoBotConfig):
+    """Atualiza configuração do bot de seleção automática"""
+    try:
+        auto_bot.update_config(config)
+        return {"message": "Configuração atualizada com sucesso", "config": config}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.get("/auto-bot/results")
+async def get_auto_bot_results():
+    """Retorna últimos resultados da avaliação"""
+    try:
+        status = auto_bot.get_status()
+        if not status.last_evaluation:
+            return {"message": "Nenhuma avaliação realizada ainda"}
+        
+        # Simula busca dos últimos resultados - na implementação real, 
+        # você pode armazenar histórico em banco de dados
+        return {
+            "last_evaluation": status.last_evaluation,
+            "best_combo": status.best_combo,
+            "total_evaluations": status.total_evaluations,
+            "symbols_with_data": status.symbols_with_data,
+            "tick_counts": status.tick_counts
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/auto-bot/ticks/{symbol}")
+async def get_symbol_ticks(symbol: str, limit: int = 100):
+    """Retorna últimos ticks de um símbolo específico"""
+    try:
+        from auto_selection_bot import ticks_store
+        
+        if symbol not in ticks_store:
+            raise HTTPException(status_code=404, detail=f"Símbolo {symbol} não encontrado")
+        
+        ticks = list(ticks_store[symbol])
+        recent_ticks = ticks[-limit:] if len(ticks) > limit else ticks
+        
+        return {
+            "symbol": symbol,
+            "total_ticks": len(ticks),
+            "recent_ticks": [{"timestamp": ts, "price": price} for ts, price in recent_ticks],
+            "count": len(recent_ticks)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
