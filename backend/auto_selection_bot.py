@@ -278,11 +278,14 @@ class AutoSelectionBot:
         Para cada símbolo e timeframe:
          - pega ticks recentes do ticks_store
          - agrega pra candles de timeframe
-         - simula performance
-        Retorna ranking por 'net' (ou por winrate).
+         - simula performance com critérios avançados
+        Retorna ranking por score combinado (winrate + PnL + volume) ou net.
         """
         results = []
         cutoff_ts = time.time() - self.config.sim_window_seconds
+        
+        total_combinations = 0
+        valid_combinations = 0
         
         for sym in self.config.symbols:
             ticks_list = list(ticks_store.get(sym, []))
@@ -293,23 +296,90 @@ class AutoSelectionBot:
                 continue
                 
             for tf_type, tf_val in self.config.timeframes:
+                total_combinations += 1
                 try:
                     candles = self._aggregate_to_candles(ticks_recent, tf_type, tf_val)
                     sim = self._simulate_simple_strategy(candles, STRAT, stake=self.config.sim_trade_stake)
                     
-                    results.append({
+                    # Calcula score combinado
+                    combined_score = self._calculate_combined_score(sim)
+                    
+                    # Adiciona métricas extras
+                    result = {
                         "symbol": sym,
                         "tf_type": tf_type,
                         "tf_val": tf_val,
                         "timeframe_desc": f"{tf_type}{tf_val}",
+                        "combined_score": combined_score,
+                        "meets_criteria": self._meets_execution_criteria(sim),
+                        "candles_count": len(candles),
                         **sim
-                    })
+                    }
+                    
+                    results.append(result)
+                    
+                    if sim['trades'] > 0:
+                        valid_combinations += 1
+                        
                 except Exception as e:
                     logger.warning(f"Erro ao avaliar {sym} {tf_type}{tf_val}: {e}")
                     
-        # ordena por net (poderíamos usar winrate)
-        results_sorted = sorted(results, key=lambda x: (x['net'], x['winrate'] if x['winrate'] is not None else -1), reverse=True)
+        # Ordena por score combinado se configurado, senão por net
+        if self.config.use_combined_score:
+            results_sorted = sorted(results, key=lambda x: x['combined_score'], reverse=True)
+        else:
+            results_sorted = sorted(results, key=lambda x: (x['net'], x['winrate'] if x['winrate'] is not None else -1), reverse=True)
+        
+        # Estatísticas da avaliação
+        self.status.evaluation_stats = {
+            "total_combinations": total_combinations,
+            "valid_combinations": valid_combinations,
+            "symbols_evaluated": len(self.config.symbols),
+            "timeframes_evaluated": len(self.config.timeframes)
+        }
+        
         return {"results": results_sorted}
+        
+    def _calculate_combined_score(self, sim_result: Dict[str, Any]) -> float:
+        """
+        Calcula score combinado baseado em:
+        - Winrate (peso 40%)
+        - PnL normalizado (peso 40%) 
+        - Volume de trades normalizado (peso 20%)
+        """
+        winrate = sim_result.get('winrate', 0) or 0
+        net_pnl = sim_result.get('net', 0) or 0
+        trades = sim_result.get('trades', 0) or 0
+        
+        # Normaliza PnL (assume max possível ±10 para normalizar entre 0-1)
+        pnl_normalized = max(0, min(1, (net_pnl + 10) / 20))
+        
+        # Normaliza volume de trades (assume max 20 trades na janela)
+        volume_normalized = min(1, trades / 20)
+        
+        # Score combinado com pesos
+        combined_score = (
+            winrate * 0.4 +           # 40% winrate
+            pnl_normalized * 0.4 +    # 40% PnL normalizado
+            volume_normalized * 0.2   # 20% volume
+        )
+        
+        return combined_score
+        
+    def _meets_execution_criteria(self, sim_result: Dict[str, Any]) -> bool:
+        """
+        Verifica se o resultado atende aos critérios para execução de trades
+        """
+        winrate = sim_result.get('winrate', 0) or 0
+        trades = sim_result.get('trades', 0) or 0
+        net_pnl = sim_result.get('net', 0) or 0
+        
+        # Critérios: winrate >= min_winrate, trades >= min_sample, PnL positivo
+        return (
+            winrate >= self.config.min_winrate and
+            trades >= self.config.min_trades_sample and
+            net_pnl > 0
+        )
         
     def _aggregate_to_candles(self, ticks: List[Tuple[float, float]], tf_type: str, tf_value: int) -> pd.DataFrame:
         """
