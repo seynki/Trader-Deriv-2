@@ -380,7 +380,7 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                 <CardTitle className="text-lg">Último Trade Executado</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <Label className="text-sm text-muted-foreground">Símbolo</Label>
                     <p className="font-bold">{botStatus.last_trade.symbol}</p>
@@ -396,8 +396,14 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                     <p className="font-bold">${botStatus.last_trade.stake}</p>
                   </div>
                   <div>
-                    <Label className="text-sm text-muted-foreground">Timestamp</Label>
-                    <p className="text-sm">{formatDateTime(botStatus.last_trade.timestamp)}</p>
+                    <Label className="text-sm text-muted-foreground">Duração Auto</Label>
+                    <Badge variant="outline">
+                      {botStatus.last_trade.duration}{botStatus.last_trade.duration_unit}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Timeframe</Label>
+                    <p className="text-sm font-medium">{botStatus.last_trade.auto_timeframe}</p>
                   </div>
                 </div>
                 {botStatus.last_trade.reason && (
@@ -406,6 +412,10 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
                     <p className="text-sm">{botStatus.last_trade.reason}</p>
                   </div>
                 )}
+                <div className="mt-2">
+                  <Label className="text-sm text-muted-foreground">Timestamp</Label>
+                  <p className="text-sm">{formatDateTime(botStatus.last_trade.timestamp)}</p>
+                </div>
               </CardContent>
             </Card>
           )}
