@@ -538,9 +538,10 @@ class AutoSelectionBot:
         except Exception as e:
             logger.error(f"Erro ao executar trade automático: {e}")
             
-    async def _execute_real_trade(self, symbol: str, direction: str, stake: float) -> Optional[Dict]:
+    async def _execute_real_trade(self, symbol: str, direction: str, stake: float, best_combo: Dict) -> Optional[Dict]:
         """
         Executa trade real via API da Deriv usando o endpoint interno /deriv/buy
+        Usa automaticamente a duração e unidade do melhor timeframe encontrado
         """
         if not self.deriv_api or not self.deriv_api.connected:
             logger.error(f"API Deriv não conectada - não é possível executar trade real")
@@ -553,18 +554,25 @@ class AutoSelectionBot:
             sys.path.append(os.path.dirname(__file__))
             from server import BuyRequest, deriv_buy
             
-            # Cria requisição de compra
+            # Converte o timeframe do melhor combo para duration e duration_unit da Deriv
+            tf_type = best_combo.get('tf_type', 'ticks')
+            tf_val = best_combo.get('tf_val', 5)
+            
+            # Mapeia tipos de timeframe para unidades da Deriv
+            duration, duration_unit = self._convert_timeframe_to_deriv_params(tf_type, tf_val)
+            
+            # Cria requisição de compra com parâmetros automáticos
             buy_request = BuyRequest(
                 symbol=symbol,
                 type="CALLPUT",
                 contract_type=direction,  # "CALL" ou "PUT"
-                duration=5,
-                duration_unit="t",
+                duration=duration,
+                duration_unit=duration_unit,
                 stake=stake,
                 currency="USD"
             )
             
-            logger.info(f"Executando trade REAL via Deriv API: {symbol} {direction} stake={stake}")
+            logger.info(f"Executando trade REAL via Deriv API: {symbol} {direction} stake={stake} duration={duration}{duration_unit} [Auto-TF: {tf_type}{tf_val}]")
             
             # Executa trade real usando endpoint interno
             result = await deriv_buy(buy_request)
@@ -578,7 +586,10 @@ class AutoSelectionBot:
                     "payout": result.get("payout"),
                     "symbol": symbol,
                     "direction": direction,
-                    "stake": stake
+                    "stake": stake,
+                    "duration": duration,
+                    "duration_unit": duration_unit,
+                    "auto_timeframe": f"{tf_type}{tf_val}"
                 }
             else:
                 logger.error(f"Falha ao executar trade real - resultado vazio")
@@ -587,6 +598,24 @@ class AutoSelectionBot:
         except Exception as e:
             logger.error(f"Erro ao executar trade real: {e}")
             return None
+            
+    def _convert_timeframe_to_deriv_params(self, tf_type: str, tf_val: int) -> Tuple[int, str]:
+        """
+        Converte timeframe interno para parâmetros da API Deriv
+        """
+        if tf_type == 'ticks':
+            # Ticks: usar valor direto com unidade 't'
+            return tf_val, "t"
+        elif tf_type == 's':
+            # Segundos: usar valor direto com unidade 's'  
+            return tf_val, "s"
+        elif tf_type == 'm':
+            # Minutos: usar valor direto com unidade 'm'
+            return tf_val, "m"
+        else:
+            # Fallback para ticks se tipo desconhecido
+            logger.warning(f"Tipo de timeframe desconhecido: {tf_type}, usando fallback para ticks")
+            return 5, "t"
 
 # Instância global do bot
 auto_bot = AutoSelectionBot()
