@@ -307,7 +307,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Auto-Bot de seleção automática testado com sucesso - todos os endpoints funcionando"
+##     - "Sistema completo Auto-Bot execução real testado com sucesso - trades reais funcionando"
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
