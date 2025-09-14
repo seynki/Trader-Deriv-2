@@ -119,9 +119,9 @@ class AutoBotStatus(BaseModel):
     auto_execute: bool = False
     trades_executed: int = 0
     last_trade: Optional[Dict[str, Any]] = None
-    min_winrate: float = 0.75  # winrate mínimo mais rigoroso
-    min_trades_sample: int = 8  # trades mínimos mais rigoroso
-    min_pnl_positive: float = 0.5  # PnL mínimo positivo
+    min_winrate: float = 0.85  # winrate mínimo ULTRA rigoroso  
+    min_trades_sample: int = 12  # trades mínimos ULTRA rigoroso
+    min_pnl_positive: float = 1.0  # PnL mínimo positivo MAIS ALTO
     use_combined_score: bool = True
     conservative_mode: bool = True
     prefer_longer_timeframes: bool = True
