@@ -849,6 +849,7 @@ export default function App() {
               <TabsTrigger value="derived">Derived indices</TabsTrigger>
               <TabsTrigger value="auto">Automação</TabsTrigger>
               <TabsTrigger value="river">🎯 River Threshold</TabsTrigger>
+              <TabsTrigger value="ml-comparison">🧠 ML Engine vs River</TabsTrigger>
             </TabsList>
               <div className="ml-4"><span className="text-xs opacity-70">Modelo:</span></div>
 
