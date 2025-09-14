@@ -515,8 +515,8 @@ class AutoSelectionBot:
                     
                     logger.info(f"Executando trade: {symbol} {direction} stake={self.config.sim_trade_stake} [TF: {best['timeframe_desc']}, Score: {best.get('combined_score', 0):.3f}]")
                     
-                    # Executa trade via API da Deriv (simulação aqui)
-                    trade_result = await self._execute_real_trade(symbol, direction, self.config.sim_trade_stake)
+                    # Executa trade via API da Deriv com parâmetros automáticos
+                    trade_result = await self._execute_real_trade(symbol, direction, self.config.sim_trade_stake, best)
                     
                     if trade_result:
                         self.status.trades_executed += 1
