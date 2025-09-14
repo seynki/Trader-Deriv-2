@@ -2052,24 +2052,25 @@ async def test_ultra_conservative_auto_bot():
         }
 
 async def main():
-    """Main function to run Improved Auto-Bot tests"""
-    print("🤖 TESTE BOT DE SELEÇÃO AUTOMÁTICA MELHORADO - NOVAS FUNCIONALIDADES")
+    """Main function to run Ultra Conservative Auto-Bot tests"""
+    print("🛡️ TESTE BOT DE SELEÇÃO AUTOMÁTICA - MELHORIAS ULTRA CONSERVADORAS")
     print("=" * 70)
-    print("📋 Conforme solicitado na review request:")
-    print("   OBJETIVO: Testar bot de seleção automática melhorado com novas funcionalidades")
+    print("📋 Conforme review request em português:")
+    print("   OBJETIVO: Testar as melhorias ULTRA CONSERVADORAS implementadas")
+    print("   no bot de seleção automática")
     print("   TESTES:")
-    print("   1. Conectividade Básica: GET /api/deriv/status (connected=true, authenticated=true)")
-    print("   2. Status do Bot: novos campos (min_winrate=0.70, use_combined_score=true)")
-    print("   3. Configuração Avançada: POST /api/auto-bot/config com novas configurações")
-    print("   4. Teste de Funcionamento: start → aguardar 10s → verificar → stop")
-    print("   5. Validações: novos timeframes, score combinado, critérios winrate")
-    print("   🎯 FOCO: Sistema melhorado em modo SIMULAÇÃO (NÃO trades reais)")
-    print("   💡 Novos timeframes: ticks 10, 25; segundos 1, 5; minutos 1")
-    print("   📊 Score combinado: winrate + PnL + volume")
+    print("   1. Verificar status inicial: critérios ultra rigorosos (min_winrate=0.85, min_trades_sample=12, min_pnl_positive=1.0)")
+    print("   2. Testar configuração ultra conservadora com payload específico")
+    print("   3. Testar funcionamento: start → aguardar 15-20s → verificar status/results → stop")
+    print("   4. Verificar filtros: timeframes 1-2 ticks REMOVIDOS")
+    print("   5. Validar critérios ultra rigorosos: winrate >= 85%, trades >= 12, PnL >= 1.0")
+    print("   🎯 FOCO: Sistema MUITO mais seletivo para maior winrate")
+    print("   💡 Timeframes problemáticos (1-2 ticks) foram filtrados")
+    print("   📊 Critérios ultra rigorosos: 85% winrate, 12+ trades, 1.0+ PnL")
     
     try:
-        # Run Improved Auto-Bot tests
-        success, results = await test_improved_auto_bot()
+        # Run Ultra Conservative Auto-Bot tests
+        success, results = await test_ultra_conservative_auto_bot()
         
         # Exit with appropriate code
         sys.exit(0 if success else 1)
