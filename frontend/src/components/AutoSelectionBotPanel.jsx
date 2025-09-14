@@ -432,7 +432,100 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
           )}
         </TabsContent>
 
-        {/* Aba Configuração */}
+        {/* Aba Performance */}
+        <TabsContent value="performance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Estatísticas de Avaliação</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {botStatus.evaluation_stats ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total de Combinações</p>
+                    <p className="text-2xl font-bold">{botStatus.evaluation_stats.total_combinations}</p>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Combinações Válidas</p>
+                    <p className="text-2xl font-bold text-green-600">{botStatus.evaluation_stats.valid_combinations}</p>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Símbolos Avaliados</p>
+                    <p className="text-2xl font-bold">{botStatus.evaluation_stats.symbols_evaluated}</p>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">Timeframes Avaliados</p>
+                    <p className="text-2xl font-bold">{botStatus.evaluation_stats.timeframes_evaluated}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Nenhuma avaliação realizada ainda.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Configurações Atuais */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Configurações Ativas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm text-muted-foreground">Winrate Mínimo</Label>
+                  <p className="font-bold text-lg">{(botStatus.min_winrate * 100).toFixed(0)}%</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Score Combinado</Label>
+                  <Badge variant={botStatus.use_combined_score ? "default" : "secondary"}>
+                    {botStatus.use_combined_score ? "Ativo" : "Inativo"}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Execução Automática</Label>
+                  <Badge variant={botStatus.auto_execute ? "destructive" : "outline"}>
+                    {botStatus.auto_execute ? "Ativa" : "Simulação"}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Último Trade com Métricas Detalhadas */}
+          {botStatus.last_trade && botStatus.last_trade.performance_metrics && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Métricas do Último Trade</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Winrate</Label>
+                    <p className="font-bold text-green-600">
+                      {(botStatus.last_trade.performance_metrics.winrate * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">PnL Net</Label>
+                    <p className={`font-bold ${botStatus.last_trade.performance_metrics.net_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {botStatus.last_trade.performance_metrics.net_pnl.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Trades Amostra</Label>
+                    <p className="font-bold">{botStatus.last_trade.performance_metrics.trades_sample}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground">Score Combinado</Label>
+                    <p className="font-bold text-blue-600">
+                      {(botStatus.last_trade.performance_metrics.combined_score * 100).toFixed(1)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
         <TabsContent value="config" className="space-y-4">
           <Card>
             <CardHeader>
