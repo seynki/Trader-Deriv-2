@@ -17,7 +17,7 @@ from datetime import datetime
 import ssl
 
 class BackendConnectivityTester:
-    def __init__(self, base_url="https://smart-trade-robot-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://smart-deriv-bot-2.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
