@@ -872,6 +872,10 @@ export default function App() {
               )}
               <ContractPanel contract={openContract} />
             </TabsContent>
+
+            <TabsContent value="river" className="mt-6">
+              <RiverThresholdPanel />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
