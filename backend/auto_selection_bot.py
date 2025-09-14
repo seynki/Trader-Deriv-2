@@ -94,9 +94,20 @@ class AutoBotConfig(BaseModel):
     strategy_params: dict = None
     auto_execute: bool = False  # se True, executa trades reais automaticamente
     evaluation_interval: int = 5  # intervalo de avaliação em segundos
-    min_winrate: float = 0.70  # winrate mínimo para executar trades (70%)
-    min_trades_sample: int = 5  # mínimo de trades na amostra
+    min_winrate: float = 0.75  # winrate mínimo MAIS RIGOROSO (75% vs 70%)
+    min_trades_sample: int = 8  # mínimo de trades na amostra MAIS RIGOROSO (8 vs 5)
+    min_pnl_positive: float = 0.5  # PnL mínimo positivo obrigatório
     use_combined_score: bool = True  # usar score combinado (winrate + pnl + volume)
+    conservative_mode: bool = True  # modo conservador (critérios mais rigorosos)
+    prefer_longer_timeframes: bool = True  # preferir timeframes mais longos (2-10min)
+    
+    # Pesos para score combinado conservador
+    score_weights: dict = {
+        "winrate": 0.5,      # Maior peso para winrate (50% vs 40%)
+        "pnl": 0.3,          # Menor peso para PnL (30% vs 40%)
+        "volume": 0.1,       # Menor peso para volume (10% vs 20%)
+        "timeframe": 0.1     # Novo peso para tipo de timeframe (10%)
+    }
 
 class AutoBotStatus(BaseModel):
     running: bool = False
