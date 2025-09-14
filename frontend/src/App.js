@@ -875,6 +875,10 @@ export default function App() {
               <ContractPanel contract={openContract} />
             </TabsContent>
 
+            <TabsContent value="auto-bot" className="mt-6">
+              <AutoSelectionBotPanel backendUrl={BACKEND_BASE} />
+            </TabsContent>
+
             <TabsContent value="river" className="mt-6">
               <RiverThresholdPanel />
             </TabsContent>
