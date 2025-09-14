@@ -2665,6 +2665,56 @@ async def main_global_metrics_test():
         traceback.print_exc()
         sys.exit(1)
 
+async def main_river_threshold_test():
+    """Main function to run River Threshold system tests"""
+    print("🎯 TESTE RIVER THRESHOLD SYSTEM EM TEMPO REAL")
+    print("=" * 70)
+    print("📋 Conforme solicitado na review request:")
+    print("   OBJETIVO: Validar sistema de ajuste River Threshold em tempo real")
+    print("   FOCO: Melhorar win rate de 41% para 70-80% via otimização")
+    print("   TESTES:")
+    print("   1. Conectividade básica (deriv/status, river/config)")
+    print("   2. Alteração de threshold em tempo real (0.53 → 0.60 → 0.53)")
+    print("   3. Backtesting com múltiplos thresholds")
+    print("   4. Integração com strategy runner")
+    
+    try:
+        # Run River Threshold tests
+        success, results = await test_river_threshold_system()
+        
+        # Print final summary
+        print("\n" + "🏁" + "="*68)
+        print("RESULTADO FINAL: Teste River Threshold System")
+        print("🏁" + "="*68)
+        
+        if success:
+            print("✅ SISTEMA RIVER THRESHOLD FUNCIONANDO!")
+            print("📋 Principais validações:")
+            print("   ✅ Conectividade com Deriv estabelecida")
+            print("   ✅ Configuração River Threshold acessível")
+            print("   ✅ Alteração de threshold em tempo real funcionando")
+            print("   ✅ Sistema integrado com Strategy Runner")
+            print("   🎯 POTENCIAL: Otimização de win rate 41% → 70-80%")
+        else:
+            print("❌ PROBLEMAS NO SISTEMA RIVER THRESHOLD")
+            print("📋 Verificar:")
+            failed_count = len([r for r in results.values() if not r])
+            print(f"   {failed_count} testes falharam")
+            print("   Implementação dos endpoints River Threshold")
+            print("   Integração com sistema de trading")
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️  Tests interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 if __name__ == "__main__":
     # Check which test to run based on command line arguments
     if len(sys.argv) > 1:
@@ -2676,11 +2726,13 @@ if __name__ == "__main__":
             asyncio.run(main_river_test())
         elif sys.argv[1] == "global_metrics":
             asyncio.run(main_global_metrics_test())
+        elif sys.argv[1] == "river_threshold":
+            asyncio.run(main_river_threshold_test())
         else:
-            print("Available test modes: hybrid, online_learning, river, global_metrics")
-            print("Usage: python backend_test.py [hybrid|online_learning|river|global_metrics]")
-            print("Default: WebSocket tests")
-            asyncio.run(main())
+            print("Available test modes: hybrid, online_learning, river, global_metrics, river_threshold")
+            print("Usage: python backend_test.py [hybrid|online_learning|river|global_metrics|river_threshold]")
+            print("Default: River Threshold tests")
+            asyncio.run(main_river_threshold_test())
     else:
-        # Default to hybrid test as requested in review
-        asyncio.run(main_hybrid_test())
+        # Default to River Threshold test as requested in review
+        asyncio.run(main_river_threshold_test())
