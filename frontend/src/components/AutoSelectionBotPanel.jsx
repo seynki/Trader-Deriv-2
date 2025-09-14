@@ -17,7 +17,8 @@ import {
   Target,
   Settings,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  Sliders
 } from 'lucide-react';
 
 const AutoSelectionBotPanel = ({ backendUrl }) => {
