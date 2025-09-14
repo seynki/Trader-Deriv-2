@@ -206,6 +206,15 @@ function StrategyPanel({ onMlActiveChange }) {
     } catch (e) { /* ignore */ }
   };
 
+  const fetchRiverStatus = async () => {
+    try {
+      const { data } = await axios.get(`${API}/ml/river/status`);
+      setRiverStatus(data);
+    } catch (error) {
+      // Silenciar para não poluir logs quando ainda não há modelo salvo
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     intervalRef.current = setInterval(fetchStatus, 3000);
