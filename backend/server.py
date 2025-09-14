@@ -1413,17 +1413,17 @@ class RiverPerformanceMetrics(BaseModel):
 async def get_river_config():
     """Obter configuração atual do river_threshold"""
     return {
-        "river_threshold": strategy_runner.params.river_threshold,
-        "is_running": strategy_runner.running,
-        "mode": strategy_runner.mode,
+        "river_threshold": _strategy.params.river_threshold,
+        "is_running": _strategy.running,
+        "mode": _strategy.mode,
         "last_update": int(time.time())
     }
 
 @api_router.post("/strategy/river/config")
 async def update_river_config(config: RiverThresholdConfig):
     """Atualizar river_threshold em tempo real"""
-    old_threshold = strategy_runner.params.river_threshold
-    strategy_runner.params.river_threshold = config.river_threshold
+    old_threshold = _strategy.params.river_threshold
+    _strategy.params.river_threshold = config.river_threshold
     
     return {
         "success": True,
