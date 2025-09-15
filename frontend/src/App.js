@@ -825,6 +825,19 @@ export default function App() {
 
               <Card className="mt-6">
                 <CardHeader>
+                  <CardTitle>Forex</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-3">
+                  {["frxEURUSD","frxUSDBRL","frxUSDJPY"].map((sym) => (
+                    <Button key={sym} variant={symbols.includes(sym) ? "default" : "secondary"} onClick={() => {
+                      setSymbols((prev) => prev.includes(sym) ? prev.filter((x) => x !== sym) : [...prev, sym]);
+                    }}>{sym}</Button>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-6">
+                <CardHeader>
                   <CardTitle>Índices Volatility</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-3">
