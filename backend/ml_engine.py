@@ -220,6 +220,8 @@ class PositionalEncoding(nn.Module if hasattr(nn, "Module") else object):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
+        if getattr(self, 'pe', None) is None:
+            return x
         x = x + self.pe[:, :x.size(1)]
         return x
 
