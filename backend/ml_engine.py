@@ -239,7 +239,10 @@ class SeqTransformer(nn.Module if hasattr(nn, "Module") else object):
         return out
 
 def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epochs: int = 10, batch_size: int = 128):
-    device = cfg.device
+    if torch is None:
+        logging.warning("PyTorch ausente – pulando treino do transformer (modo LightGBM-only)")
+        return None
+    device = "cuda" if (hasattr(torch, "cuda") and torch.cuda.is_available()) else "cpu"
     model = SeqTransformer(input_dim=X_seq.shape[2]).to(device)
     criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
@@ -255,7 +258,10 @@ def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epo
             loss = criterion(pred, yb)
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            try:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            except Exception:
+                pass
             optimizer.step()
             losses.append(loss.item())
         logging.info(f"Transformer epoch {ep+1}/{epochs} loss={np.mean(losses):.6f}")
