@@ -56,6 +56,14 @@ class MLConfig:
                 "num_leaves":31,
                 "n_estimators":200,
             }
+        # ajusta device com segurança se torch existir
+        try:
+            if torch is not None and hasattr(torch, 'cuda') and torch.cuda.is_available():
+                self.device = 'cuda'
+            else:
+                self.device = 'cpu'
+        except Exception:
+            self.device = 'cpu'
         if self.ensemble_weights is None:
             self.ensemble_weights = {"lgb":0.6, "transformer":0.4}
 
