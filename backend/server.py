@@ -1871,7 +1871,12 @@ async def ml_engine_train(request: MLEngineTrainRequest):
         logging.info(f"Treinando com {len(df)} candles, seq_len={config.seq_len}")
         
         # Treinar modelos
-        trained_models = ml_engine.fit_models_from_candles(df, config, horizon=request.horizon)
+        trained_models = ml_engine.fit_models_from_candles(
+            df, config, horizon=request.horizon,
+            use_transformer=bool(request.use_transformer),
+            transformer_epochs=int(max(1, min(request.epochs, 10))),
+            transformer_batch=int(max(16, min(request.batch_size, 256)))
+        )
         
         # Armazenar modelos treinados
         model_key = f"{request.symbol}_{request.timeframe}_h{request.horizon}"
