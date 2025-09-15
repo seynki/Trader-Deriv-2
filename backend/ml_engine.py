@@ -286,10 +286,10 @@ def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon:
     X_lgb_s = scaler.fit_transform(X_lgb)
     lgb_model = train_lgb(X_lgb_s, y, cfg)
     # transformer
-    transformer = None
-    if train_transformer:
-        transformer = train_transformer(X_seq, y, cfg, epochs=transformer_epochs, batch_size=transformer_batch)
-    tm = TrainedModels(lgb_model=lgb_model, lgb_scaler=scaler, transformer=transformer, features=features, lgb_feat_dim=X_lgb.shape[1])
+    transformer_model = None
+    if use_transformer:
+        transformer_model = train_transformer(X_seq, y, cfg, epochs=transformer_epochs, batch_size=transformer_batch)
+    tm = TrainedModels(lgb_model=lgb_model, lgb_scaler=scaler, transformer=transformer_model, features=features, lgb_feat_dim=X_lgb.shape[1])
     return tm
 
 def predict_from_models(candles: pd.DataFrame, tm: TrainedModels, cfg: MLConfig = CFG) -> Dict[str,Any]:
