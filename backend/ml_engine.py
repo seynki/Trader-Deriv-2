@@ -42,7 +42,7 @@ class MLConfig:
     seq_len: int = 32                      # comprimento de janelas para o transformer
     feat_freqs: List[int] = (1,5,15,60)    # janelas (em segundos) para features multiescala
     lgb_params: Dict = None
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "cpu"                    # default seguro; ajustado no __post_init__ se torch disponível
     ensemble_weights: Dict[str,float] = None
 
     def __post_init__(self):
