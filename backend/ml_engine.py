@@ -238,7 +238,7 @@ class SeqTransformer(nn.Module if hasattr(nn, "Module") else object):
         out = self.head(pooled).squeeze(-1)
         return out
 
-def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epochs: int = 10, batch_size: int = 128) -> nn.Module:
+def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epochs: int = 10, batch_size: int = 128):
     device = cfg.device
     model = SeqTransformer(input_dim=X_seq.shape[2]).to(device)
     criterion = nn.BCELoss()
