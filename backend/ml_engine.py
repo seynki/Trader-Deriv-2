@@ -205,7 +205,7 @@ def train_lgb(X: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG) -> lgb.LGBMClas
 # ------------------------
 # Transformer Sequence Model (PyTorch)
 # ------------------------
-class PositionalEncoding(nn.Module):
+class PositionalEncoding(nn.Module if hasattr(nn, "Module") else object):
     def __init__(self, d_model, max_len=5000):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
