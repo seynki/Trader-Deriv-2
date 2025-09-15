@@ -1771,6 +1771,7 @@ class MLEngineTrainRequest(BaseModel):
     epochs: int = 6
     batch_size: int = 64
     min_conf: float = 0.2
+    use_transformer: bool = False  # por padrão, treinar apenas LightGBM (mais rápido)
 
 class MLEngineStatus(BaseModel):
     initialized: bool
