@@ -643,6 +643,9 @@ class StrategyParams(BaseModel):
     macd_slow: int = 26
     macd_sig: int = 9
     river_threshold: float = 0.53  # Threshold mínimo para filtro River (prob_up >= para CALL, prob_up <= 1-threshold para PUT)
+    # Gate opcional com MLEngine (Transformer + LightGBM)
+    ml_gate: bool = True
+    ml_prob_threshold: float = 0.5  # confiança mínima do ensemble (0..1)
     mode: str = "paper"  # paper | live
 
 class StrategyStatus(BaseModel):
