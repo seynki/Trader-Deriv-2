@@ -49,13 +49,21 @@ DERIV_API_TOKEN = os.environ.get("DERIV_API_TOKEN")
 DERIV_WS_URL = os.environ.get("DERIV_WS_URL", "wss://ws.derivws.com/websockets/v3")
 
 SUPPORTED_SYMBOLS = [
-    "CRYETHUSD",  # Crypto ETH/USD
-    "FRXUSDJPY",  # Forex USD/JPY
-    "US30",       # Wall St 30
-    # Volatility indices examples
-    "1HZ10V",     # Volatility 10 (1s)
-    "R_10",       # Volatility 10 Index
-    "R_15",       # Volatility 15 Index
+    # Crypto
+    "CRYETHUSD",   # Crypto ETH/USD
+    # Forex (códigos corretos da Deriv usam prefixo 'frx' minúsculo)
+    "frxEURUSD",
+    "frxUSDBRL",
+    "frxUSDJPY",
+    # Índices
+    "US30",        # Wall St 30
+    # Volatility indices (1s e padrão)
+    "1HZ10V",      # Volatility 10 (1s)
+    "1HZ25V",
+    "1HZ50V",
+    "1HZ75V",
+    "1HZ100V",
+    "R_10",        # Volatility 10 Index
     "R_25",
     "R_50",
     "R_75",
