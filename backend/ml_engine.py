@@ -286,7 +286,9 @@ def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon:
     X_lgb_s = scaler.fit_transform(X_lgb)
     lgb_model = train_lgb(X_lgb_s, y, cfg)
     # transformer
-    transformer = train_transformer(X_seq, y, cfg, epochs=6, batch_size=64)
+    transformer = None
+    if train_transformer:
+        transformer = train_transformer(X_seq, y, cfg, epochs=transformer_epochs, batch_size=transformer_batch)
     tm = TrainedModels(lgb_model=lgb_model, lgb_scaler=scaler, transformer=transformer, features=features, lgb_feat_dim=X_lgb.shape[1])
     return tm
 
