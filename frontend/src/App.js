@@ -543,9 +543,16 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <Select value={symbol} onValueChange={(v)=>{ setSymbol(v); setLastError(null); }}>
               <SelectTrigger className="w-44"><SelectValue placeholder="Símbolo"/></SelectTrigger>
               <SelectContent>
-                {derivedSymbols.map((d) => (
-                  <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                ))}
+                {(() => {
+                  const automacaoSymbols = [
+                    ...derivedSymbols,
+                    { value: "frxEURUSD", label: "EUR/USD (Forex)" },
+                    { value: "frxUSDBRL", label: "USD/BRL (Forex)" },
+                  ];
+                  return automacaoSymbols.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                  ));
+                })()}
               </SelectContent>
             </Select>
           </div>
