@@ -208,6 +208,9 @@ def train_lgb(X: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG) -> lgb.LGBMClas
 class PositionalEncoding(nn.Module if hasattr(nn, "Module") else object):
     def __init__(self, d_model=64, max_len=5000):
         super().__init__()
+        if torch is None or not hasattr(nn, 'Module'):
+            self.pe = None
+            return
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
