@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Testing after Frontend Modifications
-Tests backend endpoints after frontend changes to ensure they continue working properly
+Backend Testing - Phase 2/3 Forex Support Validation
+Tests Forex support (frxEURUSD, frxUSDBRL), ML Engine training/prediction, and StrategyRunner with ML gate
 """
 
 import requests
