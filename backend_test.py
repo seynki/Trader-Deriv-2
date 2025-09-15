@@ -2211,34 +2211,44 @@ async def comparative_analysis():
     }
 
 async def main():
-    """Main function to run comparative analysis as requested"""
-    print("⚖️ ANÁLISE COMPARATIVA: ML ENGINE vs RIVER ONLINE LEARNING")
-    print("=" * 70)
-    print("📋 Conforme review request em português:")
-    print("   OBJETIVO: Análise comparativa de performance entre sistemas ML")
-    print("   TESTES:")
-    print("   1. ML ENGINE: status/train/predict/decide_trade")
-    print("   2. RIVER ONLINE: status/train_csv/predict/decide_trade")
-    print("   3. ANÁLISE: acurácia, velocidade, qualidade, facilidade")
-    print("   🎯 META: Identificar qual sistema funciona melhor")
-    print("   💡 Parâmetros: R_100, timeframe=1m, count=500, horizon=3, seq_len=32")
-    print("   🔒 MODO: DEMO (dry_run=true, aguardar 5s para Deriv)")
+    """
+    Main test execution function for Phase 2/3 Forex Support validation
+    """
+    print("🚀 INICIANDO TESTES BACKEND - PHASE 2/3 FOREX SUPPORT")
+    print("=" * 80)
     
     try:
-        # Run comparative analysis
-        success, results = await comparative_analysis()
+        # Run Phase 2/3 Forex Support tests
+        success, results = await test_phase2_forex_support()
         
-        # Exit with appropriate code
-        sys.exit(0 if success else 1)
+        print("\n" + "=" * 80)
+        print("📊 RESUMO FINAL DOS TESTES")
+        print("=" * 80)
         
-    except KeyboardInterrupt:
-        print("\n⚠️  Tests interrupted by user")
-        sys.exit(1)
+        if success:
+            print("🎉 SUCESSO: Phase 2/3 Forex Support validado com sucesso!")
+            print("✅ Sistema pronto para operações Forex com ML Engine")
+        else:
+            print("❌ FALHA: Problemas detectados no suporte Forex")
+            print("🔧 Verificar logs acima para detalhes dos problemas")
+        
+        print(f"\nResultados detalhados: {results}")
+        
+        return success
+        
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"❌ ERRO CRÍTICO NA EXECUÇÃO DOS TESTES: {e}")
         import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        print(f"Traceback: {traceback.format_exc()}")
+        return False
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        success = asyncio.run(main())
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n⚠️ Testes interrompidos pelo usuário")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Erro fatal: {e}")
+        sys.exit(1)
