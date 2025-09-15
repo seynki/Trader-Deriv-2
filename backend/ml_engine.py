@@ -278,7 +278,7 @@ class TrainedModels:
     features: Optional[List[str]] = None
     lgb_feat_dim: Optional[int] = None
 
-def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon: int = 3, train_transformer: bool = True, transformer_epochs: int = 6, transformer_batch: int = 64) -> TrainedModels:
+def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon: int = 3, use_transformer: bool = True, transformer_epochs: int = 6, transformer_batch: int = 64) -> TrainedModels:
     X_lgb, X_seq, y, feat_names = None, None, None, None
     X_lgb, X_seq, y, features = build_supervised_dataset(candles, seq_len=cfg.seq_len, horizon=horizon)
     # standardize LGB features (improves some models)
