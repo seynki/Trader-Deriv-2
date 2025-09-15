@@ -287,7 +287,7 @@ def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epo
 class TrainedModels:
     lgb_model: Optional[lgb.LGBMClassifier] = None
     lgb_scaler: Optional[StandardScaler] = None
-    transformer: Optional[nn.Module] = None
+    transformer: Optional[Any] = None
     features: Optional[List[str]] = None
     lgb_feat_dim: Optional[int] = None
 
