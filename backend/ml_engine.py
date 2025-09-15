@@ -212,7 +212,7 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:, :x.size(1)]
         return x
 
-class SeqTransformer(nn.Module):
+class SeqTransformer(nn.Module if hasattr(nn, "Module") else object):
     def __init__(self, input_dim, d_model=64, nhead=4, num_layers=2, dim_feedforward=128, dropout=0.1):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, d_model)
