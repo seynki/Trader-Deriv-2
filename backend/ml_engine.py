@@ -445,8 +445,13 @@ def save_trained_models(tm: TrainedModels, path_prefix: str):
     if tm.lgb_model is not None:
         joblib.dump(tm.lgb_model, f"{path_prefix}_lgb.pkl")
         joblib.dump(tm.lgb_scaler, f"{path_prefix}_scaler.pkl")
-    if tm.transformer is not None:
-        torch.save(tm.transformer.state_dict(), f"{path_prefix}_trans.pt")
+    # salvar transformer apenas se PyTorch estiver disponível
+    if tm.transformer is not None and torch is not None:
+        try:
+            import torch as _torch
+            _torch.save(tm.transformer.state_dict(), f"{path_prefix}_trans.pt")
+        except Exception:
+            pass
     # features meta
     joblib.dump({"features": tm.features, "lgb_feat_dim": tm.lgb_feat_dim}, f"{path_prefix}_meta.pkl")
 
