@@ -292,8 +292,9 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "ML Engine vs River Online Learning: Análise Comparativa Completada"
-##   stuck_tasks: []
+##     - "Phase 2/3 Forex Support: frxEURUSD, frxUSDBRL + ML Engine + StrategyRunner"
+##   stuck_tasks:
+##     - "Phase 2/3 Forex Support: frxEURUSD, frxUSDBRL + ML Engine + StrategyRunner"
 ##   test_all: false
 ##   test_priority: "high_first"
 ## agent_communication:
