@@ -20,13 +20,24 @@ function backendBase() {
   const env = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
   try {
     const u = new URL(env);
-    // If env points to localhost but page is not localhost, prefer same-origin (ingress) to avoid 404s
-    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && typeof window !== "undefined" && window.location && window.location.hostname !== "localhost") {
-      return window.location.origin.replace(/\/+$/, "");
+    // If env points to localhost but page is opened on a different host (e.g., remote Docker),
+    // build a URL using the current host with backend port 8001 to avoid 'localhost' mismatch.
+    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && typeof window !== "undefined" && window.location) {
+      const pageHost = window.location.hostname;
+      if (pageHost !== "localhost" && pageHost !== "127.0.0.1") {
+        const proto = window.location.protocol || "http:";
+        return `${proto}//${pageHost}:8001`;
+      }
     }
     return env;
   } catch {
-    if (typeof window !== "undefined" && window.location) return window.location.origin.replace(/\/+$/, "");
+    // Fallbacks when env URL is invalid or missing
+    if (typeof window !== "undefined" && window.location) {
+      const proto = window.location.protocol || "http:";
+      const host = window.location.hostname || "localhost";
+      // Try port 8001 on same host for docker-compose default
+      return `${proto}//${host}:8001`;
+    }
     return "";
   }
 }
