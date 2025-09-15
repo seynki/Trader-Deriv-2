@@ -14,9 +14,17 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 import lightgbm as lgb
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import Dataset, DataLoader
+except Exception:
+    torch = None
+    class _Dummy: pass
+    nn = _Dummy()
+    Dataset = object
+    def DataLoader(*args, **kwargs):
+        raise RuntimeError("PyTorch não está instalado nesta imagem. ML Engine funcionará em modo LightGBM apenas.")
 from tqdm import tqdm
 import joblib
 import logging
