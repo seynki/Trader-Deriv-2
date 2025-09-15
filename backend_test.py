@@ -46,7 +46,7 @@ async def test_ultra_conservative_auto_bot():
     Foco: Confirmar que o sistema agora é MUITO mais seletivo e deve resultar em maior winrate, mesmo que execute menos trades.
     """
     
-    base_url = "https://deriv-bot-tester.preview.emergentagent.com"
+    base_url = "https://volatility-trader-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -471,7 +471,7 @@ async def test_backend_after_frontend_modifications():
     O backend deve continuar funcionando normalmente, apenas testando se os endpoints necessários estão respondendo corretamente.
     """
     
-    base_url = "https://deriv-bot-tester.preview.emergentagent.com"
+    base_url = "https://volatility-trader-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -783,7 +783,7 @@ async def test_ml_engine_endpoints():
     - Tudo funcionando em modo DEMO
     """
     
-    base_url = "https://deriv-bot-tester.preview.emergentagent.com"
+    base_url = "https://volatility-trader-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -1185,7 +1185,7 @@ async def test_river_online_learning():
     5. POST /api/ml/river/decide_trade (decisão com dry_run=true)
     """
     
-    base_url = "https://deriv-bot-tester.preview.emergentagent.com"
+    base_url = "https://volatility-trader-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
