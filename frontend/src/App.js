@@ -44,7 +44,7 @@ function backendBase() {
 const BACKEND_BASE = backendBase();
 const API = BACKEND_BASE.endsWith("/api") ? BACKEND_BASE : `${BACKEND_BASE}/api`;
 
-const defaultSymbols = ["CRYETHUSD", "FRXUSDJPY", "US30"];
+const defaultSymbols = ["CRYETHUSD", "frxEURUSD", "frxUSDBRL"];
 const derivedSymbols = [
   // 1-second variants
   { value: "1HZ10V", label: "Volatility 10 (1s)" },
