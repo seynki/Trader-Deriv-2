@@ -1087,6 +1087,37 @@ class StrategyRunner:
                 if not signal:
                     await asyncio.sleep(cooldown_seconds)
                     continue
+                # Opcional: confirmar com MLEngine se habilitado
+                if self.params.ml_gate:
+                    try:
+                        # Preparar DataFrame do último trecho para predição
+                        df = pd.DataFrame(candles)
+                        if 'timestamp' in df.columns:
+                            df.index = pd.to_datetime(df['timestamp'], unit='s')
+                        elif 'epoch' in df.columns:
+                            df.index = pd.to_datetime(df['epoch'], unit='s')
+                        else:
+                            df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+                        # Usar modelos já treinados em memória (se houver) para o mesmo símbolo
+                        available_models = [k for k in _ml_engine_models.keys() if k.startswith(self.params.symbol)]
+                        if available_models:
+                            model_key = available_models[-1]
+                            trained_models = _ml_engine_models[model_key]
+                            pred = ml_engine.predict_from_models(df.tail(_ml_engine_config.seq_len + 10), trained_models, _ml_engine_config)
+                            prob = float(pred.get('prob', 0.5))
+                            conf = float(pred.get('conf', 0.0))
+                            direction = str(pred.get('direction'))
+                            # Gate: direção do ensemble deve concordar e confiança mínima deve ser atendida
+                            agree = ((direction == 'CALL' and signal.get('side') == 'RISE') or (direction == 'PUT' and signal.get('side') == 'FALL'))
+                            if (not agree) or (conf < self.params.ml_prob_threshold):
+                                self.last_reason = f"Gate ML bloqueou: agree={agree} conf={conf:.3f} < thr {self.params.ml_prob_threshold:.2f}"
+                                await asyncio.sleep(cooldown_seconds)
+                                continue
+                        else:
+                            # Sem modelo ML disponível, prossegue usando apenas River+TA
+                            pass
+                    except Exception as ge:
+                        logger.warning(f"ML gate check failed (prosseguindo sem gate): {ge}")
                 if self.in_position:
                     await asyncio.sleep(cooldown_seconds)
                     continue
