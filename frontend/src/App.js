@@ -188,7 +188,7 @@ function StrategyPanel({ onMlActiveChange }) {
   const intervalRef = useRef(null);
 
   const defaults = useMemo(() => ({
-    symbol: "R_100",
+    symbol: "R_10",
     granularity: 60,
     candle_len: 200,
     duration: 5,
