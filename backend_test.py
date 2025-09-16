@@ -255,75 +255,42 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 3 FALHOU - Exception: {e}")
             json_responses["strategy_monitoring"] = {"error": str(e)}
         
-        # Test C: Ticks History validation via StrategyRunner
-        log("\n🔍 TEST C: TICKS HISTORY VALIDATION (StrategyRunner._get_candles)")
-        log("   Objetivo: Validar que StrategyRunner._get_candles funciona para frxEURUSD")
-        log("   Método: POST /api/strategy/start → aguardar 3s → verificar running/last_run_at → stop")
+        # Step 4: POST /api/strategy/stop
+        log("\n🔍 STEP 4: POST /api/strategy/stop")
+        log("   Objetivo: Parar estratégia e confirmar running=false")
         
         try:
-            # Start strategy with frxEURUSD
-            strategy_payload = {
-                "symbol": "frxEURUSD",
-                "granularity": 60,
-                "candle_len": 200,
-                "duration": 5,
-                "duration_unit": "t",
-                "stake": 1,
-                "mode": "paper"
-            }
-            
-            log(f"   Payload: {json.dumps(strategy_payload, indent=2)}")
-            response = session.post(f"{api_url}/strategy/start", json=strategy_payload, timeout=20)
-            log(f"   POST /api/strategy/start: {response.status_code}")
+            response = session.post(f"{api_url}/strategy/stop", json={}, timeout=15)
+            log(f"   POST /api/strategy/stop: {response.status_code}")
             
             if response.status_code == 200:
-                start_data = response.json()
-                log(f"   Start Response: {json.dumps(start_data, indent=2)}")
+                stop_data = response.json()
+                json_responses["strategy_stop"] = stop_data
+                log(f"   Response: {json.dumps(stop_data, indent=2)}")
                 
-                # Wait 3 seconds as requested
-                log("   ⏱️  Aguardando 3s para StrategyRunner processar...")
-                time.sleep(3)
+                running = stop_data.get('running', True)  # Default True to catch failures
                 
-                # Check status
-                response = session.get(f"{api_url}/strategy/status", timeout=10)
-                log(f"   GET /api/strategy/status: {response.status_code}")
+                log(f"   📊 Strategy Stop:")
+                log(f"      Running: {running}")
                 
-                if response.status_code == 200:
-                    status_data = response.json()
-                    log(f"   Status Response: {json.dumps(status_data, indent=2)}")
-                    
-                    running = status_data.get('running', False)
-                    last_run_at = status_data.get('last_run_at')
-                    symbol = status_data.get('symbol', '')
-                    
-                    log(f"   📊 Strategy Status:")
-                    log(f"      Running: {running}")
-                    log(f"      Last Run At: {last_run_at}")
-                    log(f"      Symbol: {symbol}")
-                    
-                    if running and last_run_at is not None and symbol == "frxEURUSD":
-                        test_results["ticks_history_validation"] = True
-                        log("✅ Ticks History OK: StrategyRunner funcionando com frxEURUSD")
-                    else:
-                        log(f"❌ Ticks History FALHOU: running={running}, last_run_at={last_run_at}, symbol={symbol}")
-                    
-                    # Stop strategy
-                    log("   🛑 Parando strategy...")
-                    response = session.post(f"{api_url}/strategy/stop", json={}, timeout=10)
-                    log(f"   POST /api/strategy/stop: {response.status_code}")
-                    
+                if not running:
+                    test_results["strategy_stop"] = True
+                    log("✅ Step 4 OK: Estratégia parada (running=false)")
                 else:
-                    log(f"❌ Strategy status FALHOU - HTTP {response.status_code}")
+                    log(f"❌ Step 4 FALHOU: running={running} (deveria ser false)")
             else:
-                log(f"❌ Strategy start FALHOU - HTTP {response.status_code}")
+                log(f"❌ Strategy stop FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_stop"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
+                    json_responses["strategy_stop"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
-            log(f"❌ Ticks History validation FALHOU - Exception: {e}")
+            log(f"❌ Step 4 FALHOU - Exception: {e}")
+            json_responses["strategy_stop"] = {"error": str(e)}
         
         # Test D1: ML Engine training para frxEURUSD
         log("\n🔍 TEST D1: ML ENGINE TRAINING frxEURUSD")
