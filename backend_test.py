@@ -486,57 +486,9 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 7 FALHOU - Exception: {e}")
             json_responses["river_backtest"] = {"error": str(e)}
         
-        # Test F: ML Engine training para frxUSDBRL (teste rápido)
-        log("\n🔍 TEST F: ML ENGINE TRAINING frxUSDBRL (TESTE RÁPIDO)")
-        log("   Objetivo: POST /api/ml/engine/train para frxUSDBRL")
-        
-        ml_train_usdbrl_payload = {
-            "symbol": "frxUSDBRL",
-            "timeframe": "1m",
-            "count": 3000,
-            "horizon": 3,
-            "seq_len": 32,
-            "epochs": 2,
-            "batch_size": 64,
-            "use_transformer": False
-        }
-        
-        try:
-            log(f"   Payload: {json.dumps(ml_train_usdbrl_payload, indent=2)}")
-            log("   ⏱️  Iniciando treinamento ML Engine para frxUSDBRL...")
-            
-            response = session.post(f"{api_url}/ml/engine/train", json=ml_train_usdbrl_payload, timeout=180)
-            log(f"   POST /api/ml/engine/train: {response.status_code}")
-            
-            if response.status_code == 200:
-                train_data = response.json()
-                log(f"   Response: {json.dumps(train_data, indent=2)}")
-                
-                success = train_data.get('success', False)
-                model_key = train_data.get('model_key', '')
-                features_count = train_data.get('features_count', 0)
-                lgb_trained = train_data.get('lgb_trained', False)
-                
-                log(f"   📊 ML Training frxUSDBRL Result:")
-                log(f"      Success: {success}")
-                log(f"      Model Key: {model_key}")
-                log(f"      Features Count: {features_count}")
-                log(f"      LGB Trained: {lgb_trained}")
-                
-                if success and 'frxUSDBRL' in model_key and lgb_trained:
-                    test_results["ml_engine_train_usdbrl"] = True
-                    log("✅ ML Engine Training frxUSDBRL OK: Modelo treinado")
-                else:
-                    log(f"❌ ML Engine Training frxUSDBRL FALHOU: success={success}, lgb={lgb_trained}")
-            else:
-                log(f"❌ ML Engine Training frxUSDBRL FALHOU - HTTP {response.status_code}")
-                    
-        except Exception as e:
-            log(f"❌ ML Engine Training frxUSDBRL FALHOU - Exception: {e}")
-        
-        # Final analysis
+        # Final analysis and JSON report
         log("\n" + "🏁" + "="*68)
-        log("RESULTADO FINAL: Teste Phase 2/3 Forex Support")
+        log("RESULTADO FINAL: Baseline de Auditoria ML (R_10)")
         log("🏁" + "="*68)
         
         passed_tests = sum(test_results.values())
@@ -544,57 +496,62 @@ async def test_ml_audit_baseline_r10():
         success_rate = (passed_tests / total_tests) * 100
         
         log(f"📊 ESTATÍSTICAS:")
-        log(f"   Testes executados: {total_tests}")
-        log(f"   Testes passaram: {passed_tests}")
+        log(f"   Passos executados: {total_tests}")
+        log(f"   Passos bem-sucedidos: {passed_tests}")
         log(f"   Taxa de sucesso: {success_rate:.1f}%")
         
-        log(f"\n📋 DETALHES POR TESTE:")
-        test_names = {
-            "health_and_symbols": "A) Saúde e símbolos (frxEURUSD, frxUSDBRL em symbols)",
-            "contracts_for_eurusd": "B1) contracts_for frxEURUSD (CALL/PUT)",
-            "contracts_for_usdbrl": "B2) contracts_for frxUSDBRL (CALL/PUT)",
-            "ticks_history_validation": "C) Ticks History validation (StrategyRunner._get_candles)",
-            "ml_engine_train_eurusd": "D1) ML Engine training frxEURUSD (3000 candles)",
-            "ml_engine_predict_eurusd": "D2) ML Engine prediction frxEURUSD",
-            "strategy_runner_ml_gate": "E) StrategyRunner paper com ML gate",
-            "ml_engine_train_usdbrl": "F) ML Engine training frxUSDBRL (teste rápido)"
+        log(f"\n📋 DETALHES POR PASSO:")
+        step_names = {
+            "deriv_status": "1) GET /api/deriv/status (connected=true, authenticated=true)",
+            "strategy_start": "2) POST /api/strategy/start (R_10, ML gate habilitado)",
+            "strategy_monitoring": "3) Monitoramento 60-90s (win_rate, daily_pnl, last_reason)",
+            "strategy_stop": "4) POST /api/strategy/stop (running=false)",
+            "ml_engine_train": "5) POST /api/ml/engine/train (R_10, 5m, 2500 candles)",
+            "ml_engine_predict": "6) POST /api/ml/engine/predict (R_10, 200 candles)",
+            "river_backtest": "7) POST /api/strategy/river/backtest (múltiplos thresholds)"
         }
         
         for test_key, passed in test_results.items():
-            test_name = test_names.get(test_key, test_key)
-            status = "✅ PASSOU" if passed else "❌ FALHOU"
-            log(f"   {test_name}: {status}")
+            step_name = step_names.get(test_key, test_key)
+            status = "✅ SUCESSO" if passed else "❌ FALHOU"
+            log(f"   {step_name}: {status}")
         
-        # Critérios de aprovação conforme review request
-        critical_tests = [
-            "health_and_symbols",
-            "contracts_for_eurusd", 
-            "contracts_for_usdbrl",
-            "ticks_history_validation",
-            "ml_engine_train_eurusd"
-        ]
+        # Report all JSON responses as requested
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
         
-        critical_passed = sum(test_results[test] for test in critical_tests)
-        overall_success = critical_passed >= 4  # Allow 1 critical failure
+        overall_success = passed_tests >= 5  # Allow 2 failures out of 7 steps
         
         if overall_success:
-            log("\n🎉 PHASE 2/3 FOREX SUPPORT FUNCIONANDO!")
-            log("📋 Validações bem-sucedidas:")
-            log("   ✅ Símbolos Forex: frxEURUSD e frxUSDBRL disponíveis")
-            log("   ✅ Contracts: CALL/PUT disponíveis para ambos símbolos")
-            log("   ✅ Ticks History: StrategyRunner._get_candles funciona com Forex")
-            log("   ✅ ML Engine: Treino e predição funcionam para Forex")
-            if test_results["strategy_runner_ml_gate"]:
-                log("   ✅ StrategyRunner: ML gate funcionando em paper mode")
-            log("   🎯 CONCLUSÃO: Suporte Forex Phase 2/3 implementado com sucesso!")
-            log("   💡 Sistema pronto para trading Forex com ML Engine e StrategyRunner")
+            log("\n🎉 BASELINE DE AUDITORIA ML (R_10) EXECUTADA COM SUCESSO!")
+            log("📋 Passos completados:")
+            if test_results["deriv_status"]:
+                log("   ✅ Deriv: Conectado e autenticado")
+            if test_results["strategy_start"]:
+                log("   ✅ Estratégia: Iniciada com ML gate para R_10")
+            if test_results["strategy_monitoring"]:
+                log("   ✅ Monitoramento: Dados capturados por 60-90s")
+            if test_results["strategy_stop"]:
+                log("   ✅ Estratégia: Parada com sucesso")
+            if test_results["ml_engine_train"]:
+                log("   ✅ ML Engine: Modelo treinado para R_10")
+            if test_results["ml_engine_predict"]:
+                log("   ✅ ML Engine: Predição realizada")
+            if test_results["river_backtest"]:
+                log("   ✅ River Backtest: Thresholds testados")
+            log("   🎯 CONCLUSÃO: Auditoria ML baseline completada!")
+            log("   💡 Todos os JSONs foram reportados conforme solicitado")
         else:
-            log("\n❌ PROBLEMAS DETECTADOS NO SUPORTE FOREX")
-            failed_critical = [test_names.get(name, name) for name in critical_tests if not test_results[name]]
-            log(f"   Testes críticos que falharam: {failed_critical}")
-            log("   📋 FOCO: Verificar implementação do suporte Forex")
+            log("\n❌ PROBLEMAS DETECTADOS NA AUDITORIA ML")
+            failed_steps = [step_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Passos que falharam: {failed_steps}")
+            log("   📋 FOCO: Verificar implementação dos endpoints ML")
         
-        return overall_success, test_results
+        return overall_success, test_results, json_responses
         
     except Exception as e:
         log(f"❌ ERRO CRÍTICO NO TESTE FOREX: {e}")
