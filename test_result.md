@@ -292,9 +292,9 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "ML Audit Baseline R_10: scripts/ml_audit_plan.md execution"
+##     - "R_10 Paper Mode Sequence: ML Engine + River + Strategy Testing"
 ##   stuck_tasks:
-##     - "Strategy start/stop endpoints: technical issues with HTTP 500 errors"
+##     - "Strategy start/stop endpoints: technical issues with HTTP 500 errors and 'Strategy already running' conflicts"
 ##   test_all: false
 ##   test_priority: "high_first"
 ## agent_communication:
