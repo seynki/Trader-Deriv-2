@@ -12,7 +12,7 @@ import asyncio
 import websockets
 from datetime import datetime
 
-async def test_phase2_forex_support():
+async def test_ml_audit_baseline_r10():
     """
     Test Phase 2/3 Forex Support as requested in Portuguese review:
     
