@@ -1104,6 +1104,29 @@ class StrategyRunner:
                     break
                 candles = await self._get_candles(self.params.symbol, self.params.granularity, self.params.candle_len)
                 self.last_run_at = int(time.time())
+
+                # Bloqueio por janela de não-operação (spike de volatilidade) e cooldown adaptativo
+                if block_until_iter > 0:
+                    block_until_iter -= 1
+                    await asyncio.sleep(cooldown_seconds)
+                    continue
+
+                # Detectar spike de volatilidade via ATR proxy (desvio padrão recente como aproximador)
+                try:
+                    closes = [float(c.get("close", 0)) for c in candles]
+                    if len(closes) >= 20:
+                        last_20 = np.array(closes[-20:])
+                        std20 = float(np.std(last_20))
+                        p95 = float(np.percentile(np.abs(np.diff(last_20)), 95))
+                        # se variação recente muito alta, abrir no-trade window por 10-20 candles
+                        if std20 > 0 and (np.abs(last_20[-1] - last_20[0]) / (abs(last_20[0]) + 1e-9)) > 0.01:
+                            block_until_iter = max(block_until_iter, self.params.vol_block_candles)
+                            self.last_reason = f"No-trade window devido a spike de volatilidade (std20={std20:.5f})"
+                            await asyncio.sleep(cooldown_seconds)
+                            continue
+                except Exception:
+                    pass
+
                 signal = self._decide_signal(candles)
                 if not signal:
                     await asyncio.sleep(cooldown_seconds)
