@@ -367,47 +367,53 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 5 FALHOU - Exception: {e}")
             json_responses["ml_engine_train"] = {"error": str(e)}
         
-        # Test D2: ML Engine prediction para frxEURUSD
-        log("\n🔍 TEST D2: ML ENGINE PREDICTION frxEURUSD")
-        log("   Objetivo: POST /api/ml/engine/predict {symbol:frxEURUSD, count:200}")
+        # Step 6: POST /api/ml/engine/predict
+        log("\n🔍 STEP 6: POST /api/ml/engine/predict")
+        log("   Objetivo: Fazer predição ML para R_10")
         
         ml_predict_payload = {
-            "symbol": "frxEURUSD",
+            "symbol": "R_10",
             "count": 200
         }
         
         try:
             log(f"   Payload: {json.dumps(ml_predict_payload, indent=2)}")
-            response = session.post(f"{api_url}/ml/engine/predict", json=ml_predict_payload, timeout=30)
+            response = session.post(f"{api_url}/ml/engine/predict", json=ml_predict_payload, timeout=60)
             log(f"   POST /api/ml/engine/predict: {response.status_code}")
             
             if response.status_code == 200:
                 predict_data = response.json()
+                json_responses["ml_engine_predict"] = predict_data
                 log(f"   Response: {json.dumps(predict_data, indent=2)}")
                 
                 prediction = predict_data.get('prediction', {})
                 direction = prediction.get('direction', '')
                 confidence = prediction.get('confidence', 0)
+                probability = prediction.get('probability', 0)
                 
                 log(f"   📊 ML Prediction Result:")
                 log(f"      Direction: {direction}")
                 log(f"      Confidence: {confidence}")
+                log(f"      Probability: {probability}")
                 
                 if direction and confidence is not None:
-                    test_results["ml_engine_predict_eurusd"] = True
-                    log("✅ ML Engine Prediction OK: Direction e confidence retornados")
+                    test_results["ml_engine_predict"] = True
+                    log("✅ Step 6 OK: Predição ML realizada com sucesso")
                 else:
-                    log(f"❌ ML Engine Prediction FALHOU: direction='{direction}', confidence={confidence}")
+                    log(f"❌ Step 6 FALHOU: direction='{direction}', confidence={confidence}")
             else:
                 log(f"❌ ML Engine Prediction FALHOU - HTTP {response.status_code}")
+                json_responses["ml_engine_predict"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
+                    json_responses["ml_engine_predict"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
-            log(f"❌ ML Engine Prediction FALHOU - Exception: {e}")
+            log(f"❌ Step 6 FALHOU - Exception: {e}")
+            json_responses["ml_engine_predict"] = {"error": str(e)}
         
         # Test E: StrategyRunner paper com ML gate
         log("\n🔍 TEST E: STRATEGYRUNNER PAPER COM ML GATE")
