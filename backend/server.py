@@ -1784,7 +1784,7 @@ class MLEngineStatus(BaseModel):
     lgb_available: bool
 
 class MLEnginePredictRequest(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     count: int = 100  # últimos N candles para predição
 
 class MLEngineDecisionRequest(BaseModel):
