@@ -14,40 +14,21 @@ from datetime import datetime
 
 async def test_ml_audit_baseline_r10():
     """
-    Test Phase 2/3 Forex Support as requested in Portuguese review:
+    Execute ML Audit Baseline for R_10 following scripts/ml_audit_plan.md
     
-    Objetivo: Validar suporte a Forex (frxEURUSD, frxUSDBRL), treino/predição ML Engine leve e StrategyRunner com gate ML (paper). 
-    Usar conta DEMO já configurada no backend. Não testar frontend agora (usuário testará manualmente).
-
-    Checklist de testes:
-    A) Saúde e símbolos
-    1) GET http://localhost:8001/api/deriv/status → deve retornar connected=true, authenticated=true e incluir 'frxEURUSD' e 'frxUSDBRL' em symbols.
-
-    B) contracts_for para Forex
-    2) GET /api/deriv/contracts_for/frxEURUSD?product_type=basic → 200 com contract_types contendo CALL/PUT
-    3) GET /api/deriv/contracts_for/frxUSDBRL?product_type=basic → 200 com contract_types contendo CALL/PUT
-
-    C) Ticks History (1m candles) para Forex
-    4) Validar que StrategyRunner._get_candles funciona para frxEURUSD com granularity=60 e count=200 (chamar via POST /api/strategy/start e rápido stop)
-       - POST /api/strategy/start body: {symbol:"frxEURUSD", granularity:60, candle_len:200, duration:5, duration_unit:"t", stake:1, mode:"paper"}
-       - Aguardar 3s e GET /api/strategy/status deve mostrar running=true e last_run_at não-nulo → então POST /api/strategy/stop
-
-    D) ML Engine leve com 3000 candles 1m para Forex
-    5) POST /api/ml/engine/train com body {symbol:"frxEURUSD", timeframe:"1m", count:3000, horizon:3, seq_len:32, epochs:2, batch_size:64, use_transformer:false}
-       - Esperado: 200 com success=true, model_key contendo frxEURUSD_1m_h3, features_count>=20, lgb_trained=true
-    6) POST /api/ml/engine/predict {symbol:"frxEURUSD", count:200} → 200 com prediction.direction e confidence
-
-    E) StrategyRunner paper com ML gate habilitado
-    7) POST /api/strategy/start com body {symbol:"frxEURUSD", granularity:60, candle_len:200, duration:5, duration_unit:"t", stake:1, mode:"paper", ml_gate:true, ml_prob_threshold:0.4}
-       - Aguardar ~8s, realizar 3 consultas GET /api/strategy/status espaçadas 3s; verificar running=true e last_reason eventualmente mostrando "Gate ML bloqueou" OU um trade realizado (daily_pnl alterado). Em seguida POST /api/strategy/stop.
-
-    F) Repetir rapidamente para frxUSDBRL apenas contratos_for e treino curto
-    8) GET /api/deriv/contracts_for/frxUSDBRL?product_type=basic (já em B)
-    9) POST /api/ml/engine/train {symbol:"frxUSDBRL", timeframe:"1m", count:3000, horizon:3, seq_len:32, epochs:2, batch_size:64, use_transformer:false}
-
-    Critérios de aprovação: Todos os endpoints respondem 200 conforme esperado; contratos_for retornam CALL/PUT; ML train/predict funcionam para ao menos frxEURUSD; StrategyRunner inicia e atualiza last_run_at; nenhum erro 5xx recorrente nos logs.
-
-    Importante: Não executar /api/deriv/buy diretamente nos testes. Apenas paper mode no StrategyRunner.
+    Steps to execute:
+    1) GET /api/deriv/status must be connected=true, authenticated=true
+    2) POST /api/strategy/start with JSON body: 
+       {"symbol":"R_10","granularity":300,"candle_len":200,"duration":5,"duration_unit":"t","stake":1,"ml_gate":true,"ml_prob_threshold":0.4,"mode":"paper"}
+    3) Wait 60-90s checking GET /api/strategy/status every 15s; capture win_rate, daily_pnl, last_reason
+    4) POST /api/strategy/stop and confirm running=false
+    5) POST /api/ml/engine/train with body: {"symbol":"R_10","timeframe":"5m","count":2500,"horizon":3,"seq_len":32,"use_transformer":false}
+       Save model_key from response
+    6) POST /api/ml/engine/predict with body: {"symbol":"R_10","count":200}
+    7) POST /api/strategy/river/backtest with body: {"symbol":"R_10","timeframe":"5m","lookback_candles":1500,"thresholds":[0.5,0.53,0.55,0.6,0.65,0.7]}
+       Collect win_rate, expected_value and suggested_threshold
+    
+    Do NOT execute /api/deriv/buy directly. Report all returned JSONs.
     """
     
     base_url = "https://finance-bot-4.preview.emergentagent.com"
