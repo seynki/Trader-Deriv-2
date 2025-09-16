@@ -14,7 +14,7 @@ import json
 import time
 from datetime import datetime
 
-BASE_URL = "https://deriv-r10-bot.preview.emergentagent.com"
+BASE_URL = "https://finance-bot-4.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def log(message):
