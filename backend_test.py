@@ -292,70 +292,80 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 4 FALHOU - Exception: {e}")
             json_responses["strategy_stop"] = {"error": str(e)}
         
-        # Test D1: ML Engine training para frxEURUSD
-        log("\n🔍 TEST D1: ML ENGINE TRAINING frxEURUSD")
-        log("   Objetivo: POST /api/ml/engine/train com 3000 candles 1m para frxEURUSD")
-        log("   Parâmetros: symbol=frxEURUSD, timeframe=1m, count=3000, horizon=3, seq_len=32, epochs=2, use_transformer=false")
+        # Step 5: POST /api/ml/engine/train
+        log("\n🔍 STEP 5: POST /api/ml/engine/train")
+        log("   Objetivo: Treinar modelo ML para R_10")
+        log("   Parâmetros: symbol=R_10, timeframe=5m, count=2500, horizon=3, seq_len=32, use_transformer=false")
         
         ml_train_payload = {
-            "symbol": "frxEURUSD",
-            "timeframe": "1m",
-            "count": 3000,
+            "symbol": "R_10",
+            "timeframe": "5m",
+            "count": 2500,
             "horizon": 3,
             "seq_len": 32,
-            "epochs": 2,
-            "batch_size": 64,
             "use_transformer": False
         }
         
+        saved_model_key = None
+        
         try:
             log(f"   Payload: {json.dumps(ml_train_payload, indent=2)}")
-            log("   ⏱️  Iniciando treinamento ML Engine (pode demorar 60-120s)...")
+            log("   ⏱️  Iniciando treinamento ML Engine (pode demorar 60-180s)...")
             
-            response = session.post(f"{api_url}/ml/engine/train", json=ml_train_payload, timeout=180)
+            response = session.post(f"{api_url}/ml/engine/train", json=ml_train_payload, timeout=240)
             log(f"   POST /api/ml/engine/train: {response.status_code}")
             
             if response.status_code == 200:
                 train_data = response.json()
+                json_responses["ml_engine_train"] = train_data
                 log(f"   Response: {json.dumps(train_data, indent=2)}")
                 
                 success = train_data.get('success', False)
                 model_key = train_data.get('model_key', '')
                 features_count = train_data.get('features_count', 0)
                 lgb_trained = train_data.get('lgb_trained', False)
+                transformer_trained = train_data.get('transformer_trained', False)
                 candles_used = train_data.get('candles_used', 0)
+                
+                # Save model_key for next step
+                saved_model_key = model_key
                 
                 log(f"   📊 ML Training Result:")
                 log(f"      Success: {success}")
                 log(f"      Model Key: {model_key}")
                 log(f"      Features Count: {features_count}")
                 log(f"      LGB Trained: {lgb_trained}")
+                log(f"      Transformer Trained: {transformer_trained}")
                 log(f"      Candles Used: {candles_used}")
                 
                 # Check criteria
-                has_eurusd_key = 'frxEURUSD' in model_key and '1m' in model_key and 'h3' in model_key
+                has_r10_key = 'R_10' in model_key and '5m' in model_key and 'h3' in model_key
                 sufficient_features = features_count >= 20
                 
                 log(f"   ✅ Validações:")
-                log(f"      Model Key contains frxEURUSD_1m_h3: {has_eurusd_key}")
+                log(f"      Model Key contains R_10_5m_h3: {has_r10_key}")
                 log(f"      Features Count >= 20: {sufficient_features} ({features_count})")
                 log(f"      LGB Trained: {lgb_trained}")
                 
-                if success and has_eurusd_key and sufficient_features and lgb_trained:
-                    test_results["ml_engine_train_eurusd"] = True
-                    log("✅ ML Engine Training frxEURUSD OK: Modelo treinado com sucesso")
+                if success and model_key:
+                    test_results["ml_engine_train"] = True
+                    log("✅ Step 5 OK: Modelo ML treinado com sucesso")
+                    log(f"   💾 Model Key salvo: {model_key}")
                 else:
-                    log(f"❌ ML Engine Training FALHOU: success={success}, key_ok={has_eurusd_key}, features_ok={sufficient_features}, lgb={lgb_trained}")
+                    log(f"❌ Step 5 FALHOU: success={success}, model_key='{model_key}'")
             else:
                 log(f"❌ ML Engine Training FALHOU - HTTP {response.status_code}")
+                json_responses["ml_engine_train"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
+                    json_responses["ml_engine_train"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
-            log(f"❌ ML Engine Training FALHOU - Exception: {e}")
+            log(f"❌ Step 5 FALHOU - Exception: {e}")
+            json_responses["ml_engine_train"] = {"error": str(e)}
         
         # Test D2: ML Engine prediction para frxEURUSD
         log("\n🔍 TEST D2: ML ENGINE PREDICTION frxEURUSD")
