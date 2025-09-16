@@ -158,49 +158,102 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 2 FALHOU - Exception: {e}")
             json_responses["strategy_start"] = {"error": str(e)}
         
-        # Test B2: contracts_for para frxUSDBRL
-        log("\n🔍 TEST B2: CONTRACTS_FOR frxUSDBRL")
-        log("   Objetivo: GET /api/deriv/contracts_for/frxUSDBRL?product_type=basic → CALL/PUT")
+        # Step 3: Monitor strategy for 60-90s checking every 15s
+        log("\n🔍 STEP 3: MONITORAMENTO DA ESTRATÉGIA (60-90s)")
+        log("   Objetivo: Consultar GET /api/strategy/status a cada 15s")
+        log("   Capturar: win_rate, daily_pnl, last_reason")
+        
+        monitoring_data = []
+        monitoring_duration = 75  # 75 seconds (between 60-90s)
+        check_interval = 15  # every 15 seconds
+        checks_count = monitoring_duration // check_interval
         
         try:
-            response = session.get(f"{api_url}/deriv/contracts_for/frxUSDBRL?product_type=basic", timeout=15)
-            log(f"   GET /api/deriv/contracts_for/frxUSDBRL: {response.status_code}")
+            log(f"   ⏱️  Iniciando monitoramento por {monitoring_duration}s ({checks_count} checks)")
             
-            if response.status_code == 200:
-                contracts_data = response.json()
-                log(f"   Response: {json.dumps(contracts_data, indent=2)}")
+            for check_num in range(checks_count):
+                log(f"   📊 Check {check_num + 1}/{checks_count} (t={check_num * check_interval}s)")
                 
-                symbol = contracts_data.get('symbol', '')
-                contract_types = contracts_data.get('contract_types', [])
-                product_type = contracts_data.get('product_type', '')
-                
-                log(f"   📊 Contracts for frxUSDBRL:")
-                log(f"      Symbol: {symbol}")
-                log(f"      Product Type: {product_type}")
-                log(f"      Contract Types: {contract_types}")
-                
-                # Check for CALL/PUT
-                has_call = 'CALL' in contract_types
-                has_put = 'PUT' in contract_types
-                
-                log(f"      CALL Available: {has_call}")
-                log(f"      PUT Available: {has_put}")
-                
-                if has_call and has_put:
-                    test_results["contracts_for_usdbrl"] = True
-                    log("✅ Contracts frxUSDBRL OK: CALL/PUT disponíveis")
-                else:
-                    log(f"❌ Contracts frxUSDBRL FALHOU: CALL={has_call}, PUT={has_put}")
-            else:
-                log(f"❌ Contracts frxUSDBRL FALHOU - HTTP {response.status_code}")
                 try:
-                    error_data = response.json()
-                    log(f"   Error: {error_data}")
-                except:
-                    log(f"   Error text: {response.text}")
+                    response = session.get(f"{api_url}/strategy/status", timeout=10)
+                    log(f"      GET /api/strategy/status: {response.status_code}")
                     
+                    if response.status_code == 200:
+                        status_data = response.json()
+                        
+                        running = status_data.get('running', False)
+                        win_rate = status_data.get('win_rate', 0)
+                        daily_pnl = status_data.get('daily_pnl', 0)
+                        last_reason = status_data.get('last_reason', '')
+                        last_run_at = status_data.get('last_run_at')
+                        wins = status_data.get('wins', 0)
+                        losses = status_data.get('losses', 0)
+                        total_trades = status_data.get('total_trades', 0)
+                        
+                        check_data = {
+                            "check_number": check_num + 1,
+                            "timestamp": int(time.time()),
+                            "running": running,
+                            "win_rate": win_rate,
+                            "daily_pnl": daily_pnl,
+                            "last_reason": last_reason,
+                            "last_run_at": last_run_at,
+                            "wins": wins,
+                            "losses": losses,
+                            "total_trades": total_trades
+                        }
+                        monitoring_data.append(check_data)
+                        
+                        log(f"      Running: {running}")
+                        log(f"      Win Rate: {win_rate}%")
+                        log(f"      Daily PnL: {daily_pnl}")
+                        log(f"      Last Reason: '{last_reason}'")
+                        log(f"      Total Trades: {total_trades} (W:{wins}, L:{losses})")
+                        log(f"      Last Run At: {last_run_at}")
+                        
+                    else:
+                        log(f"      ❌ Status check FALHOU - HTTP {response.status_code}")
+                        check_data = {
+                            "check_number": check_num + 1,
+                            "timestamp": int(time.time()),
+                            "error": f"HTTP {response.status_code}"
+                        }
+                        monitoring_data.append(check_data)
+                        
+                except Exception as e:
+                    log(f"      ❌ Status check FALHOU - Exception: {e}")
+                    check_data = {
+                        "check_number": check_num + 1,
+                        "timestamp": int(time.time()),
+                        "error": str(e)
+                    }
+                    monitoring_data.append(check_data)
+                
+                # Wait before next check (except for last check)
+                if check_num < checks_count - 1:
+                    log(f"      ⏱️  Aguardando {check_interval}s...")
+                    time.sleep(check_interval)
+            
+            json_responses["strategy_monitoring"] = monitoring_data
+            
+            # Analyze monitoring results
+            successful_checks = [d for d in monitoring_data if "error" not in d]
+            if len(successful_checks) >= 3:  # At least 3 successful checks
+                test_results["strategy_monitoring"] = True
+                log(f"✅ Step 3 OK: Monitoramento completado ({len(successful_checks)}/{checks_count} checks bem-sucedidos)")
+                
+                # Show summary of captured data
+                final_check = successful_checks[-1] if successful_checks else {}
+                log(f"   📈 Dados finais capturados:")
+                log(f"      Win Rate: {final_check.get('win_rate', 0)}%")
+                log(f"      Daily PnL: {final_check.get('daily_pnl', 0)}")
+                log(f"      Last Reason: '{final_check.get('last_reason', '')}'")
+            else:
+                log(f"❌ Step 3 FALHOU: Poucos checks bem-sucedidos ({len(successful_checks)}/{checks_count})")
+                
         except Exception as e:
-            log(f"❌ Contracts frxUSDBRL FALHOU - Exception: {e}")
+            log(f"❌ Step 3 FALHOU - Exception: {e}")
+            json_responses["strategy_monitoring"] = {"error": str(e)}
         
         # Test C: Ticks History validation via StrategyRunner
         log("\n🔍 TEST C: TICKS HISTORY VALIDATION (StrategyRunner._get_candles)")
