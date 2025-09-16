@@ -317,7 +317,7 @@ def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon:
     # standardize LGB features (improves some models)
     scaler = StandardScaler()
     X_lgb_s = scaler.fit_transform(X_lgb)
-    lgb_model = train_lgb(X_lgb_s, y, cfg)
+    lgb_model = train_lgb(X_lgb_s, y, cfg, top_k_features=20)
     # transformer
     transformer_model = None
     if use_transformer:
