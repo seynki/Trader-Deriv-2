@@ -341,10 +341,18 @@ def predict_from_models(candles: pd.DataFrame, tm: TrainedModels, cfg: MLConfig 
     # take last sample
     x_lgb = X_lgb_full[-1:]
     x_seq = X_seq_full[-1:]
-    # LGB
+    # LGB com seleção de features (se disponível)
     if tm.lgb_model is not None:
         x_lgb_s = tm.lgb_scaler.transform(x_lgb)
-        prob_lgb = tm.lgb_model.predict_proba(x_lgb_s)[:,1][0]
+        try:
+            sel_idx = getattr(tm.lgb_model, "selected_features_idx_", None)
+            if sel_idx is not None:
+                x_use = x_lgb_s[:, sel_idx]
+            else:
+                x_use = x_lgb_s
+        except Exception:
+            x_use = x_lgb_s
+        prob_lgb = tm.lgb_model.predict_proba(x_use)[:,1][0]
     else:
         prob_lgb = 0.5
     # transformer
