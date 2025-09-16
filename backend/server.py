@@ -1661,8 +1661,10 @@ async def river_backtest(request: RiverBacktestRequest):
                     max_drawdown=0.0
                 ))
         
-        # Encontrar melhor threshold baseado em expected value
-        best_result = max(results, key=lambda x: x.expected_value) if results else None
+        # Encontrar melhor threshold: expected value ajustado por drawdown (penalização)
+        def score(x: RiverPerformanceMetrics) -> float:
+            return float(x.expected_value) - 0.1 * float(x.max_drawdown)
+        best_result = max(results, key=lambda x: score(x)) if results else None
         
         return {
             "symbol": request.symbol,
