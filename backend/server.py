@@ -1788,7 +1788,7 @@ class MLEnginePredictRequest(BaseModel):
     count: int = 100  # últimos N candles para predição
 
 class MLEngineDecisionRequest(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     count: int = 100
     stake: float = 1.0
     duration: int = 5
