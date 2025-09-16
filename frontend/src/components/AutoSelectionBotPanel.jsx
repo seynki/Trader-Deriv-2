@@ -37,7 +37,7 @@ const AutoSelectionBotPanel = ({ backendUrl }) => {
   });
 
   const [config, setConfig] = useState({
-    symbols: ["R_100", "R_75", "R_50", "R_25", "R_10"],
+    symbols: ["R_10"],
     timeframes: [
       ["ticks", 1],
       ["ticks", 2],    // NOVO
