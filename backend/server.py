@@ -1438,7 +1438,7 @@ class RiverThresholdConfig(BaseModel):
     river_threshold: float = Field(ge=0.5, le=0.95, description="Threshold entre 0.5 e 0.95")
 
 class RiverBacktestRequest(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     timeframe: str = "1m"  # 1m, 3m, 5m, 15m
     lookback_candles: int = 1000
     thresholds: List[float] = Field(default=[0.5, 0.53, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8])
