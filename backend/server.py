@@ -1373,7 +1373,7 @@ async def river_predict(candle: RiverPredictCandle):
         raise HTTPException(status_code=400, detail=f"Erro na predição: {e}")
 
 class RiverDecideTradeRequest(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     duration: int = 5
     duration_unit: str = "t"
     stake: float = 1.0
