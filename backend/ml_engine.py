@@ -55,6 +55,7 @@ class MLConfig:
                 "learning_rate":0.05,
                 "num_leaves":31,
                 "n_estimators":200,
+                "class_weight":"balanced",
             }
         # ajusta device com segurança se torch existir
         try:
