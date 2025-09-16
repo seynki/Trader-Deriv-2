@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Testing - Phase 2/3 Forex Support Validation
-Tests Forex support (frxEURUSD, frxUSDBRL), ML Engine training/prediction, and StrategyRunner with ML gate
+Backend Testing - ML Audit Baseline R_10
+Executes ML audit plan following scripts/ml_audit_plan.md for R_10 symbol
 """
 
 import requests
