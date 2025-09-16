@@ -626,7 +626,7 @@ async def deriv_sell(req: SellRequest):
 # -------------------- Strategy Runner (Paper/Live) -----------------------
 
 class StrategyParams(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     granularity: int = 60
     candle_len: int = 200
     duration: int = 5
