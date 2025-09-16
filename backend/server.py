@@ -1763,7 +1763,7 @@ async def get_symbol_ticks(symbol: str, limit: int = 100):
 # =============================================
 
 class MLEngineTrainRequest(BaseModel):
-    symbol: str = "R_100"
+    symbol: str = "R_10"
     timeframe: str = "1m"  # 1m, 5m, 15m
     count: int = 2000
     horizon: int = 3
