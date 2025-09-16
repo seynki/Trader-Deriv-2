@@ -913,6 +913,22 @@ class StrategyRunner:
         last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
 
         trending = (last_adx is not None) and (last_adx >= self.params.adx_trend)
+
+        # Gate de regime ADX + threshold dinâmico
+        # ADX regimes:
+        # - ADX < 20: bloquear entradas
+        # - 20 ≤ ADX < 25: exigir prob >= 0.60
+        # - ADX ≥ 25: exigir prob >= 0.55
+        if last_adx is None:
+            return None
+        if last_adx < 20:
+            return None
+        required_prob = 0.6 if last_adx < 25 else 0.55
+        # Ajustar confiança do River conforme direção
+        if river_signal == "RISE" and river_confidence < required_prob:
+            return None
+        if river_signal == "FALL" and river_confidence < required_prob:
+            return None
         
         # === PASSO 3: CONFIRMAR COM INDICADORES TÉCNICOS ===
         indicators_confirm = False
