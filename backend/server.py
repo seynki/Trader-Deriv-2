@@ -1530,8 +1530,8 @@ async def update_river_config(config: RiverThresholdConfig):
         "message": f"River threshold alterado de {old_threshold:.3f} para {config.river_threshold:.3f}"
     }
 
-@api_router.post("/strategy/river/backtest")
-async def river_backtest(request: RiverBacktestRequest):
+@api_router.post("/strategy/river/backtest_run")
+async def river_backtest_run(request: RiverBacktestRequest):
     """
     Backtesting rápido para diferentes river_thresholds
     Simula como diferentes thresholds afetariam a performance
