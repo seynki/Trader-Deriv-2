@@ -1175,6 +1175,16 @@ class StrategyRunner:
                 else:
                     pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
                 self.daily_pnl += pnl
+                # Cooldown adaptativo por sequência de perdas
+                if pnl <= 0:
+                    consec_losses += 1
+                else:
+                    consec_losses = 0
+                if consec_losses >= 3:
+                    # aumentar cooldown e aplicar pausa
+                    block_until_iter = max(block_until_iter, self.params.adx_block_candles)
+                    consec_losses = 0
+                    self.last_reason = "Cooldown adaptativo após 3 perdas"
                 # Atualiza estatísticas globais (paper ou live)
                 try:
                     _global_stats.add_pnl(pnl)
