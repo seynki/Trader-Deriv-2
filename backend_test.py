@@ -104,49 +104,59 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 1 FALHOU - Exception: {e}")
             json_responses["deriv_status"] = {"error": str(e)}
         
-        # Test B1: contracts_for para frxEURUSD
-        log("\n🔍 TEST B1: CONTRACTS_FOR frxEURUSD")
-        log("   Objetivo: GET /api/deriv/contracts_for/frxEURUSD?product_type=basic → CALL/PUT")
+        # Step 2: POST /api/strategy/start
+        log("\n🔍 STEP 2: POST /api/strategy/start")
+        log("   Objetivo: Iniciar estratégia R_10 com ML gate habilitado")
+        
+        strategy_payload = {
+            "symbol": "R_10",
+            "granularity": 300,  # 5 minutes
+            "candle_len": 200,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1,
+            "ml_gate": True,
+            "ml_prob_threshold": 0.4,
+            "mode": "paper"
+        }
         
         try:
-            response = session.get(f"{api_url}/deriv/contracts_for/frxEURUSD?product_type=basic", timeout=15)
-            log(f"   GET /api/deriv/contracts_for/frxEURUSD: {response.status_code}")
+            log(f"   Payload: {json.dumps(strategy_payload, indent=2)}")
+            response = session.post(f"{api_url}/strategy/start", json=strategy_payload, timeout=20)
+            log(f"   POST /api/strategy/start: {response.status_code}")
             
             if response.status_code == 200:
-                contracts_data = response.json()
-                log(f"   Response: {json.dumps(contracts_data, indent=2)}")
+                start_data = response.json()
+                json_responses["strategy_start"] = start_data
+                log(f"   Response: {json.dumps(start_data, indent=2)}")
                 
-                symbol = contracts_data.get('symbol', '')
-                contract_types = contracts_data.get('contract_types', [])
-                product_type = contracts_data.get('product_type', '')
+                running = start_data.get('running', False)
+                mode = start_data.get('mode', '')
+                symbol = start_data.get('symbol', '')
                 
-                log(f"   📊 Contracts for frxEURUSD:")
+                log(f"   📊 Strategy Start:")
+                log(f"      Running: {running}")
+                log(f"      Mode: {mode}")
                 log(f"      Symbol: {symbol}")
-                log(f"      Product Type: {product_type}")
-                log(f"      Contract Types: {contract_types}")
                 
-                # Check for CALL/PUT
-                has_call = 'CALL' in contract_types
-                has_put = 'PUT' in contract_types
-                
-                log(f"      CALL Available: {has_call}")
-                log(f"      PUT Available: {has_put}")
-                
-                if has_call and has_put:
-                    test_results["contracts_for_eurusd"] = True
-                    log("✅ Contracts frxEURUSD OK: CALL/PUT disponíveis")
+                if running and symbol == "R_10" and mode == "paper":
+                    test_results["strategy_start"] = True
+                    log("✅ Step 2 OK: Estratégia R_10 iniciada com ML gate")
                 else:
-                    log(f"❌ Contracts frxEURUSD FALHOU: CALL={has_call}, PUT={has_put}")
+                    log(f"❌ Step 2 FALHOU: running={running}, symbol={symbol}, mode={mode}")
             else:
-                log(f"❌ Contracts frxEURUSD FALHOU - HTTP {response.status_code}")
+                log(f"❌ Strategy start FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_start"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
+                    json_responses["strategy_start"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
-            log(f"❌ Contracts frxEURUSD FALHOU - Exception: {e}")
+            log(f"❌ Step 2 FALHOU - Exception: {e}")
+            json_responses["strategy_start"] = {"error": str(e)}
         
         # Test B2: contracts_for para frxUSDBRL
         log("\n🔍 TEST B2: CONTRACTS_FOR frxUSDBRL")
