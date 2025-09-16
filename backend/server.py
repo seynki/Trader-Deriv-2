@@ -1675,8 +1675,8 @@ async def river_backtest(request: RiverBacktestRequest):
             "current_threshold": _strategy.params.river_threshold,
             "recommendation": {
                 "suggested_threshold": best_result.threshold if best_result else 0.53,
-                "expected_improvement": f"+{((best_result.win_rate - 0.41) * 100):.1f}%" if best_result and best_result.win_rate > 0.41 else "N/A",
-                "rationale": f"Threshold {best_result.threshold:.2f} mostrou win rate de {best_result.win_rate:.1%} com {best_result.total_trades} trades" if best_result else "Dados insuficientes"
+                "score": score(best_result) if best_result else 0.0,
+                "rationale": f"Threshold {best_result.threshold:.2f} EV={best_result.expected_value:.3f}, MDD={best_result.max_drawdown:.3f}, trades={best_result.total_trades}" if best_result else "Dados insuficientes"
             }
         }
         
