@@ -1089,6 +1089,8 @@ class StrategyRunner:
         self.daily_pnl = 0.0
         self.in_position = False
         cooldown_seconds = 5
+        consec_losses = 0
+        block_until_iter = 0
         logger.info(f"Strategy loop started: {self.params}")
         while self.running:
             try:
