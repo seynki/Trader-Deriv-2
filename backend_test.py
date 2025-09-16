@@ -415,89 +415,76 @@ async def test_ml_audit_baseline_r10():
             log(f"❌ Step 6 FALHOU - Exception: {e}")
             json_responses["ml_engine_predict"] = {"error": str(e)}
         
-        # Test E: StrategyRunner paper com ML gate
-        log("\n🔍 TEST E: STRATEGYRUNNER PAPER COM ML GATE")
-        log("   Objetivo: StrategyRunner com ml_gate=true, ml_prob_threshold=0.4")
-        log("   Método: start → aguardar 8s → 3 consultas status (3s intervalo) → verificar last_reason → stop")
+        # Step 7: POST /api/strategy/river/backtest
+        log("\n🔍 STEP 7: POST /api/strategy/river/backtest")
+        log("   Objetivo: Executar backtest River com múltiplos thresholds")
+        log("   Capturar: win_rate, expected_value, suggested_threshold")
         
-        strategy_ml_payload = {
-            "symbol": "frxEURUSD",
-            "granularity": 60,
-            "candle_len": 200,
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1,
-            "mode": "paper",
-            "ml_gate": True,
-            "ml_prob_threshold": 0.4
+        river_backtest_payload = {
+            "symbol": "R_10",
+            "timeframe": "5m",
+            "lookback_candles": 1500,
+            "thresholds": [0.5, 0.53, 0.55, 0.6, 0.65, 0.7]
         }
         
         try:
-            log(f"   Payload: {json.dumps(strategy_ml_payload, indent=2)}")
-            response = session.post(f"{api_url}/strategy/start", json=strategy_ml_payload, timeout=20)
-            log(f"   POST /api/strategy/start: {response.status_code}")
+            log(f"   Payload: {json.dumps(river_backtest_payload, indent=2)}")
+            log("   ⏱️  Iniciando River backtest (pode demorar 30-60s)...")
+            
+            response = session.post(f"{api_url}/strategy/river/backtest", json=river_backtest_payload, timeout=120)
+            log(f"   POST /api/strategy/river/backtest: {response.status_code}")
             
             if response.status_code == 200:
-                start_data = response.json()
-                log(f"   Start Response: {json.dumps(start_data, indent=2)}")
+                backtest_data = response.json()
+                json_responses["river_backtest"] = backtest_data
+                log(f"   Response: {json.dumps(backtest_data, indent=2)}")
                 
-                # Wait ~8s as requested
-                log("   ⏱️  Aguardando ~8s para ML gate processar...")
-                time.sleep(8)
+                results = backtest_data.get('results', [])
+                best_threshold = backtest_data.get('best_threshold')
+                suggested_threshold = backtest_data.get('suggested_threshold')
                 
-                # Perform 3 status checks with 3s intervals
-                ml_gate_evidence = []
-                daily_pnl_changes = []
+                log(f"   📊 River Backtest Results:")
+                log(f"      Total Results: {len(results)}")
+                log(f"      Best Threshold: {best_threshold}")
+                log(f"      Suggested Threshold: {suggested_threshold}")
                 
-                for i in range(3):
-                    log(f"   📊 Status Check {i+1}/3:")
-                    response = session.get(f"{api_url}/strategy/status", timeout=10)
-                    log(f"      GET /api/strategy/status: {response.status_code}")
+                # Show detailed results for each threshold
+                for result in results:
+                    threshold = result.get('threshold', 0)
+                    win_rate = result.get('win_rate', 0)
+                    expected_value = result.get('expected_value', 0)
+                    total_trades = result.get('total_trades', 0)
                     
-                    if response.status_code == 200:
-                        status_data = response.json()
-                        
-                        running = status_data.get('running', False)
-                        last_reason = status_data.get('last_reason', '')
-                        daily_pnl = status_data.get('daily_pnl', 0)
-                        last_run_at = status_data.get('last_run_at')
-                        
-                        log(f"      Running: {running}")
-                        log(f"      Last Reason: '{last_reason}'")
-                        log(f"      Daily PnL: {daily_pnl}")
-                        log(f"      Last Run At: {last_run_at}")
-                        
-                        # Check for ML gate evidence
-                        if 'Gate ML' in last_reason or 'ML bloqueou' in last_reason:
-                            ml_gate_evidence.append(f"Check {i+1}: ML Gate blocked")
-                        elif daily_pnl != 0:
-                            ml_gate_evidence.append(f"Check {i+1}: Trade executed (PnL={daily_pnl})")
-                        
-                        daily_pnl_changes.append(daily_pnl)
+                    log(f"      Threshold {threshold}: WR={win_rate:.1f}%, EV={expected_value:.3f}, Trades={total_trades}")
+                
+                if len(results) > 0:
+                    test_results["river_backtest"] = True
+                    log("✅ Step 7 OK: River backtest executado com sucesso")
                     
-                    if i < 2:  # Don't wait after last check
-                        time.sleep(3)
-                
-                log(f"   📈 ML Gate Evidence: {ml_gate_evidence}")
-                log(f"   💰 Daily PnL Changes: {daily_pnl_changes}")
-                
-                # Strategy is working if it's running and shows ML gate activity OR trade execution
-                if len(ml_gate_evidence) > 0:
-                    test_results["strategy_runner_ml_gate"] = True
-                    log("✅ StrategyRunner ML Gate OK: Evidência de ML gate funcionando")
+                    # Highlight best result
+                    if best_threshold is not None:
+                        best_result = next((r for r in results if r.get('threshold') == best_threshold), None)
+                        if best_result:
+                            log(f"   🏆 Melhor resultado:")
+                            log(f"      Threshold: {best_result.get('threshold')}")
+                            log(f"      Win Rate: {best_result.get('win_rate', 0):.1f}%")
+                            log(f"      Expected Value: {best_result.get('expected_value', 0):.3f}")
+                            log(f"      Total Trades: {best_result.get('total_trades', 0)}")
                 else:
-                    log("❌ StrategyRunner ML Gate FALHOU: Sem evidência de ML gate ou trades")
-                
-                # Stop strategy
-                log("   🛑 Parando strategy...")
-                response = session.post(f"{api_url}/strategy/stop", json={}, timeout=10)
-                log(f"   POST /api/strategy/stop: {response.status_code}")
-                
+                    log(f"❌ Step 7 FALHOU: Nenhum resultado de backtest retornado")
             else:
-                log(f"❌ StrategyRunner ML Gate start FALHOU - HTTP {response.status_code}")
+                log(f"❌ River Backtest FALHOU - HTTP {response.status_code}")
+                json_responses["river_backtest"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["river_backtest"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
                     
         except Exception as e:
-            log(f"❌ StrategyRunner ML Gate FALHOU - Exception: {e}")
+            log(f"❌ Step 7 FALHOU - Exception: {e}")
+            json_responses["river_backtest"] = {"error": str(e)}
         
         # Test F: ML Engine training para frxUSDBRL (teste rápido)
         log("\n🔍 TEST F: ML ENGINE TRAINING frxUSDBRL (TESTE RÁPIDO)")
