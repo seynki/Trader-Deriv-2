@@ -26,7 +26,7 @@ const RiverThresholdPanel = () => {
   
   // Configurações de backtesting
   const [backtestConfig, setBacktestConfig] = useState({
-    symbol: 'R_100',
+    symbol: 'R_10',
     timeframe: '1m',
     lookback_candles: 1000,
     custom_thresholds: '0.50,0.53,0.55,0.60,0.65,0.70,0.75,0.80'
