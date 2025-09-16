@@ -1684,6 +1684,11 @@ async def river_backtest_run(request: RiverBacktestRequest):
         logger.error(f"Erro no backtesting River: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no backtesting: {str(e)}")
 
+@api_router.post("/strategy/river/backtest")
+async def river_backtest(request: RiverBacktestRequest):
+    # alias para compatibilidade com clientes antigos
+    return await river_backtest_run(request)
+
 @api_router.get("/strategy/river/performance")
 async def get_river_performance():
     """Obter métricas de performance atuais do River"""
