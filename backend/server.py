@@ -1707,6 +1707,23 @@ async def river_backtest_run(request: RiverBacktestRequest):
                     drawdown = peak - cumulative_pnl
                     if drawdown > max_dd:
                         max_dd = drawdown
+
+                # Sharpe e Sortino simples por trade
+                pnls = [t["pnl"] for t in trades]
+                sharpe = None
+                sortino = None
+                try:
+                    import math
+                    m = sum(pnls) / len(pnls)
+                    sd = (sum((x - m)**2 for x in pnls) / max(len(pnls)-1,1)) ** 0.5
+                    if sd > 0:
+                        sharpe = m / sd
+                    downside = [min(0.0, x - m) for x in pnls]
+                    dd = (sum(d**2 for d in downside) / max(len(pnls)-1,1)) ** 0.5
+                    if dd > 0:
+                        sortino = m / dd
+                except Exception:
+                    pass
                 
                 # Estimar trades por dia (assume 1 minuto candles)
                 time_span_hours = (len(candles_data) * (60 if request.timeframe == "1m" else 180)) / 3600
@@ -1718,7 +1735,8 @@ async def river_backtest_run(request: RiverBacktestRequest):
                     total_trades=len(trades),
                     avg_trades_per_day=trades_per_day,
                     expected_value=expected_value,
-                    max_drawdown=max_dd
+                    max_drawdown=max_dd,
+                    sharpe_ratio=sharpe
                 ))
             else:
                 results.append(RiverPerformanceMetrics(
