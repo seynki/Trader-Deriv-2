@@ -39,28 +39,31 @@ async def test_ml_audit_baseline_r10():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "🌍" + "="*68)
-    log("TESTE PHASE 2/3 - SUPORTE FOREX (frxEURUSD, frxUSDBRL)")
-    log("🌍" + "="*68)
-    log("📋 Conforme solicitado na review request:")
-    log("   A) Saúde e símbolos: GET /api/deriv/status deve incluir frxEURUSD e frxUSDBRL")
-    log("   B) contracts_for para Forex: CALL/PUT disponíveis")
-    log("   C) Ticks History: StrategyRunner._get_candles funciona para Forex")
-    log("   D) ML Engine: treino com 3000 candles 1m para Forex")
-    log("   E) StrategyRunner paper com ML gate habilitado")
-    log("   F) Teste rápido frxUSDBRL")
-    log("   🎯 CRITÉRIO: Todos endpoints 200, CALL/PUT disponíveis, ML funciona, StrategyRunner atualiza")
+    log("\n" + "🤖" + "="*68)
+    log("BASELINE DE AUDITORIA ML (R_10) - scripts/ml_audit_plan.md")
+    log("🤖" + "="*68)
+    log("📋 Passos conforme solicitado:")
+    log("   1) GET /api/deriv/status → connected=true, authenticated=true")
+    log("   2) POST /api/strategy/start com R_10, granularity=300, ml_gate=true")
+    log("   3) Aguardar 60-90s consultando status a cada 15s")
+    log("   4) POST /api/strategy/stop → running=false")
+    log("   5) POST /api/ml/engine/train R_10, timeframe=5m, count=2500")
+    log("   6) POST /api/ml/engine/predict R_10, count=200")
+    log("   7) POST /api/strategy/river/backtest com thresholds múltiplos")
+    log("   🎯 OBJETIVO: Reportar todos JSONs retornados")
     
     test_results = {
-        "health_and_symbols": False,
-        "contracts_for_eurusd": False,
-        "contracts_for_usdbrl": False,
-        "ticks_history_validation": False,
-        "ml_engine_train_eurusd": False,
-        "ml_engine_predict_eurusd": False,
-        "strategy_runner_ml_gate": False,
-        "ml_engine_train_usdbrl": False
+        "deriv_status": False,
+        "strategy_start": False,
+        "strategy_monitoring": False,
+        "strategy_stop": False,
+        "ml_engine_train": False,
+        "ml_engine_predict": False,
+        "river_backtest": False
     }
+    
+    # Store all JSON responses for reporting
+    json_responses = {}
     
     try:
         # Test A: Saúde e símbolos
