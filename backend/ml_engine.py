@@ -180,14 +180,31 @@ def build_supervised_dataset(candles: pd.DataFrame, seq_len: int, horizon: int =
 # ------------------------
 # LightGBM trainer
 # ------------------------
-def train_lgb(X: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG) -> lgb.LGBMClassifier:
+def train_lgb(X: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, top_k_features: int = 20) -> lgb.LGBMClassifier:
     # simple time-series split
     tscv = TimeSeriesSplit(n_splits=3)
-    models = []
     best_model = None
     best_score = -np.inf
-    for train_idx, val_idx in tscv.split(X):
-        X_train, X_val = X[train_idx], X[val_idx]
+    best_features_idx = None
+
+    # Primeiro treino completo para obter importâncias
+    clf0 = lgb.LGBMClassifier(**cfg.lgb_params)
+    clf0.fit(X, y, callbacks=[lgb.log_evaluation(0)])
+    try:
+        importances = clf0.booster_.feature_importance(importance_type="gain")
+    except Exception:
+        importances = getattr(clf0, "feature_importances_", None)
+    if importances is not None and len(importances) == X.shape[1]:
+        idx_sorted = np.argsort(importances)[::-1]
+        top_idx = idx_sorted[:min(top_k_features, X.shape[1])]
+        X_use = X[:, top_idx]
+    else:
+        top_idx = None
+        X_use = X
+
+    # CV com features selecionadas
+    for train_idx, val_idx in tscv.split(X_use):
+        X_train, X_val = X_use[train_idx], X_use[val_idx]
         y_train, y_val = y[train_idx], y[val_idx]
         clf = lgb.LGBMClassifier(**cfg.lgb_params)
         clf.fit(X_train, y_train,
@@ -196,11 +213,13 @@ def train_lgb(X: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG) -> lgb.LGBMClas
         preds = clf.predict_proba(X_val)[:,1]
         auc = roc_auc_score(y_val, preds)
         logging.info(f"LGB fold AUC: {auc:.4f}")
-        models.append(clf)
         if auc > best_score:
             best_score = auc
             best_model = clf
+            best_features_idx = top_idx
     logging.info(f"LGB best AUC (cv): {best_score:.4f}")
+    # anexar índice de features selecionadas ao modelo para uso posterior
+    best_model.selected_features_idx_ = best_features_idx
     return best_model
 
 # ------------------------
