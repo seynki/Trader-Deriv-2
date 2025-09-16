@@ -283,7 +283,7 @@ function StrategyPanel({ onMlActiveChange }) {
             <span className={`inline-flex h-2 w-2 rounded-full ${status?.running ? "bg-emerald-500" : "bg-slate-500"}`} />
             <span>{status?.running ? "Rodando" : "Parada"}</span>
             <span>• Modo: {status?.mode || "paper"}</span>
-            <span>• Símbolo: {status?.symbol || "R_100"}</span>
+            <span>• Símbolo: {status?.symbol || "R_10"}</span>
             {riverStatus && (
               <span>• River upd: {String(riverStatus?.samples ?? 0)} acc: {riverStatus?.acc != null ? Number(riverStatus.acc).toFixed(2) : "–"} logloss: {riverStatus?.logloss != null ? Number(riverStatus.logloss).toFixed(3) : "–"}</span>
             )}
