@@ -658,6 +658,31 @@
 ##       -comment: "WEBSOCKET INSTABILITY CONFIRMED (2025-01-28): ❌ CRITICAL WEBSOCKET ISSUE DETECTED - Executado teste de conectividade conforme review request: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO 2) GET /api/strategy/status ✅ running=false, total_trades=0, sistema operacional 3) WebSocket /api/ws/ticks ❌ INSTABILIDADE CONFIRMADA: conectou com sucesso mas apresentou 5 timeouts consecutivos em 21s, recebeu 21 mensagens (1.0 msg/s), símbolos R_100 e R_10 detectados, mas teste terminou prematuramente devido à instabilidade. LOGS DO BACKEND: Detectados múltiplos erros 'Error sending tick message: received 1000 (OK); then sent 1000 (OK)' e 'WebSocket message processing error: received 1000 (OK)' confirmando que WebSocket está fechando constantemente como reportado pelo usuário. DIAGNÓSTICO FINAL: O problema reportado pelo usuário de 'WebSocket fechando constantemente' e 'sistema para de detectar sinais' está confirmado. WebSocket conecta mas não mantém estabilidade, causando perda de coordenadas dos ticks."
 ##       -working: false
 ##       -agent: "testing"
+
+## backend:
+##   - task: "ML Audit Baseline V10 (3t/5m)"
+##     implemented: false
+##     working: "NA"
+##     file: "/app/scripts/ml_audit_plan.md"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Plano de auditoria ML criado. Próximo passo: rodar baseline automatizado para R_10 nos timeframes 3 ticks (paper) e 5m (ML Engine/backtest)."
+##
+## test_plan:
+##   current_focus:
+##     - "ML Audit Baseline V10 (3t/5m)"
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+##
+## agent_communication:
+##   -agent: "main"
+##   -message: "Por favor, testar endpoints do baseline conforme scripts/ml_audit_plan.md: 1) GET /api/deriv/status 2) POST /api/strategy/start (paper, R_10, granularity=300, duration=5t) e monitor por 60–90s 3) POST /api/strategy/stop 4) POST /api/ml/engine/train (R_10, timeframe=5m, count=2000–4000, transformer desativado) 5) POST /api/ml/engine/predict (R_10, count=200) 6) POST /api/strategy/river/backtest (R_10, timeframe=1m e 5m, lookback=1500). Registrar win_rate, EV por trade e recomendação de threshold."
+
 ##       -comment: "WEBSOCKET STABILITY TESTING APÓS CORREÇÕES (2025-01-28): ❌ CORREÇÕES AINDA NÃO RESOLVERAM PROBLEMAS - Executado teste completo de 60s conforme review request português: 1) GET /api/deriv/status ✅ connected=true, authenticated=false, environment=DEMO 2) GET /api/strategy/status ✅ running=false, sistema operacional 3) WebSocket /api/ws/ticks ❌ AINDA INSTÁVEL: conectou mas apresentou 10 timeouts consecutivos em 30s, recebeu apenas 1 mensagem (0.03 msg/s), 0 ticks recebidos, teste terminou prematuramente 4) LOGS DO BACKEND ❌ ERROS 'received 1000 (OK)' AINDA APARECEM: 11 ocorrências detectadas nos logs recentes incluindo 'Error sending tick message: received 1000 (OK); then sent 1000 (OK)' e 'WebSocket message processing error'. DIAGNÓSTICO FINAL: As correções implementadas (melhor tratamento de desconexões, reconnect agressivo, tratamento de WebSocketDisconnect/ConnectionClosed) NÃO resolveram o problema fundamental. WebSocket ainda fecha constantemente e não mantém conexão estável por 60s. Taxa de mensagens não melhorou (0.03 msg/s vs esperado >0.5 msg/s). RECOMENDAÇÃO: Investigar causa raiz dos erros 'received 1000 (OK)' e implementar correções mais profundas no sistema de WebSocket."
 ##       -working: true
 ##       -agent: "testing"
