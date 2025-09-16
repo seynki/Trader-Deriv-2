@@ -2178,32 +2178,34 @@ async def comparative_analysis():
 
 async def main():
     """
-    Main test execution function for Phase 2/3 Forex Support validation
+    Main test execution function for ML Audit Baseline R_10
     """
-    print("🚀 INICIANDO TESTES BACKEND - PHASE 2/3 FOREX SUPPORT")
+    print("🚀 INICIANDO BASELINE DE AUDITORIA ML (R_10)")
     print("=" * 80)
     
     try:
-        # Run Phase 2/3 Forex Support tests
-        success, results = await test_phase2_forex_support()
+        # Run ML Audit Baseline tests
+        success, results, json_responses = await test_ml_audit_baseline_r10()
         
         print("\n" + "=" * 80)
-        print("📊 RESUMO FINAL DOS TESTES")
+        print("📊 RESUMO FINAL DA AUDITORIA")
         print("=" * 80)
         
         if success:
-            print("🎉 SUCESSO: Phase 2/3 Forex Support validado com sucesso!")
-            print("✅ Sistema pronto para operações Forex com ML Engine")
+            print("🎉 SUCESSO: Baseline de Auditoria ML (R_10) executada com sucesso!")
+            print("✅ Todos os passos do scripts/ml_audit_plan.md completados")
+            print("📄 Todos os JSONs foram reportados conforme solicitado")
         else:
-            print("❌ FALHA: Problemas detectados no suporte Forex")
+            print("❌ FALHA: Problemas detectados na auditoria ML")
             print("🔧 Verificar logs acima para detalhes dos problemas")
         
-        print(f"\nResultados detalhados: {results}")
+        print(f"\nResultados por passo: {results}")
+        print(f"\nTotal de JSONs capturados: {len(json_responses)}")
         
         return success
         
     except Exception as e:
-        print(f"❌ ERRO CRÍTICO NA EXECUÇÃO DOS TESTES: {e}")
+        print(f"❌ ERRO CRÍTICO NA EXECUÇÃO DA AUDITORIA: {e}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return False
