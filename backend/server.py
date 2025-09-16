@@ -1153,8 +1153,24 @@ class StrategyRunner:
                             direction = str(pred.get('direction'))
                             # Gate: direção do ensemble deve concordar e confiança mínima deve ser atendida
                             agree = ((direction == 'CALL' and signal.get('side') == 'RISE') or (direction == 'PUT' and signal.get('side') == 'FALL'))
-                            if (not agree) or (conf < self.params.ml_prob_threshold):
-                                self.last_reason = f"Gate ML bloqueou: agree={agree} conf={conf:.3f} < thr {self.params.ml_prob_threshold:.2f}"
+                            # Threshold dinâmico por regime ADX (mesma lógica do filtro River):
+                            # ADX < 20 já bloqueado anteriormente; 20-25 => 0.60, >=25 => 0.55
+                            try:
+                                closes_g = [float(c.get('close')) for c in candles]
+                                highs_g = [float(c.get('high')) for c in candles]
+                                lows_g = [float(c.get('low')) for c in candles]
+                                adx_vals_g = _adx(highs_g, lows_g, closes_g)
+                                last_adx_g = next((x for x in reversed(adx_vals_g) if x is not None), None)
+                            except Exception:
+                                last_adx_g = None
+                            dyn_thr = self.params.ml_prob_threshold
+                            if last_adx_g is not None:
+                                if last_adx_g >= 25:
+                                    dyn_thr = 0.55
+                                elif last_adx_g >= 20:
+                                    dyn_thr = max(dyn_thr, 0.60)
+                            if (not agree) or (conf < dyn_thr):
+                                self.last_reason = f"Gate ML bloqueou: agree={agree} conf={conf:.3f} < thr {dyn_thr:.2f} (ADX={last_adx_g:.1f} if not None)"
                                 await asyncio.sleep(cooldown_seconds)
                                 continue
                         else:
