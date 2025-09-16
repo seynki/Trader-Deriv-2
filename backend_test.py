@@ -66,9 +66,9 @@ async def test_ml_audit_baseline_r10():
     json_responses = {}
     
     try:
-        # Test A: Saúde e símbolos
-        log("\n🔍 TEST A: SAÚDE E SÍMBOLOS")
-        log("   Objetivo: GET /api/deriv/status deve incluir 'frxEURUSD' e 'frxUSDBRL' em symbols")
+        # Step 1: GET /api/deriv/status
+        log("\n🔍 STEP 1: GET /api/deriv/status")
+        log("   Objetivo: connected=true, authenticated=true")
         
         try:
             response = session.get(f"{api_url}/deriv/status", timeout=15)
@@ -76,6 +76,7 @@ async def test_ml_audit_baseline_r10():
             
             if response.status_code == 200:
                 deriv_data = response.json()
+                json_responses["deriv_status"] = deriv_data
                 log(f"   Response: {json.dumps(deriv_data, indent=2)}")
                 
                 connected = deriv_data.get('connected', False)
@@ -88,29 +89,20 @@ async def test_ml_audit_baseline_r10():
                 log(f"      Authenticated: {authenticated}")
                 log(f"      Environment: {environment}")
                 log(f"      Total Symbols: {len(symbols)}")
+                log(f"      R_10 Available: {'R_10' in symbols}")
                 
-                # Check for Forex symbols
-                forex_symbols = ['frxEURUSD', 'frxUSDBRL']
-                found_forex = []
-                for forex_sym in forex_symbols:
-                    if forex_sym in symbols:
-                        found_forex.append(forex_sym)
-                        log(f"      ✅ {forex_sym}: ENCONTRADO")
-                    else:
-                        log(f"      ❌ {forex_sym}: NÃO ENCONTRADO")
-                
-                log(f"   📈 Forex Symbols Found: {found_forex}")
-                
-                if connected and authenticated and environment == "DEMO" and len(found_forex) >= 2:
-                    test_results["health_and_symbols"] = True
-                    log("✅ Saúde e símbolos OK: Deriv conectado e símbolos Forex disponíveis")
+                if connected and authenticated:
+                    test_results["deriv_status"] = True
+                    log("✅ Step 1 OK: Deriv connected=true, authenticated=true")
                 else:
-                    log(f"❌ Saúde FALHOU: connected={connected}, auth={authenticated}, env={environment}, forex_found={len(found_forex)}")
+                    log(f"❌ Step 1 FALHOU: connected={connected}, authenticated={authenticated}")
             else:
                 log(f"❌ Deriv status FALHOU - HTTP {response.status_code}")
+                json_responses["deriv_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                     
         except Exception as e:
-            log(f"❌ Saúde e símbolos FALHOU - Exception: {e}")
+            log(f"❌ Step 1 FALHOU - Exception: {e}")
+            json_responses["deriv_status"] = {"error": str(e)}
         
         # Test B1: contracts_for para frxEURUSD
         log("\n🔍 TEST B1: CONTRACTS_FOR frxEURUSD")
