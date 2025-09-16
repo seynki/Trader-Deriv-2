@@ -292,9 +292,10 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "R_10 Paper Mode Sequence: ML Engine + River + Strategy Testing"
+##     - "River Auto-Tuning + Regime Gating + Risk Rules"
+##     - "Backtest alias + Apply best threshold"
 ##   stuck_tasks:
-##     - "Strategy start/stop endpoints: technical issues with HTTP 500 errors and 'Strategy already running' conflicts"
+##     - "None"
 ##   test_all: false
 ##   test_priority: "high_first"
 ## agent_communication:
