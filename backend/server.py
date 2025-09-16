@@ -12,6 +12,7 @@ from datetime import datetime, date
 import asyncio
 import json
 import time
+import numpy as np
 
 # 3rd party realtime
 import websockets
