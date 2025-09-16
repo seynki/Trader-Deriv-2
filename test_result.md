@@ -658,6 +658,24 @@
 ##   - task: "Deriv connectivity and WebSocket stability testing"
 ##     implemented: true
 ##     working: true
+
+## backend:
+##   - task: "ML Audit Execute & Tuning (R_10 3t + 5m)"
+##     implemented: false
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Rodar sequência: treinar ML Engine (R_10 5m), backtest thresholds River (5m), aplicar threshold sugerido, executar StrategyRunner paper em 3 ticks (granularity=1, duration=3) e em 5m (granularity=300, duration=5t) por ~90s cada, com ml_gate=0.6 e adx_trend=28."
+##
+## agent_communication:
+##   -agent: "main"
+##   -message: "Testing agent: executar sequência acima. NÃO executar live trades. Apenas paper mode. Registrar JSONs e métricas (win_rate, daily_pnl, wins/losses) e o threshold aplicado."
+
 ##     file: "/app/backend/server.py"
 ##     stuck_count: 2
 ##     priority: "high"
