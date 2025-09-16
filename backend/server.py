@@ -1546,6 +1546,59 @@ async def update_river_config(config: RiverThresholdConfig):
         "message": f"River threshold alterado de {old_threshold:.3f} para {config.river_threshold:.3f}"
     }
 
+class RiverTuneRequest(BaseModel):
+    symbol: str = "R_10"
+    timeframe: str = "1m"
+    lookback_candles: int = 1200
+    thresholds: Optional[List[float]] = None
+    apply: bool = True
+
+@api_router.post("/strategy/river/tune")
+async def river_tune(request: RiverTuneRequest):
+    """Executa backtest com múltiplos thresholds e aplica o melhor via /strategy/river/config.
+    Seleção pelo score: EV - 0.1*MDD.
+    """
+    # construir lista de thresholds se não enviada
+    thresholds = request.thresholds
+    if not thresholds:
+        thresholds = [round(x, 2) for x in list(np.arange(0.50, 0.801, 0.02))]
+    # rodar backtest
+    bt_req = RiverBacktestRequest(
+        symbol=request.symbol,
+        timeframe=request.timeframe,
+        lookback_candles=request.lookback_candles,
+        thresholds=thresholds,
+    )
+    bt_res = await river_backtest_run(bt_req)
+    results = bt_res.get("results", [])
+    if not results:
+        raise HTTPException(status_code=400, detail="Backtest sem resultados")
+    # escolher melhor pelo mesmo score
+    def score(item):
+        try:
+            return float(item.get("expected_value", 0.0)) - 0.1 * float(item.get("max_drawdown", 0.0))
+        except Exception:
+            return float(item.get("expected_value", 0.0))
+    best = max(results, key=score)
+    suggested = float(best.get("threshold"))
+    before = _strategy.params.river_threshold
+    applied = False
+    if request.apply:
+        _ = await update_river_config(RiverThresholdConfig(river_threshold=suggested))
+        applied = True
+    return {
+        "symbol": request.symbol,
+        "timeframe": request.timeframe,
+        "lookback_candles": request.lookback_candles,
+        "thresholds_tested": thresholds,
+        "best": best,
+        "score": score(best),
+        "applied": applied,
+        "old_threshold": before,
+        "new_threshold": suggested if applied else before,
+        "backtest": bt_res,
+    }
+
 @api_router.post("/strategy/river/backtest_run")
 async def river_backtest_run(request: RiverBacktestRequest):
     """
