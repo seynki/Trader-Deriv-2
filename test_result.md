@@ -292,9 +292,9 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Phase 2/3 Forex Support: frxEURUSD, frxUSDBRL + ML Engine + StrategyRunner"
+##     - "ML Audit Baseline R_10: scripts/ml_audit_plan.md execution"
 ##   stuck_tasks:
-##     - "Phase 2/3 Forex Support: frxEURUSD, frxUSDBRL + ML Engine + StrategyRunner"
+##     - "Strategy start/stop endpoints: technical issues with HTTP 500 errors"
 ##   test_all: false
 ##   test_priority: "high_first"
 ## agent_communication:
