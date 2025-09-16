@@ -27,7 +27,7 @@ async def test_r10_paper_mode_sequence():
     Reportar: JSONs de retorno, threshold aplicado, win_rate/wins/losses/ daily_pnl, last_reason e qualquer bloqueio do ML gate. NÃO executar /api/deriv/buy diretamente (somente StrategyRunner paper).
     """
     
-    base_url = "https://finance-bot-4.preview.emergentagent.com"
+    base_url = "https://market-signal-pro-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
