@@ -26,7 +26,7 @@ import os
 logger = logging.getLogger(__name__)
 
 # --- Configurações do bot ---
-SYMBOLS = ["R_100", "R_75", "R_50", "R_25", "R_10"]  # símbolos a avaliar
+SYMBOLS = ["R_10"]  # símbolos a avaliar
 # timeframes: representados como ('type','value') where type in {'ticks','s','m'}
 # FILTRADOS: Removidos 1-2 ticks que causam winrate baixo
 TIMEFRAMES = [
