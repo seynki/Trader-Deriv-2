@@ -530,6 +530,10 @@ def save_trained_models(tm: TrainedModels, path_prefix: str):
     if tm.lgb_model is not None:
         joblib.dump(tm.lgb_model, f"{path_prefix}_lgb.pkl")
         joblib.dump(tm.lgb_scaler, f"{path_prefix}_scaler.pkl")
+        try:
+            joblib.dump(tm.lgb_calibrator, f"{path_prefix}_cal.pkl")
+        except Exception:
+            pass
     # salvar transformer apenas se PyTorch estiver disponível
     if tm.transformer is not None and torch is not None:
         try:
@@ -538,7 +542,7 @@ def save_trained_models(tm: TrainedModels, path_prefix: str):
         except Exception:
             pass
     # features meta
-    joblib.dump({"features": tm.features, "lgb_feat_dim": tm.lgb_feat_dim}, f"{path_prefix}_meta.pkl")
+    joblib.dump({"features": tm.features, "lgb_feat_dim": tm.lgb_feat_dim, "shap_top20": tm.shap_top20}, f"{path_prefix}_meta.pkl")
 
 def load_trained_models(path_prefix: str, cfg: MLConfig = CFG) -> TrainedModels:
     tm = TrainedModels()
