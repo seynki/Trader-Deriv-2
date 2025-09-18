@@ -380,7 +380,7 @@ def predict_from_models(candles: pd.DataFrame, tm: TrainedModels, cfg: MLConfig 
     # take last sample
     x_lgb = X_lgb_full[-1:]
     x_seq = X_seq_full[-1:]
-    # LGB com seleção de features (se disponível)
+    # LGB com seleção de features (se disponível) e calibrador (se disponível)
     if tm.lgb_model is not None:
         x_lgb_s = tm.lgb_scaler.transform(x_lgb)
         try:
@@ -391,7 +391,10 @@ def predict_from_models(candles: pd.DataFrame, tm: TrainedModels, cfg: MLConfig 
                 x_use = x_lgb_s
         except Exception:
             x_use = x_lgb_s
-        prob_lgb = tm.lgb_model.predict_proba(x_use)[:,1][0]
+        if tm.lgb_calibrator is not None:
+            prob_lgb = tm.lgb_calibrator.predict_proba(x_use)[:,1][0]
+        else:
+            prob_lgb = tm.lgb_model.predict_proba(x_use)[:,1][0]
     else:
         prob_lgb = 0.5
     # transformer
