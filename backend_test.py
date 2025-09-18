@@ -58,7 +58,7 @@ def test_ml_engine_and_risk_stops():
         log("   Objetivo: Treinar modelo com calibração sigmoid e extrair SHAP top-20")
         
         train_payload = {
-            "symbol": "R_10",
+            "symbol": "R_25",
             "timeframe": "1m",
             "count": 2000,
             "horizon": 3,
