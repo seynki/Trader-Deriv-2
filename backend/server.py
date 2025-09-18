@@ -2024,7 +2024,8 @@ async def ml_engine_train(request: MLEngineTrainRequest):
             df, config, horizon=request.horizon,
             use_transformer=bool(request.use_transformer),
             transformer_epochs=int(max(1, min(request.epochs, 10))),
-            transformer_batch=int(max(16, min(request.batch_size, 256)))
+            transformer_batch=int(max(16, min(request.batch_size, 256))),
+            calibrate=str(request.calibrate or "sigmoid").lower()
         )
         
         # Armazenar modelos treinados
