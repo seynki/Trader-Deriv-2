@@ -307,9 +307,11 @@ def train_transformer(X_seq: np.ndarray, y: np.ndarray, cfg: MLConfig = CFG, epo
 class TrainedModels:
     lgb_model: Optional[lgb.LGBMClassifier] = None
     lgb_scaler: Optional[StandardScaler] = None
+    lgb_calibrator: Optional[Any] = None
     transformer: Optional[Any] = None
     features: Optional[List[str]] = None
     lgb_feat_dim: Optional[int] = None
+    shap_top20: Optional[List[Tuple[str, float]]] = None
 
 def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon: int = 3, use_transformer: bool = True, transformer_epochs: int = 6, transformer_batch: int = 64) -> TrainedModels:
     X_lgb, X_seq, y, feat_names = None, None, None, None
