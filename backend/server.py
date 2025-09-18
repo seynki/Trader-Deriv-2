@@ -1920,6 +1920,7 @@ class MLEngineTrainRequest(BaseModel):
     batch_size: int = 64
     min_conf: float = 0.2
     use_transformer: bool = False  # por padrão, treinar apenas LightGBM (mais rápido)
+    calibrate: str = "sigmoid"  # "none" | "sigmoid" | "isotonic"
 
 class MLEngineStatus(BaseModel):
     initialized: bool
