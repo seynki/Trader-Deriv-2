@@ -634,6 +634,7 @@ class StrategyParams(BaseModel):
     duration_unit: str = "t"
     stake: float = 1.0
     daily_loss_limit: float = -20.0
+    max_consec_losses_stop: int = 5
     adx_trend: float = 22.0
     rsi_ob: float = 70.0
     rsi_os: float = 30.0
