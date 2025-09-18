@@ -549,6 +549,10 @@ def load_trained_models(path_prefix: str, cfg: MLConfig = CFG) -> TrainedModels:
     try:
         tm.lgb_model = joblib.load(f"{path_prefix}_lgb.pkl")
         tm.lgb_scaler = joblib.load(f"{path_prefix}_scaler.pkl")
+        try:
+            tm.lgb_calibrator = joblib.load(f"{path_prefix}_cal.pkl")
+        except Exception:
+            tm.lgb_calibrator = None
     except Exception:
         tm.lgb_model = None
         tm.lgb_scaler = None
@@ -556,6 +560,7 @@ def load_trained_models(path_prefix: str, cfg: MLConfig = CFG) -> TrainedModels:
         meta = joblib.load(f"{path_prefix}_meta.pkl")
         tm.features = meta.get('features')
         tm.lgb_feat_dim = meta.get('lgb_feat_dim')
+        tm.shap_top20 = meta.get('shap_top20')
     except Exception:
         pass
     try:
