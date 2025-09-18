@@ -1198,10 +1198,14 @@ class StrategyRunner:
                 else:
                     consec_losses = 0
                 if consec_losses >= 3:
-                    # aumentar cooldown e aplicar pausa
+                    # aumentar cooldown e aplicar pausa temporária
                     block_until_iter = max(block_until_iter, self.params.adx_block_candles)
-                    consec_losses = 0
                     self.last_reason = "Cooldown adaptativo após 3 perdas"
+                # Hard stop por sequência de perdas exagerada
+                if consec_losses >= max(1, int(self.params.max_consec_losses_stop)):
+                    self.last_reason = f"Hard stop: {consec_losses} perdas consecutivas >= {self.params.max_consec_losses_stop}"
+                    self.running = False
+                    break
                 # Atualiza estatísticas globais (paper ou live)
                 try:
                     _global_stats.add_pnl(pnl)
