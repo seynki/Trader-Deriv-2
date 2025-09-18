@@ -2057,6 +2057,8 @@ async def ml_engine_train(request: MLEngineTrainRequest):
                 "confidence": test_pred["conf"],
                 "direction": test_pred["direction"]
             },
+            "shap_top20": trained_models.shap_top20,
+            "calibration": request.calibrate,
             "saved_path": model_path
         }
         
