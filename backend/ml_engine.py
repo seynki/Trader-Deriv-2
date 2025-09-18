@@ -320,11 +320,48 @@ def fit_models_from_candles(candles: pd.DataFrame, cfg: MLConfig = CFG, horizon:
     scaler = StandardScaler()
     X_lgb_s = scaler.fit_transform(X_lgb)
     lgb_model = train_lgb(X_lgb_s, y, cfg, top_k_features=20)
+    # Calibração opcional
+    calibrator = None
+    if calibrate in {"sigmoid", "isotonic"}:
+        try:
+            from sklearn.calibration import CalibratedClassifierCV
+            calibrator = CalibratedClassifierCV(lgb_model, method=calibrate, cv=3)
+            calibrator.fit(X_lgb_s, y)
+        except Exception as _e:
+            logging.warning(f"Falha ao calibrar ({calibrate}): {_e}")
+            calibrator = None
+    # SHAP Top-20
+    shap_top20 = None
+    try:
+        import shap
+        explainer = shap.TreeExplainer(lgb_model)
+        # usar amostra para performance
+        sample = X_lgb_s[-min(2000, len(X_lgb_s)):, :]
+        shap_values = explainer.shap_values(sample)
+        # shap_values pode ser [class0, class1] em binário
+        sv = shap_values[1] if isinstance(shap_values, list) else shap_values
+        import numpy as np
+        rel = np.mean(np.abs(sv), axis=0)
+        # nomes das features: agregadas (mean,std,last) não têm nomes, então index
+        idx_rel = np.argsort(rel)[::-1]
+        top = idx_rel[:20]
+        shap_top20 = [(f"feat_{int(i)}", float(rel[i])) for i in top]
+    except Exception as _se:
+        logging.warning(f"Falha SHAP: {_se}")
+        shap_top20 = None
     # transformer
     transformer_model = None
     if use_transformer:
         transformer_model = train_transformer(X_seq, y, cfg, epochs=transformer_epochs, batch_size=transformer_batch)
-    tm = TrainedModels(lgb_model=lgb_model, lgb_scaler=scaler, transformer=transformer_model, features=features, lgb_feat_dim=X_lgb.shape[1])
+    tm = TrainedModels(
+        lgb_model=lgb_model,
+        lgb_scaler=scaler,
+        lgb_calibrator=calibrator,
+        transformer=transformer_model,
+        features=features,
+        lgb_feat_dim=X_lgb.shape[1],
+        shap_top20=shap_top20,
+    )
     return tm
 
 def predict_from_models(candles: pd.DataFrame, tm: TrainedModels, cfg: MLConfig = CFG) -> Dict[str,Any]:
