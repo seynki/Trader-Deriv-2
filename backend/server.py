@@ -1862,7 +1862,7 @@ async def river_restore_backup(request: Dict[str, Any]):
             raise HTTPException(status_code=500, detail="Falha ao restaurar backup")
         
         # Verificar modelo restaurado
-        restored_model = RiverOnlineCandleModel.load()
+        restored_model = river_online_model.RiverOnlineCandleModel.load()
         
         return {
             "success": True,
