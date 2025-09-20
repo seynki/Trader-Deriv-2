@@ -146,8 +146,128 @@ class RiverOnlineCandleModel:
     def save(self, path: str = MODEL_SAVE_PATH):
         # ensure parent dir
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # 🔄 BACKUP AUTOMÁTICO: Criar backup antes de salvar
+        self._create_backup()
+        
         with open(path, "wb") as f:
             pickle.dump(self, f)
+            
+        # Atualizar metadados
+        self._update_metadata()
+    
+    def _create_backup(self):
+        """Cria backup automático do modelo River com timestamp"""
+        try:
+            Path(BACKUP_DIR).mkdir(parents=True, exist_ok=True)
+            
+            if Path(MODEL_SAVE_PATH).exists():
+                timestamp = int(time.time())
+                backup_filename = f"river_model_samples_{self.sample_count}_{timestamp}.pkl"
+                backup_path = Path(BACKUP_DIR) / backup_filename
+                
+                # Copiar modelo atual para backup
+                shutil.copy2(MODEL_SAVE_PATH, backup_path)
+                print(f"🔄 Backup River criado: {backup_filename} (samples: {self.sample_count})")
+                
+                # Manter apenas os últimos 10 backups
+                self._cleanup_old_backups()
+                
+        except Exception as e:
+            print(f"⚠️ Erro criando backup River: {e}")
+    
+    def _cleanup_old_backups(self):
+        """Remove backups antigos, mantendo apenas os 10 mais recentes"""
+        try:
+            backup_files = list(Path(BACKUP_DIR).glob("river_model_samples_*.pkl"))
+            if len(backup_files) > 10:
+                # Ordenar por timestamp (mais antigo primeiro)
+                backup_files.sort()
+                for old_backup in backup_files[:-10]:
+                    old_backup.unlink()
+                    print(f"🗑️ Backup antigo removido: {old_backup.name}")
+        except Exception as e:
+            print(f"⚠️ Erro limpando backups antigos: {e}")
+    
+    def _update_metadata(self):
+        """Atualiza metadados do modelo River"""
+        try:
+            metadata = {
+                "last_update": datetime.utcnow().isoformat(),
+                "sample_count": self.sample_count,
+                "accuracy": float(self.metric_acc.get()) if self.sample_count > 0 else None,
+                "logloss": float(self.metric_logloss.get()) if self.sample_count > 0 else None,
+                "model_path": MODEL_SAVE_PATH,
+                "rolling_window": ROLLING_WINDOW
+            }
+            
+            with open(METADATA_PATH, "w") as f:
+                json.dump(metadata, f, indent=2)
+                
+        except Exception as e:
+            print(f"⚠️ Erro atualizando metadados River: {e}")
+    
+    @staticmethod
+    def list_backups():
+        """Lista todos os backups disponíveis do River"""
+        try:
+            backup_files = list(Path(BACKUP_DIR).glob("river_model_samples_*.pkl"))
+            backups = []
+            
+            for backup_file in sorted(backup_files, reverse=True):
+                # Extrair informações do nome do arquivo
+                parts = backup_file.stem.split('_')
+                if len(parts) >= 4:
+                    try:
+                        samples = int(parts[3])
+                        timestamp = int(parts[4])
+                        date_str = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        backups.append({
+                            "file": backup_file.name,
+                            "path": str(backup_file),
+                            "samples": samples,
+                            "timestamp": timestamp,
+                            "date": date_str,
+                            "size_mb": round(backup_file.stat().st_size / (1024*1024), 2)
+                        })
+                    except (ValueError, IndexError):
+                        continue
+            
+            return backups
+        except Exception as e:
+            print(f"⚠️ Erro listando backups River: {e}")
+            return []
+    
+    @staticmethod
+    def restore_from_backup(backup_filename: str):
+        """Restaura modelo River de um backup específico"""
+        try:
+            backup_path = Path(BACKUP_DIR) / backup_filename
+            if not backup_path.exists():
+                raise FileNotFoundError(f"Backup não encontrado: {backup_filename}")
+            
+            # Criar backup do modelo atual antes de restaurar
+            if Path(MODEL_SAVE_PATH).exists():
+                current_timestamp = int(time.time())
+                current_backup = Path(BACKUP_DIR) / f"river_model_current_before_restore_{current_timestamp}.pkl"
+                shutil.copy2(MODEL_SAVE_PATH, current_backup)
+                print(f"🔄 Backup do modelo atual criado: {current_backup.name}")
+            
+            # Restaurar backup
+            shutil.copy2(backup_path, MODEL_SAVE_PATH)
+            print(f"✅ Modelo River restaurado de: {backup_filename}")
+            
+            # Carregar modelo restaurado para verificar
+            restored_model = RiverOnlineCandleModel.load()
+            print(f"📊 Modelo restaurado: {restored_model.sample_count} amostras, "
+                  f"acc: {restored_model.metric_acc.get():.3f}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erro restaurando backup River: {e}")
+            return False
 
     @staticmethod
     def load(path: str = MODEL_SAVE_PATH):
