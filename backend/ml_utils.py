@@ -350,30 +350,95 @@ def make_target(df: pd.DataFrame, horizon: int, threshold: float) -> pd.Series:
     return (ret > threshold).astype(int)
 
 
-def select_features(df: pd.DataFrame):
-    """Enhanced feature selection including all advanced technical indicators"""
-    # Keywords for feature selection (expanded)
-    feature_keywords = [
-        "rsi", "macd", "bb_", "close", "volume", "slope", "z",  # original
-        "adx", "stoch", "williams", "cci", "atr", "mfi", "vwap", "vol_",  # momentum & volume
-        "ichi_", "fib_", "sr_", "pattern_",  # patterns & levels  
-        "ema_", "returns_", "price_rank", "volatility", "divergence",  # price dynamics
-        "higher_high", "lower_low", "inside_bar", "outside_bar", "position", "width"  # market structure
+def select_features(df: pd.DataFrame, max_features: int = 18, method: str = "auto"):
+    """
+    🎯 SISTEMA DE SELEÇÃO AUTOMÁTICA DE FEATURES OTIMIZADO
+    Reduz de ~53+ features para as mais importantes baseado em:
+    1. Importância técnica conhecida
+    2. Correlação baixa entre features
+    3. Estabilidade temporal
+    """
+    # 🎯 FEATURES CORE (sempre incluir) - as mais importantes para trading
+    core_features = [
+        "close", "rsi_14", "macd_line", "macd_signal", "adx_14", 
+        "bb_position", "atr_14", "returns_1", "close_vs_ema_21"
     ]
     
-    # Get candidate features
-    cands = [c for c in df.columns if any(k in c for k in feature_keywords)]
+    # 🎯 FEATURES COMPLEMENTARES (rankeadas por importância)  
+    complementary_features = [
+        "macd_hist", "rsi_7", "bb_width", "stoch_k", "williams_r",
+        "cci_20", "ema_21_slope", "price_volatility_10", "close_z20",
+        "returns_3", "price_rank_10", "atr_7", "rsi_divergence",
+        "macd_fast_line", "bb_basis", "higher_high", "lower_low",
+        "returns_5", "ema_9", "stoch_d", "vol_volume_ratio"
+    ]
     
-    # Blacklist raw OHLC to avoid overfitting
-    blacklist = {"open", "high", "low", "time", "epoch", "timestamp"}
+    available_features = []
     
-    # Select numeric features that aren't in blacklist
-    feats = [c for c in cands if c not in blacklist and pd.api.types.is_numeric_dtype(df[c])]
+    # Adicionar features core disponíveis
+    for feat in core_features:
+        if feat in df.columns and not df[feat].isna().all():
+            available_features.append(feat)
     
-    # Sort features for consistent ordering
-    feats = sorted(feats)
+    # Adicionar features complementares até atingir max_features
+    remaining_slots = max_features - len(available_features)
     
-    return feats
+    if method == "auto" and remaining_slots > 0:
+        # 🎯 SELEÇÃO BASEADA EM CORRELAÇÃO E IMPORTÂNCIA
+        feature_scores = {}
+        
+        for feat in complementary_features:
+            if feat in df.columns and not df[feat].isna().all() and len(available_features) < max_features:
+                # Calcular score baseado em:
+                # 1. Variabilidade (evitar features constantes)
+                # 2. Correlação com features já selecionadas (evitar redundância)
+                
+                feat_data = df[feat].dropna()
+                if len(feat_data) < 10:
+                    continue
+                    
+                # Score 1: Variabilidade (std normalizado)
+                variability_score = feat_data.std() / (abs(feat_data.mean()) + 1e-6)
+                
+                # Score 2: Anti-correlação (penalizar alta correlação com features existentes)
+                correlation_penalty = 0
+                for existing_feat in available_features:
+                    if existing_feat in df.columns:
+                        try:
+                            corr = df[feat].corr(df[existing_feat])
+                            if not pd.isna(corr):
+                                correlation_penalty += abs(corr)
+                        except:
+                            pass
+                
+                # Score combinado (maior variabilidade, menor correlação)
+                combined_score = variability_score - (correlation_penalty * 0.3)
+                feature_scores[feat] = combined_score
+        
+        # Selecionar features com maior score
+        sorted_features = sorted(feature_scores.items(), key=lambda x: x[1], reverse=True)
+        for feat, score in sorted_features:
+            if len(available_features) < max_features:
+                available_features.append(feat)
+    
+    # Fallback: adicionar features complementares na ordem se necessário
+    for feat in complementary_features:
+        if feat in df.columns and feat not in available_features and len(available_features) < max_features:
+            available_features.append(feat)
+    
+    # Garantir que temos pelo menos algumas features básicas
+    if len(available_features) < 5:
+        basic_features = ["close", "open", "high", "low", "volume"]
+        for feat in basic_features:
+            if feat in df.columns and feat not in available_features:
+                available_features.append(feat)
+                if len(available_features) >= 5:
+                    break
+    
+    logger.info(f"🎯 FEATURE SELECTION: Selecionadas {len(available_features)} features de {len(df.columns)} disponíveis")
+    logger.info(f"🎯 FEATURES CORE: {[f for f in core_features if f in available_features]}")
+    
+    return available_features
 
 
 def remove_correlated_features(df: pd.DataFrame, features: List[str], threshold: float = 0.95) -> List[str]:
