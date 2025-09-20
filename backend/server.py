@@ -293,6 +293,22 @@ class DerivWS:
                             for q in list(self.contract_queues.get(cid_int, [])):
                                 if not q.full():
                                     q.put_nowait(message)
+                        
+                        # 🛡️ STOP LOSS DINÂMICO: Armazenar dados do contrato para monitoramento
+                        if cid_int is not None:
+                            self.last_contract_data[cid_int] = {
+                                "profit": poc.get("profit"),
+                                "status": poc.get("status"),
+                                "is_expired": poc.get("is_expired"),
+                                "buy_price": poc.get("buy_price"),
+                                "current_spot": poc.get("current_spot"),
+                                "entry_spot": poc.get("entry_spot"),
+                                "timestamp": int(time.time())
+                            }
+                            
+                            # Se contrato expirou, remover do monitoramento ativo
+                            if bool(poc.get("is_expired")) and hasattr(_strategy, '_remove_active_contract'):
+                                _strategy._remove_active_contract(cid_int)
                         # Online learning (River) pós-trade: quando expira e ainda não aprendemos
                         try:
                             if cid_int is not None and bool(poc.get("is_expired")) and not self._river_learned.get(cid_int):
