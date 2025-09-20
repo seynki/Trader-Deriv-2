@@ -18,6 +18,9 @@ ML_DIR = ROOT / "ml_models"
 ML_DIR.mkdir(exist_ok=True)
 CHAMP_PATH = ML_DIR / "champion.json"
 
+# Configure logger
+logger = logging.getLogger(__name__)
+
 
 def ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
