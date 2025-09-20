@@ -70,13 +70,13 @@ class StrategyParams:
     
     def __post_init__(self):
         if self.timeframe_weight_multipliers is None:
-            # Dar MUITO mais peso aos timeframes de minutos (ULTRA conservadores)
+            # 🎯 PESOS OTIMIZADOS: Máxima prioridade para 2+ minutos (winrate 53% comprovado)
             self.timeframe_weight_multipliers = {
-                "ticks": 0.1,    # Peso MUITO menor para ticks (muito arriscados)
-                "s": 0.4,        # Peso baixo para segundos (arriscados)
-                "m_1": 1.2,      # Peso bom para 1 minuto
-                "m_2_10": 2.0,   # PESO MÁXIMO para 2-10 minutos (ULTRA conservadores)
-                "m_15_30": 1.8,  # Peso muito alto para 15-30 minutos
+                "ticks": 0.05,    # Peso MÍNIMO para ticks (winrate ~25-35%)
+                "s_30_60": 0.3,   # Peso baixo para 30s-1min (winrate ~33%)
+                "s_120_plus": 1.5, # PESO ALTO para 2+ minutos em segundos (winrate 53%+)
+                "m_2_5": 3.0,     # 🎯 PESO MÁXIMO para 2-5 minutos (SWEET SPOT)
+                "m_10_plus": 2.5, # PESO MUITO ALTO para 10+ minutos (estabilidade)
             }
 
 STRAT = StrategyParams()
