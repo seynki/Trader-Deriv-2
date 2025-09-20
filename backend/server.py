@@ -981,19 +981,22 @@ class StrategyRunner:
 
     async def _start_dynamic_stop_loss_monitor(self):
         """
-        🛡️ SISTEMA DE STOP LOSS DINÂMICO
+        🛡️ SISTEMA DE STOP LOSS DINÂMICO MELHORADO
         Monitora contratos ativos em tempo real e sai quando atinge limite de perda
         """
         if not self.params.enable_dynamic_stop_loss:
+            logger.info("🛡️ Stop Loss Dinâmico DESABILITADO")
             return
             
-        logger.info(f"🛡️ Stop Loss Dinâmico iniciado: {self.params.stop_loss_percentage*100}% de perda, check a cada {self.params.stop_loss_check_interval}s")
+        logger.info(f"🛡️ Stop Loss Dinâmico INICIADO: {self.params.stop_loss_percentage*100}% de perda, check a cada {self.params.stop_loss_check_interval}s")
         
         while self.running:
             try:
                 if not self.active_contracts:
                     await asyncio.sleep(self.params.stop_loss_check_interval)
                     continue
+                
+                logger.debug(f"🛡️ Monitorando {len(self.active_contracts)} contratos ativos...")
                 
                 # Verificar cada contrato ativo
                 contracts_to_remove = []
@@ -1002,14 +1005,19 @@ class StrategyRunner:
                         # Obter dados atuais do contrato via WebSocket
                         current_profit = await self._get_contract_current_profit(contract_id)
                         if current_profit is None:
+                            logger.debug(f"🛡️ Sem dados atuais para contrato {contract_id}")
                             continue
                             
                         stake = contract_data.get('stake', 1.0)
                         loss_limit = -abs(stake * self.params.stop_loss_percentage)
                         
+                        # Log de monitoramento
+                        profit_percent = (current_profit / stake) * 100 if stake > 0 else 0
+                        logger.debug(f"🛡️ Contrato {contract_id}: Profit={current_profit:.2f} ({profit_percent:.1f}%), Limite={loss_limit:.2f}")
+                        
                         # Verificar se atingiu stop loss
                         if current_profit <= loss_limit:
-                            logger.warning(f"🛡️ STOP LOSS ATIVADO! Contract {contract_id}: Profit {current_profit} <= Limite {loss_limit}")
+                            logger.warning(f"🛡️ STOP LOSS ATIVADO! Contract {contract_id}: Profit {current_profit:.2f} <= Limite {loss_limit:.2f} ({profit_percent:.1f}%)")
                             
                             # Tentar vender o contrato
                             sold_successfully = await self._sell_contract(contract_id)
