@@ -24,7 +24,7 @@ def test_ml_engine_and_risk_stops():
     Execute the ML Engine + Risk Stops validation test plan
     """
     
-    base_url = "https://market-bot-helper.preview.emergentagent.com"
+    base_url = "https://finance-bot-timer.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
