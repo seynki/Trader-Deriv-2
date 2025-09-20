@@ -192,6 +192,8 @@ class DerivWS:
         self._river_learned: Dict[int, bool] = {}
         # avoid double-counting stats per contract
         self.stats_recorded: Dict[int, bool] = {}
+        # 🛡️ STOP LOSS DINÂMICO: Cache de dados de contratos para monitoramento
+        self.last_contract_data: Dict[int, Dict[str, Any]] = {}
 
     def _build_uri(self) -> str:
         if not self.app_id:
