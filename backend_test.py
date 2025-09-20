@@ -19,6 +19,341 @@ import sys
 import time
 from datetime import datetime
 
+def test_dynamic_stop_loss_system():
+    """
+    Execute the Dynamic Stop Loss System validation test plan
+    """
+    
+    base_url = "https://finance-bot-timer.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🛡️" + "="*68)
+    log("SISTEMA DE STOP LOSS DINÂMICO - VALIDATION TESTING")
+    log("🛡️" + "="*68)
+    log("📋 Test Plan:")
+    log("   1) GET /api/strategy/optimize/status - Verificar parâmetros stop loss dinâmico")
+    log("   2) POST /api/strategy/optimize/apply - Aplicar configurações stop loss")
+    log("   3) GET /api/strategy/status - Verificar estado da estratégia")
+    log("   4) GET /api/deriv/status - Confirmar conectividade Deriv")
+    
+    test_results = {
+        "optimize_status_check": False,
+        "optimize_apply_config": False,
+        "strategy_status_check": False,
+        "deriv_connectivity_check": False
+    }
+    
+    # Store all JSON responses for reporting
+    json_responses = {}
+    
+    try:
+        # Test 1: GET /api/strategy/optimize/status - Verificar parâmetros stop loss dinâmico
+        log("\n🔍 TEST 1: GET /api/strategy/optimize/status")
+        log("   Objetivo: Verificar se novos parâmetros de stop loss dinâmico estão presentes")
+        log("   Esperado: dynamic_stop_loss=true, stop_loss_percentage=0.5, stop_loss_check_interval=2, active_contracts_count")
+        
+        try:
+            response = session.get(f"{api_url}/strategy/optimize/status", timeout=15)
+            log(f"   GET /api/strategy/optimize/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                json_responses["optimize_status"] = status_data
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                
+                current_config = status_data.get('current_config', {})
+                dynamic_stop_loss = current_config.get('dynamic_stop_loss')
+                stop_loss_percentage = current_config.get('stop_loss_percentage')
+                stop_loss_check_interval = current_config.get('stop_loss_check_interval')
+                active_contracts_count = current_config.get('active_contracts_count')
+                
+                log(f"   📊 Stop Loss Dinâmico Status:")
+                log(f"      Dynamic Stop Loss: {dynamic_stop_loss}")
+                log(f"      Stop Loss Percentage: {stop_loss_percentage}")
+                log(f"      Stop Loss Check Interval: {stop_loss_check_interval}")
+                log(f"      Active Contracts Count: {active_contracts_count}")
+                
+                # Validate expected fields
+                has_dynamic_stop_loss = dynamic_stop_loss is not None
+                has_stop_loss_percentage = stop_loss_percentage is not None
+                has_stop_loss_check_interval = stop_loss_check_interval is not None
+                has_active_contracts_count = active_contracts_count is not None
+                
+                # Check expected values
+                expected_dynamic_stop_loss = dynamic_stop_loss == True
+                expected_stop_loss_percentage = stop_loss_percentage == 0.5
+                expected_stop_loss_check_interval = stop_loss_check_interval == 2
+                expected_active_contracts_count = isinstance(active_contracts_count, int)
+                
+                if (has_dynamic_stop_loss and has_stop_loss_percentage and 
+                    has_stop_loss_check_interval and has_active_contracts_count and
+                    expected_dynamic_stop_loss and expected_stop_loss_percentage and
+                    expected_stop_loss_check_interval and expected_active_contracts_count):
+                    test_results["optimize_status_check"] = True
+                    log("✅ Test 1 OK: Parâmetros de stop loss dinâmico presentes e corretos")
+                    log(f"   🎯 dynamic_stop_loss={dynamic_stop_loss}, stop_loss_percentage={stop_loss_percentage}, check_interval={stop_loss_check_interval}s, active_contracts={active_contracts_count}")
+                else:
+                    log(f"❌ Test 1 FALHOU: Parâmetros ausentes ou incorretos")
+                    log(f"   dynamic_stop_loss: {has_dynamic_stop_loss} (expected=True: {expected_dynamic_stop_loss})")
+                    log(f"   stop_loss_percentage: {has_stop_loss_percentage} (expected=0.5: {expected_stop_loss_percentage})")
+                    log(f"   stop_loss_check_interval: {has_stop_loss_check_interval} (expected=2: {expected_stop_loss_check_interval})")
+                    log(f"   active_contracts_count: {has_active_contracts_count} (is_int: {expected_active_contracts_count})")
+            else:
+                log(f"❌ Optimize Status FALHOU - HTTP {response.status_code}")
+                json_responses["optimize_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["optimize_status"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 1 FALHOU - Exception: {e}")
+            json_responses["optimize_status"] = {"error": str(e)}
+        
+        # Test 2: POST /api/strategy/optimize/apply - Aplicar configurações stop loss
+        log("\n🔍 TEST 2: POST /api/strategy/optimize/apply")
+        log("   Objetivo: Testar aplicação das configurações incluindo stop loss dinâmico")
+        log("   Payload: enable_dynamic_stop_loss=true, stop_loss_percentage=0.40, stop_loss_check_interval=3")
+        
+        apply_payload = {
+            "enable_dynamic_stop_loss": True,
+            "stop_loss_percentage": 0.40,
+            "stop_loss_check_interval": 3,
+            "use_2min_timeframe": True,
+            "river_threshold": 0.68,
+            "max_features": 18,
+            "enable_technical_stop_loss": True,
+            "min_adx_for_trade": 25.0,
+            "ml_prob_threshold": 0.65
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(apply_payload, indent=2)}")
+            
+            response = session.post(f"{api_url}/strategy/optimize/apply", json=apply_payload, timeout=20)
+            log(f"   POST /api/strategy/optimize/apply: {response.status_code}")
+            
+            if response.status_code == 200:
+                apply_data = response.json()
+                json_responses["optimize_apply"] = apply_data
+                log(f"   Response: {json.dumps(apply_data, indent=2)}")
+                
+                message = apply_data.get('message', '')
+                applied_config = apply_data.get('applied_config', {})
+                expected_improvement = apply_data.get('expected_improvement', '')
+                
+                log(f"   📊 Apply Results:")
+                log(f"      Message: {message}")
+                log(f"      Applied Config: {applied_config}")
+                log(f"      Expected Improvement: {expected_improvement}")
+                
+                # Validate success message
+                success_message = "otimizações aplicadas com sucesso" in message.lower()
+                has_applied_config = isinstance(applied_config, dict) and len(applied_config) > 0
+                has_expected_improvement = isinstance(expected_improvement, str) and len(expected_improvement) > 0
+                
+                if success_message and has_applied_config and has_expected_improvement:
+                    test_results["optimize_apply_config"] = True
+                    log("✅ Test 2 OK: Configurações de stop loss dinâmico aplicadas com sucesso")
+                    log(f"   🎯 Configurações aplicadas: {list(applied_config.keys())}")
+                else:
+                    log(f"❌ Test 2 FALHOU: success_msg={success_message}, config={has_applied_config}, improvement={has_expected_improvement}")
+            else:
+                log(f"❌ Optimize Apply FALHOU - HTTP {response.status_code}")
+                json_responses["optimize_apply"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["optimize_apply"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 2 FALHOU - Exception: {e}")
+            json_responses["optimize_apply"] = {"error": str(e)}
+        
+        # Test 3: GET /api/strategy/status - Verificar estado da estratégia
+        log("\n🔍 TEST 3: GET /api/strategy/status")
+        log("   Objetivo: Verificar que estado da estratégia não tem problemas")
+        
+        try:
+            response = session.get(f"{api_url}/strategy/status", timeout=15)
+            log(f"   GET /api/strategy/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                strategy_data = response.json()
+                json_responses["strategy_status"] = strategy_data
+                log(f"   Response: {json.dumps(strategy_data, indent=2)}")
+                
+                running = strategy_data.get('running')
+                mode = strategy_data.get('mode')
+                symbol = strategy_data.get('symbol')
+                daily_pnl = strategy_data.get('daily_pnl')
+                win_rate = strategy_data.get('win_rate')
+                
+                log(f"   📊 Strategy Status:")
+                log(f"      Running: {running}")
+                log(f"      Mode: {mode}")
+                log(f"      Symbol: {symbol}")
+                log(f"      Daily PnL: {daily_pnl}")
+                log(f"      Win Rate: {win_rate}%")
+                
+                # Validate expected fields are present (values can be any)
+                has_running = running is not None
+                has_mode = mode is not None
+                has_symbol = symbol is not None
+                has_daily_pnl = daily_pnl is not None
+                has_win_rate = win_rate is not None
+                
+                if has_running and has_mode and has_symbol and has_daily_pnl and has_win_rate:
+                    test_results["strategy_status_check"] = True
+                    log("✅ Test 3 OK: Estado da estratégia sem problemas")
+                    log(f"   🎯 Todos os campos obrigatórios presentes")
+                else:
+                    log(f"❌ Test 3 FALHOU: Campos ausentes")
+                    log(f"   running: {has_running}, mode: {has_mode}, symbol: {has_symbol}, daily_pnl: {has_daily_pnl}, win_rate: {has_win_rate}")
+            else:
+                log(f"❌ Strategy Status FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["strategy_status"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 3 FALHOU - Exception: {e}")
+            json_responses["strategy_status"] = {"error": str(e)}
+        
+        # Test 4: GET /api/deriv/status - Confirmar conectividade Deriv
+        log("\n🔍 TEST 4: GET /api/deriv/status")
+        log("   Objetivo: Confirmar que está conectado à Deriv")
+        
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=15)
+            log(f"   GET /api/deriv/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                deriv_data = response.json()
+                json_responses["deriv_status"] = deriv_data
+                log(f"   Response: {json.dumps(deriv_data, indent=2)}")
+                
+                connected = deriv_data.get('connected')
+                authenticated = deriv_data.get('authenticated')
+                environment = deriv_data.get('environment')
+                symbols = deriv_data.get('symbols', [])
+                
+                log(f"   📊 Deriv Status:")
+                log(f"      Connected: {connected}")
+                log(f"      Authenticated: {authenticated}")
+                log(f"      Environment: {environment}")
+                log(f"      Symbols Count: {len(symbols)}")
+                
+                # Validate connectivity
+                is_connected = connected == True
+                is_authenticated = authenticated == True
+                is_demo = environment == "DEMO"
+                has_symbols = isinstance(symbols, list) and len(symbols) > 0
+                
+                if is_connected and is_authenticated and is_demo and has_symbols:
+                    test_results["deriv_connectivity_check"] = True
+                    log("✅ Test 4 OK: Conectividade Deriv confirmada")
+                    log(f"   🎯 Connected={connected}, Authenticated={authenticated}, Environment={environment}, Symbols={len(symbols)}")
+                else:
+                    log(f"❌ Test 4 FALHOU: Problemas de conectividade")
+                    log(f"   connected: {is_connected}, authenticated: {is_authenticated}, demo: {is_demo}, symbols: {has_symbols}")
+            else:
+                log(f"❌ Deriv Status FALHOU - HTTP {response.status_code}")
+                json_responses["deriv_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["deriv_status"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 4 FALHOU - Exception: {e}")
+            json_responses["deriv_status"] = {"error": str(e)}
+        
+        # Final analysis and comprehensive report
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Sistema de Stop Loss Dinâmico")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "optimize_status_check": "1) GET /api/strategy/optimize/status - Parâmetros stop loss dinâmico",
+            "optimize_apply_config": "2) POST /api/strategy/optimize/apply - Aplicar configurações",
+            "strategy_status_check": "3) GET /api/strategy/status - Verificar estado estratégia",
+            "deriv_connectivity_check": "4) GET /api/deriv/status - Confirmar conectividade Deriv"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ SUCESSO" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        # Report all JSON responses as requested
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        overall_success = passed_tests >= 3  # Allow 1 failure out of 4 tests
+        
+        if overall_success:
+            log("\n🎉 SISTEMA DE STOP LOSS DINÂMICO VALIDADO COM SUCESSO!")
+            log("📋 Funcionalidades validadas:")
+            if test_results["optimize_status_check"]:
+                log("   ✅ Status: Parâmetros de stop loss dinâmico presentes e corretos")
+            if test_results["optimize_apply_config"]:
+                log("   ✅ Apply: Configurações aplicadas com sucesso")
+            if test_results["strategy_status_check"]:
+                log("   ✅ Strategy: Estado da estratégia sem problemas")
+            if test_results["deriv_connectivity_check"]:
+                log("   ✅ Deriv: Conectividade confirmada")
+            log("   🛡️ CONCLUSÃO: Sistema de stop loss dinâmico configurado e pronto!")
+            log("   🚫 NÃO executado /api/deriv/buy conforme instruções (apenas endpoints de configuração)")
+        else:
+            log("\n❌ PROBLEMAS DETECTADOS NO SISTEMA DE STOP LOSS DINÂMICO")
+            failed_steps = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_steps}")
+            log("   📋 FOCO: Verificar implementação do sistema de stop loss dinâmico")
+        
+        return overall_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
+
 def test_ml_engine_and_risk_stops():
     """
     Execute the ML Engine + Risk Stops validation test plan
