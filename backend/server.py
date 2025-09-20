@@ -229,6 +229,34 @@ class DerivWS:
             return
         await self.ws.send(json.dumps(payload))
 
+    async def _send_and_wait(self, payload: Dict[str, Any], timeout: int = 30) -> Optional[Dict[str, Any]]:
+        """
+        Envia uma requisição e aguarda a resposta com req_id
+        """
+        if not self.ws or not self.connected:
+            return None
+            
+        # Gerar req_id único
+        req_id = f"sl_{int(time.time() * 1000)}_{hash(str(payload)) % 10000}"
+        payload["req_id"] = req_id
+        
+        # Criar future para aguardar resposta
+        future = asyncio.Future()
+        self.pending[req_id] = future
+        
+        try:
+            await self._send(payload)
+            response = await asyncio.wait_for(future, timeout=timeout)
+            return response
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout aguardando resposta para req_id {req_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Erro em _send_and_wait: {e}")
+            return None
+        finally:
+            self.pending.pop(req_id, None)
+
     async def _run(self):
         while True:
             try:
