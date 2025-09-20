@@ -2455,19 +2455,19 @@ async def get_stop_loss_status():
     try:
         return {
             "dynamic_stop_loss": {
-                "enabled": _strategy_runner.params.enable_dynamic_stop_loss,
-                "percentage": _strategy_runner.params.stop_loss_percentage,
-                "percentage_display": f"{_strategy_runner.params.stop_loss_percentage*100}%",
-                "check_interval": _strategy_runner.params.stop_loss_check_interval,
-                "active_contracts": len(_strategy_runner.active_contracts),
-                "monitor_running": _strategy_runner.stop_loss_task is not None and not _strategy_runner.stop_loss_task.done()
+                "enabled": _strategy.params.enable_dynamic_stop_loss,
+                "percentage": _strategy.params.stop_loss_percentage,
+                "percentage_display": f"{_strategy.params.stop_loss_percentage*100}%",
+                "check_interval": _strategy.params.stop_loss_check_interval,
+                "active_contracts": len(_strategy.active_contracts),
+                "monitor_running": _strategy.stop_loss_task is not None and not _strategy.stop_loss_task.done()
             },
             "technical_stop_loss": {
-                "enabled": _strategy_runner.params.enable_technical_stop_loss,
-                "macd_divergence": _strategy_runner.params.macd_divergence_stop,
-                "rsi_overextended": _strategy_runner.params.rsi_overextended_stop,
-                "consecutive_losses": _strategy_runner.consecutive_losses,
-                "last_loss_time": _strategy_runner.last_loss_time
+                "enabled": _strategy.params.enable_technical_stop_loss,
+                "macd_divergence": _strategy.params.macd_divergence_stop,
+                "rsi_overextended": _strategy.params.rsi_overextended_stop,
+                "consecutive_losses": _strategy.consecutive_losses,
+                "last_loss_time": _strategy.last_loss_time
             },
             "active_contracts_details": [
                 {
@@ -2477,7 +2477,7 @@ async def get_stop_loss_status():
                     "direction": data.get("direction", "unknown"),
                     "created_at": data.get("created_at", "unknown")
                 }
-                for contract_id, data in _strategy_runner.active_contracts.items()
+                for contract_id, data in _strategy.active_contracts.items()
             ]
         }
         
