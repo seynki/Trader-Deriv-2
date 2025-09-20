@@ -1839,7 +1839,7 @@ async def river_decide_trade(req: RiverDecideTradeRequest):
 async def river_list_backups():
     """Lista todos os backups disponíveis do modelo River"""
     try:
-        backups = RiverOnlineCandleModel.list_backups()
+        backups = river_online_model.RiverOnlineCandleModel.list_backups()
         return {
             "backups": backups,
             "total_backups": len(backups),
