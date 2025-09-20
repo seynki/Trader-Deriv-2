@@ -428,6 +428,21 @@
 
 ##   -agent: "testing"
 ##   -message: "🎉 RIVER AUTO-TUNING + REGIME GATING + RISK RULES TESTADO COM SUCESSO (2025-09-16): ✅ TODOS OS CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme plano português: A) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO, 15 símbolos disponíveis B) POST /api/strategy/river/backtest ✅ symbol=R_10, timeframe=1m, lookback_candles=1200, 16 thresholds testados [0.5-0.8], todos com expected_value e max_drawdown presentes, best_threshold=0.5 capturado, recommendation.score=0.0 C) POST /api/strategy/river/config ✅ river_threshold=0.5 aplicado com sucesso, message='River threshold alterado de 0.530 para 0.500' D) POST /api/strategy/start ✅ strategy iniciada (running=true após delay inicial), monitoramento 30s completado, last_run_at atualizando regularmente, nenhuma exceção detectada E) GET /api/ml/engine/status ✅ initialized=true, sanity check OK. RESULTADO CRÍTICO: Taxa sucesso 80% (4/5 testes), todas as melhorias implementadas funcionando - River backtest com EV/MDD metrics, threshold config dinâmico, ADX regime gating preparado, ML Engine operacional. Sistema pronto para regime gating avançado e risk management melhorado. Todos os JSONs reportados conforme solicitado. NÃO executado /api/deriv/buy conforme instruções."
+
+##   - task: "Sistema de Stop Loss Dinâmico"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementado sistema de stop loss dinâmico com monitoramento em tempo real de contratos ativos, verificação a cada 2 segundos por padrão, limite de 50% de perda para ativar stop loss automático, integração com WebSocket para dados atuais de profit/loss."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "🛡️ SISTEMA DE STOP LOSS DINÂMICO VALIDADO COM SUCESSO TOTAL (2025-09-20): ✅ TODOS OS 4 CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme solicitação portuguesa: 1) GET /api/strategy/optimize/status ✅ Novos parâmetros presentes e corretos: dynamic_stop_loss=true, stop_loss_percentage=0.5 (50%), stop_loss_check_interval=2 segundos, active_contracts_count=0 (número válido) 2) POST /api/strategy/optimize/apply ✅ Aplicação das configurações com sucesso: payload {enable_dynamic_stop_loss=true, stop_loss_percentage=0.40, stop_loss_check_interval=3} → message='🎯 Otimizações aplicadas com sucesso', configurações aplicadas corretamente, parâmetros atualizados de 0.5→0.4 e 2s→3s conforme solicitado 3) GET /api/strategy/status ✅ Estado da estratégia sem problemas: running=false, mode=paper, symbol=R_10, todos os campos obrigatórios presentes (daily_pnl, win_rate, etc.) 4) GET /api/deriv/status ✅ Conectividade Deriv confirmada: connected=true, authenticated=true, environment=DEMO, 15 símbolos disponíveis. RESULTADO CRÍTICO: Taxa sucesso 100% (4/4 testes), sistema de stop loss dinâmico configurado e pronto para monitorar contratos quando trades forem executados. Parâmetros configuráveis funcionando perfeitamente. NÃO executado /api/deriv/buy conforme instruções (apenas endpoints de configuração e status testados)."
 ##   -agent: "testing"
 ##   -message: "RETESTING COMPLETED (2025-08-23): ✅ All 3 requested endpoints working perfectly: 1) GET /api/deriv/contracts_for_smart/R_10?product_type=accumulator returns 200 with proper structure - tried=['R_10'], first_supported='R_10', results contains R_10 data with fallback to basic product_type, includes ACCU contract type ✅ 2) GET /api/deriv/contracts_for/R_10?product_type=accumulator returns expected 400 validation error (not a regression) ✅ 3) GET /api/deriv/contracts_for/R_10?product_type=basic returns 200 with contract_types containing ACCU/TURBOSLONG/TURBOSSHORT/MULTUP/MULTDOWN as expected ✅. Smart fallback mechanism working correctly - when accumulator product_type is rejected, it falls back to basic and validates ACCU contract type exists. All backend endpoints functioning as designed."
 ##   -agent: "testing"
