@@ -2448,6 +2448,103 @@ async def backtest_optimizations():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro no backtest: {str(e)}")
 
+# 🛡️ ENDPOINTS ESPECÍFICOS PARA STOP LOSS
+@api_router.get("/strategy/stop_loss/status")
+async def get_stop_loss_status():
+    """Obter status detalhado do sistema de stop loss"""
+    try:
+        return {
+            "dynamic_stop_loss": {
+                "enabled": _strategy_runner.params.enable_dynamic_stop_loss,
+                "percentage": _strategy_runner.params.stop_loss_percentage,
+                "percentage_display": f"{_strategy_runner.params.stop_loss_percentage*100}%",
+                "check_interval": _strategy_runner.params.stop_loss_check_interval,
+                "active_contracts": len(_strategy_runner.active_contracts),
+                "monitor_running": _strategy_runner.stop_loss_task is not None and not _strategy_runner.stop_loss_task.done()
+            },
+            "technical_stop_loss": {
+                "enabled": _strategy_runner.params.enable_technical_stop_loss,
+                "macd_divergence": _strategy_runner.params.macd_divergence_stop,
+                "rsi_overextended": _strategy_runner.params.rsi_overextended_stop,
+                "consecutive_losses": _strategy_runner.consecutive_losses,
+                "last_loss_time": _strategy_runner.last_loss_time
+            },
+            "active_contracts_details": [
+                {
+                    "contract_id": contract_id,
+                    "stake": data.get("stake", 1.0),
+                    "symbol": data.get("symbol", "unknown"),
+                    "direction": data.get("direction", "unknown"),
+                    "created_at": data.get("created_at", "unknown")
+                }
+                for contract_id, data in _strategy_runner.active_contracts.items()
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro obtendo status stop loss: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro obtendo status stop loss: {str(e)}")
+
+@api_router.post("/strategy/stop_loss/test")
+async def test_stop_loss_system():
+    """Testar sistema de stop loss (simulação)"""
+    try:
+        if not _deriv.connected:
+            raise HTTPException(status_code=400, detail="Deriv não conectada")
+        
+        # Simular contrato com perda para testar sistema
+        test_contract_id = 999999999  # ID fictício para teste
+        test_stake = 1.0
+        
+        # Adicionar contrato de teste
+        _strategy_runner.active_contracts[test_contract_id] = {
+            "stake": test_stake,
+            "symbol": "R_100",
+            "direction": "TEST",
+            "created_at": time.time()
+        }
+        
+        # Simular dados de perda no WebSocket
+        if not hasattr(_deriv, 'last_contract_data'):
+            _deriv.last_contract_data = {}
+        
+        # Simular perda de 60% (maior que 50% configurado)
+        simulated_loss = -test_stake * 0.6
+        _deriv.last_contract_data[test_contract_id] = {
+            "profit": simulated_loss,
+            "status": "open"
+        }
+        
+        logger.info(f"🧪 Teste de stop loss: Contrato {test_contract_id} com perda simulada de ${simulated_loss}")
+        
+        # Verificar se stop loss seria ativado
+        current_profit = await _strategy_runner._get_contract_current_profit(test_contract_id)
+        loss_limit = -abs(test_stake * _strategy_runner.params.stop_loss_percentage)
+        would_trigger = current_profit is not None and current_profit <= loss_limit
+        
+        # Limpar teste
+        _strategy_runner.active_contracts.pop(test_contract_id, None)
+        _deriv.last_contract_data.pop(test_contract_id, None)
+        
+        return {
+            "test_successful": True,
+            "simulated_contract_id": test_contract_id,
+            "simulated_loss": simulated_loss,
+            "current_profit": current_profit,
+            "loss_limit": loss_limit,
+            "would_trigger_stop_loss": would_trigger,
+            "stop_loss_config": {
+                "enabled": _strategy_runner.params.enable_dynamic_stop_loss,
+                "percentage": _strategy_runner.params.stop_loss_percentage,
+                "check_interval": _strategy_runner.params.stop_loss_check_interval
+            },
+            "message": "✅ Sistema de stop loss está funcionando" if would_trigger else "❌ Stop loss não seria ativado - verificar configuração"
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro testando stop loss: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro testando stop loss: {str(e)}")
+
 # =============================================
 # AUTO SELECTION BOT ENDPOINTS
 # =============================================
