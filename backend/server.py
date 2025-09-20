@@ -1053,10 +1053,40 @@ class StrategyRunner:
                 profit = contract_data.get('profit')
                 if profit is not None:
                     return float(profit)
-            return None
+            
+            # Se não temos dados do WebSocket, tentar obter via API
+            logger.debug(f"🛡️ Tentando obter dados do contrato {contract_id} via API...")
+            return await self._get_contract_profit_via_api(contract_id)
+            
         except Exception as e:
             logger.error(f"Erro obtendo profit do contrato {contract_id}: {e}")
             return None
+    
+    async def _get_contract_profit_via_api(self, contract_id: int) -> Optional[float]:
+        """
+        Obtém profit do contrato via API da Deriv (fallback)
+        """
+        try:
+            if not _deriv.connected:
+                return None
+                
+            # Usar API proposal_open_contract para obter dados do contrato
+            payload = {
+                "proposal_open_contract": 1,
+                "contract_id": contract_id,
+                "subscribe": 0  # Não subscrever, apenas obter uma vez
+            }
+            
+            response = await _deriv._send_and_wait(payload, timeout=5)
+            if response and "proposal_open_contract" in response:
+                profit = response["proposal_open_contract"].get("profit")
+                if profit is not None:
+                    return float(profit)
+                    
+        except Exception as e:
+            logger.error(f"Erro obtendo profit via API do contrato {contract_id}: {e}")
+            
+        return None
 
     async def _sell_contract(self, contract_id: int) -> bool:
         """
