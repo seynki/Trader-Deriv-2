@@ -292,8 +292,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "River Auto-Tuning + Regime Gating + Risk Rules"
-##     - "Backtest alias + Apply best threshold"
+##     - "Sistema de Stop Loss Dinâmico"
 ##   stuck_tasks:
 ##     - "None"
 ##   test_all: false
