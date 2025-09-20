@@ -10,10 +10,13 @@ CSV expected columns: datetime, open, high, low, close, volume
 import pandas as pd
 import numpy as np
 import pickle
+import shutil
 from collections import deque
 from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
+import json
+import time
 
 # River ML (online)
 from river import preprocessing, linear_model, metrics, compose
@@ -24,6 +27,8 @@ from river import preprocessing, linear_model, metrics, compose
 ROLLING_WINDOW = 50
 MIN_TICK = 1e-8
 MODEL_SAVE_PATH = "/app/backend/ml_models/river_online_model.pkl"
+BACKUP_DIR = "/app/backend/ml_models/river_backups"
+METADATA_PATH = "/app/backend/ml_models/river_metadata.json"
 
 
 class RiverOnlineCandleModel:
