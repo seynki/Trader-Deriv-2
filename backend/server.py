@@ -1885,7 +1885,7 @@ async def river_force_backup():
         if not Path("/app/backend/ml_models/river_online_model.pkl").exists():
             raise HTTPException(status_code=404, detail="Modelo River não encontrado")
         
-        model = RiverOnlineCandleModel.load()
+        model = river_online_model.RiverOnlineCandleModel.load()
         model._create_backup()
         
         return {
