@@ -659,6 +659,10 @@ class StrategyParams(BaseModel):
     feature_selection_enabled: bool = True  # Habilitar seleção automática de features
     max_features: int = 18  # Máximo de features (reduzido de ~53)
     mode: str = "paper"  # paper | live
+    # 🛡️ STOP LOSS DINÂMICO
+    enable_dynamic_stop_loss: bool = True  # Habilitar stop loss dinâmico em tempo real
+    stop_loss_percentage: float = 0.50  # 50% de perda para ativar stop loss
+    stop_loss_check_interval: int = 2  # Verificar a cada 2 segundos
 
 class StrategyStatus(BaseModel):
     running: bool
