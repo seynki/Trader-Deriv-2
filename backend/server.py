@@ -1296,6 +1296,11 @@ class StrategyRunner:
         cid = buy_res.get("contract_id")
         if not cid:
             return 0.0
+        
+        # 🛡️ STOP LOSS DINÂMICO: Adicionar contrato ao monitoramento
+        if self.params.enable_dynamic_stop_loss:
+            self._add_active_contract(int(cid), stake, {'buy_res': buy_res})
+            
         # wait on contract updates until is_expired and profit known
         q = await _deriv.add_contract_queue(int(cid))
         profit: float = 0.0
