@@ -1857,7 +1857,7 @@ async def river_restore_backup(request: Dict[str, Any]):
         if not backup_filename:
             raise HTTPException(status_code=400, detail="backup_filename é obrigatório")
         
-        success = RiverOnlineCandleModel.restore_from_backup(backup_filename)
+        success = river_online_model.RiverOnlineCandleModel.restore_from_backup(backup_filename)
         if not success:
             raise HTTPException(status_code=500, detail="Falha ao restaurar backup")
         
