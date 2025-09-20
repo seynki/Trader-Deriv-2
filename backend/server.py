@@ -628,28 +628,36 @@ async def deriv_sell(req: SellRequest):
 
 class StrategyParams(BaseModel):
     symbol: str = "R_10"
-    granularity: int = 60
+    granularity: int = 120  # 🎯 OTIMIZAÇÃO: 2 minutos (120s) vs 1 minuto (60s) para melhor winrate
     candle_len: int = 200
     duration: int = 5
     duration_unit: str = "t"
     stake: float = 1.0
     daily_loss_limit: float = -20.0
-    max_consec_losses_stop: int = 5
-    adx_trend: float = 22.0
-    rsi_ob: float = 70.0
-    rsi_os: float = 30.0
+    max_consec_losses_stop: int = 3  # 🎯 OTIMIZAÇÃO: Reduzido de 5 para 3 (mais conservador)
+    adx_trend: float = 25.0  # 🎯 OTIMIZAÇÃO: Aumentado de 22 para 25 (tendência mais forte)
+    rsi_ob: float = 75.0  # 🎯 OTIMIZAÇÃO: Mais conservador (75 vs 70)
+    rsi_os: float = 25.0  # 🎯 OTIMIZAÇÃO: Mais conservador (25 vs 30)
     bbands_k: float = 2.0
     fast_ma: int = 9
     slow_ma: int = 21
     macd_fast: int = 12
     macd_slow: int = 26
     macd_sig: int = 9
-    river_threshold: float = 0.53  # Threshold mínimo para filtro River (prob_up >= para CALL, prob_up <= 1-threshold para PUT)
+    river_threshold: float = 0.68  # 🎯 OTIMIZAÇÃO: Aumentado de 0.53 para 0.68 (mais conservador)
     # Gate opcional com MLEngine (Transformer + LightGBM)
     ml_gate: bool = True
-    ml_prob_threshold: float = 0.6  # prob mínima do ensemble (0..1)
+    ml_prob_threshold: float = 0.65  # 🎯 OTIMIZAÇÃO: Aumentado de 0.6 para 0.65 (mais rigoroso)
     adx_block_candles: int = 20
     vol_block_candles: int = 15
+    # 🎯 NOVOS PARÂMETROS DE OTIMIZAÇÃO
+    enable_technical_stop_loss: bool = True  # Habilitar stop loss técnico
+    macd_divergence_stop: bool = True  # Stop loss por divergência MACD
+    rsi_overextended_stop: bool = True  # Stop loss por RSI overextended
+    consecutive_loss_cooldown: int = 300  # Cooldown após perdas (5 min em segundos)
+    min_adx_for_trade: float = 25.0  # ADX mínimo para permitir trade
+    feature_selection_enabled: bool = True  # Habilitar seleção automática de features
+    max_features: int = 18  # Máximo de features (reduzido de ~53)
     mode: str = "paper"  # paper | live
 
 class StrategyStatus(BaseModel):
