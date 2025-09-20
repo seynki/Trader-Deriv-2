@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Backend Testing - ML Engine + Risk Stops Validation
-Tests the new ML Engine functionalities and risk stops as requested in the review
+Backend Testing - Dynamic Stop Loss System Validation
+Tests the new Dynamic Stop Loss system as requested in the review
 
 Test Plan (Portuguese Review Request):
-1) Treino com calibração + SHAP - POST /api/ml/engine/train
-2) Predição usa calibrador - POST /api/ml/engine/predict  
-3) Hard stop por sequência de perdas - POST /api/strategy/start
-4) Alias e tuner - POST /api/strategy/river/backtest e POST /api/strategy/river/tune
+1) GET /api/strategy/optimize/status - Verificar novos parâmetros de stop loss dinâmico
+2) POST /api/strategy/optimize/apply - Testar aplicação das configurações
+3) GET /api/strategy/status - Verificar estado da estratégia
+4) GET /api/deriv/status - Testar conectividade Deriv
 
-Notes: No frontend testing. Don't execute /api/deriv/buy. Use only /api prefix. 
-DEMO environment with tokens already in backend/.env.
+Notes: No frontend testing. Don't execute /api/deriv/buy without explicit authorization. 
+Use only /api prefix. DEMO environment with tokens already in backend/.env.
 """
 
 import requests
