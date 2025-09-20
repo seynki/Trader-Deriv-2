@@ -2497,7 +2497,7 @@ async def test_stop_loss_system():
         test_stake = 1.0
         
         # Adicionar contrato de teste
-        _strategy_runner.active_contracts[test_contract_id] = {
+        _strategy.active_contracts[test_contract_id] = {
             "stake": test_stake,
             "symbol": "R_100",
             "direction": "TEST",
