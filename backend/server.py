@@ -1094,9 +1094,11 @@ class StrategyRunner:
         """
         try:
             if not _deriv.connected:
-                logger.warning("Deriv não conectada para venda")
+                logger.warning("🛡️ Deriv não conectada para venda de stop loss")
                 return False
                 
+            logger.info(f"🛡️ Tentando vender contrato {contract_id} por stop loss...")
+            
             # Preparar payload de venda
             sell_payload = {
                 "sell": contract_id,
@@ -1105,6 +1107,14 @@ class StrategyRunner:
             
             # Enviar requisição de venda
             response = await _deriv._send_and_wait(sell_payload, timeout=10)
+            
+            if response and "sell" in response:
+                sold_price = response["sell"].get("sold_for", 0)
+                logger.info(f"🛡️ Contrato {contract_id} vendido com sucesso por ${sold_price} (stop loss)")
+                return True
+            else:
+                logger.error(f"🛡️ Resposta inválida ao vender contrato {contract_id}: {response}")
+                return False
             
             if response and response.get('sell'):
                 sold_for = response['sell'].get('sold_for', 0)
