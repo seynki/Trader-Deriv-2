@@ -851,6 +851,80 @@ class StrategyRunner:
         self.last_reason: Optional[str] = None
         self.last_run_at: Optional[int] = None
         self.day: date = date.today()
+        # 🎯 OTIMIZAÇÃO: Variáveis para stop loss técnico
+        self.consecutive_losses: int = 0
+        self.last_loss_time: Optional[int] = None
+        self.current_position: Optional[Dict[str, Any]] = None
+        
+    def _check_technical_stop_loss(self, candles: List[Dict[str, Any]]) -> bool:
+        """
+        🎯 SISTEMA DE STOP LOSS TÉCNICO AVANÇADO
+        Verifica se deve parar trading baseado em indicadores técnicos
+        Retorna True se deve PARAR/BLOQUEAR trades
+        """
+        if not self.params.enable_technical_stop_loss or len(candles) < 50:
+            return False
+            
+        try:
+            close = [float(c["close"]) for c in candles]
+            high = [float(c["high"]) for c in candles]
+            low = [float(c["low"]) for c in candles]
+            
+            # 🎯 STOP LOSS 1: ADX muito fraco (sem tendência)
+            adx_values = _adx(high, low, close, 14)
+            last_adx = adx_values[-1] if adx_values else None
+            if last_adx is not None and last_adx < self.params.min_adx_for_trade:
+                return True  # Bloquear: ADX muito fraco
+                
+            # 🎯 STOP LOSS 2: RSI overextended (mercado sobrecomprado/sobrevendido)
+            if self.params.rsi_overextended_stop:
+                rsi_values = _rsi(close, 14)
+                last_rsi = next((x for x in reversed(rsi_values) if x is not None), None)
+                if last_rsi is not None and (last_rsi > 85 or last_rsi < 15):  # Condições extremas
+                    return True  # Bloquear: RSI overextended
+                        
+            # 🎯 STOP LOSS 3: Divergência MACD (sinal de reversão)
+            if self.params.macd_divergence_stop and len(close) >= 26:
+                macd_line = []
+                macd_signal = []
+                for i in range(26, len(close)):
+                    ema_fast = _ema(close[:i+1], 12)
+                    ema_slow = _ema(close[:i+1], 26)
+                    if ema_fast is not None and ema_slow is not None:
+                        macd_val = ema_fast - ema_slow
+                        macd_line.append(macd_val)
+                        
+                if len(macd_line) >= 9:
+                    # Calcular sinal MACD
+                    for i in range(9, len(macd_line)):
+                        macd_sig = _ema(macd_line[:i+1], 9)
+                        if macd_sig is not None:
+                            macd_signal.append(macd_sig)
+                            
+                    # Verificar divergência (MACD caindo while preço subindo ou vice-versa) 
+                    if len(macd_signal) >= 5:
+                        recent_macd = macd_signal[-5:]
+                        recent_prices = close[-5:]
+                        macd_trend = recent_macd[-1] - recent_macd[0]
+                        price_trend = recent_prices[-1] - recent_prices[0]
+                        
+                        # Divergência bearish: preço sobe, MACD desce
+                        # Divergência bullish: preço desce, MACD sobe
+                        if (price_trend > 0 and macd_trend < -0.001) or (price_trend < 0 and macd_trend > 0.001):
+                            return True  # Bloquear: Divergência MACD detectada
+                            
+            # 🎯 STOP LOSS 4: Cooldown após perdas consecutivas
+            current_time = int(time.time())
+            if (self.consecutive_losses >= self.params.max_consec_losses_stop and 
+                self.last_loss_time and 
+                current_time - self.last_loss_time < self.params.consecutive_loss_cooldown):
+                return True  # Bloquear: Em cooldown após perdas
+                
+            return False  # Não bloquear
+            
+        except Exception as e:
+            logger.warning(f"Erro no stop loss técnico: {e}")
+            return False  # Em caso de erro, não bloquear
 
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
         """
