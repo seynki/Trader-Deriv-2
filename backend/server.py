@@ -2185,7 +2185,12 @@ async def get_optimization_status():
             "ml_threshold": _strategy.params.ml_prob_threshold,
             "consecutive_losses": _strategy.consecutive_losses,
             "cooldown_active": (_strategy.last_loss_time and 
-                              int(time.time()) - _strategy.last_loss_time < _strategy.params.consecutive_loss_cooldown)
+                              int(time.time()) - _strategy.last_loss_time < _strategy.params.consecutive_loss_cooldown),
+            # 🛡️ STOP LOSS DINÂMICO
+            "dynamic_stop_loss": getattr(_strategy.params, 'enable_dynamic_stop_loss', False),
+            "stop_loss_percentage": getattr(_strategy.params, 'stop_loss_percentage', 0.50),
+            "stop_loss_check_interval": getattr(_strategy.params, 'stop_loss_check_interval', 2),
+            "active_contracts_count": len(getattr(_strategy, 'active_contracts', {}))
         },
         "performance_target": {
             "current_winrate_estimate": "33% (1min) | 53% (2min)",
