@@ -859,6 +859,9 @@ class StrategyRunner:
         self.consecutive_losses: int = 0
         self.last_loss_time: Optional[int] = None
         self.current_position: Optional[Dict[str, Any]] = None
+        # 🛡️ STOP LOSS DINÂMICO: Rastreamento de contratos ativos
+        self.active_contracts: Dict[int, Dict[str, Any]] = {}  # contract_id -> {stake, start_time, contract_data}
+        self.stop_loss_task: Optional[asyncio.Task] = None
         
     def _check_technical_stop_loss(self, candles: List[Dict[str, Any]]) -> bool:
         """
