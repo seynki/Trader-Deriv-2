@@ -688,6 +688,14 @@ def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
     return sum(seg) / n if seg else None
 
 
+def _ema(arr: List[float], period: int) -> Optional[float]:
+    """Calculate EMA and return the last value"""
+    if len(arr) < period:
+        return None
+    ema_series = _ema_series(arr, period)
+    return next((x for x in reversed(ema_series) if x is not None), None)
+
+
 def _ema_series(arr: List[float], period: int) -> List[Optional[float]]:
     if len(arr) == 0:
         return []
