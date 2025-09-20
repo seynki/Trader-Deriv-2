@@ -2147,6 +2147,10 @@ async def apply_optimizations(config: OptimizationConfig):
         _strategy.params.min_adx_for_trade = config.min_adx_for_trade
         _strategy.params.ml_prob_threshold = config.ml_prob_threshold
         _strategy.params.max_features = config.max_features
+        # 🛡️ STOP LOSS DINÂMICO
+        _strategy.params.enable_dynamic_stop_loss = config.enable_dynamic_stop_loss
+        _strategy.params.stop_loss_percentage = config.stop_loss_percentage
+        _strategy.params.stop_loss_check_interval = config.stop_loss_check_interval
         
         # Reset consecutive losses counter
         _strategy.consecutive_losses = 0
