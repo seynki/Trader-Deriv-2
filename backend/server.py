@@ -2518,12 +2518,12 @@ async def test_stop_loss_system():
         logger.info(f"🧪 Teste de stop loss: Contrato {test_contract_id} com perda simulada de ${simulated_loss}")
         
         # Verificar se stop loss seria ativado
-        current_profit = await _strategy_runner._get_contract_current_profit(test_contract_id)
-        loss_limit = -abs(test_stake * _strategy_runner.params.stop_loss_percentage)
+        current_profit = await _strategy._get_contract_current_profit(test_contract_id)
+        loss_limit = -abs(test_stake * _strategy.params.stop_loss_percentage)
         would_trigger = current_profit is not None and current_profit <= loss_limit
         
         # Limpar teste
-        _strategy_runner.active_contracts.pop(test_contract_id, None)
+        _strategy.active_contracts.pop(test_contract_id, None)
         _deriv.last_contract_data.pop(test_contract_id, None)
         
         return {
@@ -2534,9 +2534,9 @@ async def test_stop_loss_system():
             "loss_limit": loss_limit,
             "would_trigger_stop_loss": would_trigger,
             "stop_loss_config": {
-                "enabled": _strategy_runner.params.enable_dynamic_stop_loss,
-                "percentage": _strategy_runner.params.stop_loss_percentage,
-                "check_interval": _strategy_runner.params.stop_loss_check_interval
+                "enabled": _strategy.params.enable_dynamic_stop_loss,
+                "percentage": _strategy.params.stop_loss_percentage,
+                "check_interval": _strategy.params.stop_loss_check_interval
             },
             "message": "✅ Sistema de stop loss está funcionando" if would_trigger else "❌ Stop loss não seria ativado - verificar configuração"
         }
