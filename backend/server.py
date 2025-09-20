@@ -1289,10 +1289,14 @@ class StrategyRunner:
                 else:
                     pnl = await self._live_trade(self.params.symbol, side, self.params.duration, self.params.stake)
                 self.daily_pnl += pnl
-                # Cooldown adaptativo por sequência de perdas
+                # 🎯 ATUALIZAR TRACKING DE PERDAS CONSECUTIVAS
                 if pnl <= 0:
+                    self.consecutive_losses += 1
+                    self.last_loss_time = int(time.time())
                     consec_losses += 1
                 else:
+                    self.consecutive_losses = 0
+                    self.last_loss_time = None
                     consec_losses = 0
                 if consec_losses >= 3:
                     # aumentar cooldown e aplicar pausa temporária
