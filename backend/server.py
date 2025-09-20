@@ -2200,6 +2200,7 @@ async def get_optimization_status():
                 "Features: 53+ → 18 (reduce overfitting)", 
                 "River threshold: 0.53 → 0.68 (mais conservador)",
                 "Stop loss técnico: MACD + ADX + RSI",
+                "🛡️ Stop loss dinâmico: 50% perda → venda automática",
                 "ML threshold: 0.6 → 0.65 (mais rigoroso)"
             ]
         }
