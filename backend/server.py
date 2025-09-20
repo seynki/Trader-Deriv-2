@@ -1273,34 +1273,70 @@ class StrategyRunner:
         return data.get("candles") or []
 
     async def _paper_trade(self, symbol: str, side: str, duration_ticks: int, stake: float) -> float:
+        """
+        🛡️ TRADE PAPER COM STOP LOSS DINÂMICO
+        Simula trade com monitoramento de stop loss em tempo real
+        """
         # entry = last tick
         await _deriv.ensure_subscribed(symbol)
         q = await _deriv.add_queue(symbol)
         entry_price: Optional[float] = None
         profit: float = 0.0
+        
+        # 🛡️ Configurações de stop loss
+        stop_loss_triggered = False
+        loss_limit = -abs(stake * self.params.stop_loss_percentage) if self.params.enable_dynamic_stop_loss else None
+        
         try:
             # get first tick as entry
             try:
                 first_msg = await asyncio.wait_for(q.get(), timeout=10)
                 entry_price = float(first_msg.get("price")) if first_msg else None
+                if entry_price:
+                    logger.info(f"🛡️ PAPER TRADE iniciado: {symbol} {side} stake={stake} entry={entry_price}")
             except asyncio.TimeoutError:
                 return 0.0
-            # collect next duration_ticks
+                
+            # collect next duration_ticks with stop loss monitoring
             last_price = entry_price
             collected = 0
             t0 = time.time()
+            
             while collected < duration_ticks and (time.time() - t0) < (duration_ticks * 5):
                 try:
                     m = await asyncio.wait_for(q.get(), timeout=5)
                     if m and m.get("type") == "tick":
                         last_price = float(m.get("price"))
                         collected += 1
+                        
+                        # 🛡️ VERIFICAR STOP LOSS EM TEMPO REAL
+                        if self.params.enable_dynamic_stop_loss and entry_price and loss_limit:
+                            # Calcular P&L atual baseado na direção
+                            if side == "RISE":  # CALL
+                                current_profit = (stake * 0.95) if last_price > entry_price else (-stake)
+                            else:  # PUT
+                                current_profit = (stake * 0.95) if last_price < entry_price else (-stake)
+                            
+                            # Verificar se atingiu stop loss
+                            if current_profit <= loss_limit:
+                                stop_loss_triggered = True
+                                logger.warning(f"🛡️ STOP LOSS PAPER ATIVADO! {symbol}: Profit {current_profit:.2f} <= Limite {loss_limit:.2f}")
+                                logger.info(f"🛡️ Entry: {entry_price:.5f}, Current: {last_price:.5f}, Side: {side}")
+                                profit = current_profit
+                                break
+                                
                 except asyncio.TimeoutError:
                     pass
-            # settle
-            win = (last_price is not None and entry_price is not None and ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price)))
-            # assume payout ratio 0.95 for paper
-            profit = (stake * 0.95) if win else (-stake)
+            
+            # settle normal se não houve stop loss
+            if not stop_loss_triggered and last_price is not None and entry_price is not None:
+                win = ((side == "RISE" and last_price > entry_price) or (side == "FALL" and last_price < entry_price))
+                # assume payout ratio 0.95 for paper
+                profit = (stake * 0.95) if win else (-stake)
+                logger.info(f"🛡️ PAPER TRADE finalizado: {symbol} {'WIN' if win else 'LOSS'} profit={profit:.2f}")
+            elif stop_loss_triggered:
+                logger.info(f"🛡️ PAPER TRADE finalizado por STOP LOSS: {symbol} profit={profit:.2f}")
+                
             return profit
         finally:
             _deriv.remove_queue(symbol, q)
