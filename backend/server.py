@@ -2284,41 +2284,68 @@ class OptimizationConfig(BaseModel):
     stop_loss_check_interval: int = 2  # Verificar a cada 2 segundos
 
 @api_router.post("/strategy/optimize/apply")
-async def apply_optimizations(config: OptimizationConfig):
-    """🎯 Aplicar otimizações para melhorar winrate de 33% para 53%+"""
+async def apply_optimization_settings(request: Dict[str, Any]):
+    """Aplicar configurações de otimização à estratégia"""
     try:
-        # Atualizar parâmetros da estratégia
-        if config.use_2min_timeframe:
-            _strategy.params.granularity = 120  # 2 minutos
-            
-        _strategy.params.river_threshold = config.river_threshold
-        _strategy.params.enable_technical_stop_loss = config.enable_technical_stop_loss
-        _strategy.params.min_adx_for_trade = config.min_adx_for_trade
-        _strategy.params.ml_prob_threshold = config.ml_prob_threshold
-        _strategy.params.max_features = config.max_features
-        # 🛡️ STOP LOSS DINÂMICO
-        _strategy.params.enable_dynamic_stop_loss = config.enable_dynamic_stop_loss
-        _strategy.params.stop_loss_percentage = config.stop_loss_percentage
-        _strategy.params.stop_loss_check_interval = config.stop_loss_check_interval
+        logger.info(f"🎯 Aplicando otimizações: {request}")
         
-        # Reset consecutive losses counter
-        _strategy.consecutive_losses = 0
-        _strategy.last_loss_time = None
+        # Validar e aplicar configurações
+        if "timeframe_seconds" in request:
+            new_timeframe = int(request["timeframe_seconds"])
+            if new_timeframe in [60, 120, 180, 300]:  # 1m, 2m, 3m, 5m
+                _strategy_runner.params.timeframe_seconds = new_timeframe
+                logger.info(f"🎯 Timeframe alterado para {new_timeframe}s")
+        
+        if "river_threshold" in request:
+            new_threshold = float(request["river_threshold"])
+            if 0.5 <= new_threshold <= 0.8:
+                _strategy_runner.params.river_threshold = new_threshold
+                logger.info(f"🎯 River threshold alterado para {new_threshold}")
+        
+        if "max_features" in request:
+            new_max_features = int(request["max_features"])
+            if 10 <= new_max_features <= 100:
+                _strategy_runner.params.max_features = new_max_features
+                logger.info(f"🎯 Max features alterado para {new_max_features}")
+        
+        if "technical_stop_loss" in request:
+            _strategy_runner.params.enable_technical_stop_loss = bool(request["technical_stop_loss"])
+            logger.info(f"🎯 Stop loss técnico: {_strategy_runner.params.enable_technical_stop_loss}")
+        
+        if "min_adx" in request:
+            _strategy_runner.params.min_adx = float(request["min_adx"])
+            logger.info(f"🎯 ADX mínimo alterado para {_strategy_runner.params.min_adx}")
+        
+        if "ml_threshold" in request:
+            _strategy_runner.params.ml_prob_threshold = float(request["ml_threshold"])
+            logger.info(f"🎯 ML threshold alterado para {_strategy_runner.params.ml_prob_threshold}")
+        
+        # 🛡️ STOP LOSS DINÂMICO
+        if "enable_dynamic_stop_loss" in request:
+            _strategy_runner.params.enable_dynamic_stop_loss = bool(request["enable_dynamic_stop_loss"])
+            logger.info(f"🛡️ Stop loss dinâmico: {_strategy_runner.params.enable_dynamic_stop_loss}")
+        
+        if "stop_loss_percentage" in request:
+            new_percentage = float(request["stop_loss_percentage"])
+            if 0.1 <= new_percentage <= 1.0:  # 10% a 100%
+                _strategy_runner.params.stop_loss_percentage = new_percentage
+                logger.info(f"🛡️ Stop loss percentage alterado para {new_percentage*100}%")
+        
+        if "stop_loss_check_interval" in request:
+            new_interval = int(request["stop_loss_check_interval"])
+            if 1 <= new_interval <= 30:  # 1 a 30 segundos
+                _strategy_runner.params.stop_loss_check_interval = new_interval
+                logger.info(f"🛡️ Stop loss check interval alterado para {new_interval}s")
         
         return {
+            "success": True,
             "message": "🎯 Otimizações aplicadas com sucesso",
-            "applied_config": {
-                "timeframe": "2 minutos" if config.use_2min_timeframe else "1 minuto",
-                "river_threshold": config.river_threshold,
-                "max_features": config.max_features,
-                "technical_stop_loss": config.enable_technical_stop_loss,
-                "min_adx": config.min_adx_for_trade,
-                "ml_threshold": config.ml_prob_threshold
-            },
-            "expected_improvement": "Winrate: 33% → 53%+ | Estabilidade: ↑ | Features: 53 → 18"
+            "applied_settings": request
         }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao aplicar otimizações: {str(e)}")
+        logger.error(f"Erro aplicando otimizações: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro aplicando otimizações: {str(e)}")
 
 @api_router.get("/strategy/optimize/status")
 async def get_optimization_status():
