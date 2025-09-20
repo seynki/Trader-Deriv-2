@@ -1834,6 +1834,71 @@ async def river_decide_trade(req: RiverDecideTradeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao executar ordem Deriv: {e}")
 
+# 🔄 NOVOS ENDPOINTS PARA GERENCIAMENTO DE BACKUPS RIVER
+@api_router.get("/ml/river/backups")
+async def river_list_backups():
+    """Lista todos os backups disponíveis do modelo River"""
+    try:
+        backups = RiverOnlineCandleModel.list_backups()
+        return {
+            "backups": backups,
+            "total_backups": len(backups),
+            "backup_directory": "/app/backend/ml_models/river_backups"
+        }
+    except Exception as e:
+        logging.error(f"Error listing River backups: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro listando backups River: {str(e)}")
+
+@api_router.post("/ml/river/restore")
+async def river_restore_backup(request: Dict[str, Any]):
+    """Restaura modelo River de um backup específico"""
+    try:
+        backup_filename = request.get("backup_filename")
+        if not backup_filename:
+            raise HTTPException(status_code=400, detail="backup_filename é obrigatório")
+        
+        success = RiverOnlineCandleModel.restore_from_backup(backup_filename)
+        if not success:
+            raise HTTPException(status_code=500, detail="Falha ao restaurar backup")
+        
+        # Verificar modelo restaurado
+        restored_model = RiverOnlineCandleModel.load()
+        
+        return {
+            "success": True,
+            "message": f"Backup {backup_filename} restaurado com sucesso",
+            "restored_samples": restored_model.sample_count,
+            "restored_accuracy": float(restored_model.metric_acc.get()) if restored_model.sample_count > 0 else None,
+            "restored_logloss": float(restored_model.metric_logloss.get()) if restored_model.sample_count > 0 else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error restoring River backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro restaurando backup River: {str(e)}")
+
+@api_router.post("/ml/river/force_backup")
+async def river_force_backup():
+    """Força criação de backup do modelo River atual"""
+    try:
+        if not Path("/app/backend/ml_models/river_online_model.pkl").exists():
+            raise HTTPException(status_code=404, detail="Modelo River não encontrado")
+        
+        model = RiverOnlineCandleModel.load()
+        model._create_backup()
+        
+        return {
+            "success": True,
+            "message": "Backup forçado criado com sucesso",
+            "current_samples": model.sample_count,
+            "backup_directory": "/app/backend/ml_models/river_backups"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error forcing River backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro criando backup forçado: {str(e)}")
+
 # ========================
 # RIVER THRESHOLD CONTROL ENDPOINTS  
 # ========================
