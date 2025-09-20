@@ -2129,6 +2129,10 @@ class OptimizationConfig(BaseModel):
     enable_technical_stop_loss: bool = True
     min_adx_for_trade: float = 25.0  # ADX mínimo mais alto
     ml_prob_threshold: float = 0.65  # ML threshold mais rigoroso
+    # 🛡️ STOP LOSS DINÂMICO
+    enable_dynamic_stop_loss: bool = True  # Habilitar stop loss dinâmico
+    stop_loss_percentage: float = 0.50  # 50% de perda para ativar stop loss
+    stop_loss_check_interval: int = 2  # Verificar a cada 2 segundos
 
 @api_router.post("/strategy/optimize/apply")
 async def apply_optimizations(config: OptimizationConfig):
