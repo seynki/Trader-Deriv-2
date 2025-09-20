@@ -27,25 +27,22 @@ logger = logging.getLogger(__name__)
 
 # --- Configurações do bot ---
 SYMBOLS = ["R_10"]  # símbolos a avaliar
-# timeframes: representados como ('type','value') where type in {'ticks','s','m'}
-# FILTRADOS: Removidos 1-2 ticks que causam winrate baixo
+# 🎯 TIMEFRAMES OTIMIZADOS: Foco em 2+ minutos para melhor winrate (53% vs 33% em 1min)
 TIMEFRAMES = [
-    # REMOVIDOS: ("ticks", 1) e ("ticks", 2) - muito problemáticos para winrate
-    ("ticks", 5),        # janela de 5 ticks (mínimo para ticks)
-    ("ticks", 10),       # janela de 10 ticks
-    ("ticks", 25),       # janela de 25 ticks
-    ("ticks", 50),       # janela de 50 ticks
-    ("s", 30),           # 30 segundos (removido 15s muito rápido)
-    ("s", 60),           # 1 minuto em segundos
-    ("s", 120),          # 2 minutos em segundos
-    ("s", 300),          # 5 minutos em segundos
-    ("m", 1),            # 1 minuto
-    ("m", 2),            # 2 minutos - FOCO CONSERVADOR
-    ("m", 3),            # 3 minutos - FOCO CONSERVADOR
-    ("m", 5),            # 5 minutos - FOCO CONSERVADOR
-    ("m", 10),           # 10 minutos - FOCO CONSERVADOR
-    ("m", 15),           # 15 minutos - FOCO CONSERVADOR
-    ("m", 30),           # 30 minutos - FOCO CONSERVADOR
+    # REMOVIDOS: ("ticks", 1), ("ticks", 2), ("s", 15) - muito arriscados (winrate baixo)
+    ("ticks", 5),        # janela de 5 ticks (mínimo para ticks) - PESO BAIXO
+    ("ticks", 10),       # janela de 10 ticks - PESO BAIXO
+    ("ticks", 25),       # janela de 25 ticks - PESO BAIXO
+    ("s", 30),           # 30 segundos - PESO BAIXO
+    ("s", 60),           # 1 minuto em segundos - PESO MÉDIO
+    ("s", 120),          # 2 minutos em segundos - 🎯 PESO ALTO (53% winrate)
+    ("s", 180),          # 3 minutos - 🎯 PESO ALTO
+    ("s", 300),          # 5 minutos em segundos - 🎯 PESO ALTO
+    ("m", 2),            # 2 minutos - 🎯 PESO MÁXIMO (53% winrate confirmado)
+    ("m", 3),            # 3 minutos - 🎯 PESO MÁXIMO
+    ("m", 5),            # 5 minutos - 🎯 PESO MÁXIMO  
+    ("m", 10),           # 10 minutos - 🎯 PESO MUITO ALTO
+    ("m", 15),           # 15 minutos - 🎯 PESO MUITO ALTO
 ]
 
 SIM_WINDOW_SECONDS = 60  # janela de histórico (em segundos) usada para simular performance
