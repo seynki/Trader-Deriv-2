@@ -621,11 +621,12 @@ def train_walkforward_and_maybe_promote(
     
     y = make_target(df, horizon=horizon, threshold=threshold)
     
-    # Enhanced feature selection
-    initial_features = select_features(feats_df)
+    # 🎯 OTIMIZAÇÃO: Seleção automática com máximo de features configurável
+    max_features = 18  # Reduzido de ~53+ para 18 features principais
+    initial_features = select_features(feats_df, max_features=max_features, method="auto")
     
-    # Remove highly correlated features
-    final_features = remove_correlated_features(feats_df, initial_features, threshold=0.95)
+    # Remove highly correlated features (threshold mais rigoroso)
+    final_features = remove_correlated_features(feats_df, initial_features, threshold=0.90)
     
     print(f"Feature engineering: {len(initial_features)} initial → {len(final_features)} final features")
     
