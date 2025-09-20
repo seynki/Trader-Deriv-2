@@ -1222,6 +1222,13 @@ class StrategyRunner:
                 if not signal:
                     await asyncio.sleep(cooldown_seconds)
                     continue
+                    
+                # 🎯 VERIFICAR STOP LOSS TÉCNICO ANTES DE PROSSEGUIR
+                if self._check_technical_stop_loss(candles):
+                    self.last_reason = "🛑 Stop Loss Técnico: Condições desfavoráveis detectadas"
+                    await asyncio.sleep(cooldown_seconds)
+                    continue
+                    
                 # Opcional: confirmar com MLEngine se habilitado
                 if self.params.ml_gate:
                     try:
