@@ -1493,6 +1493,14 @@ class StrategyRunner:
                 await self.task
             except Exception:
                 pass
+        # 🛡️ STOP LOSS DINÂMICO: Parar monitoramento
+        if self.stop_loss_task and not self.stop_loss_task.done():
+            self.stop_loss_task.cancel()
+            try:
+                await self.stop_loss_task
+            except Exception:
+                pass
+            logger.info("🛡️ Sistema de Stop Loss Dinâmico parado")
         self.running = False
 
     def status(self) -> StrategyStatus:
