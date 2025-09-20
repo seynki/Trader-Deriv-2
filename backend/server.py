@@ -933,6 +933,127 @@ class StrategyRunner:
             logger.warning(f"Erro no stop loss técnico: {e}")
             return False  # Em caso de erro, não bloquear
 
+    async def _start_dynamic_stop_loss_monitor(self):
+        """
+        🛡️ SISTEMA DE STOP LOSS DINÂMICO
+        Monitora contratos ativos em tempo real e sai quando atinge limite de perda
+        """
+        if not self.params.enable_dynamic_stop_loss:
+            return
+            
+        logger.info(f"🛡️ Stop Loss Dinâmico iniciado: {self.params.stop_loss_percentage*100}% de perda, check a cada {self.params.stop_loss_check_interval}s")
+        
+        while self.running:
+            try:
+                if not self.active_contracts:
+                    await asyncio.sleep(self.params.stop_loss_check_interval)
+                    continue
+                
+                # Verificar cada contrato ativo
+                contracts_to_remove = []
+                for contract_id, contract_data in list(self.active_contracts.items()):
+                    try:
+                        # Obter dados atuais do contrato via WebSocket
+                        current_profit = await self._get_contract_current_profit(contract_id)
+                        if current_profit is None:
+                            continue
+                            
+                        stake = contract_data.get('stake', 1.0)
+                        loss_limit = -abs(stake * self.params.stop_loss_percentage)
+                        
+                        # Verificar se atingiu stop loss
+                        if current_profit <= loss_limit:
+                            logger.warning(f"🛡️ STOP LOSS ATIVADO! Contract {contract_id}: Profit {current_profit} <= Limite {loss_limit}")
+                            
+                            # Tentar vender o contrato
+                            sold_successfully = await self._sell_contract(contract_id)
+                            if sold_successfully:
+                                logger.info(f"🛡️ Contrato {contract_id} vendido com sucesso por stop loss")
+                                contracts_to_remove.append(contract_id)
+                                # Atualizar estatísticas
+                                self.consecutive_losses += 1
+                                self.last_loss_time = int(time.time())
+                            else:
+                                logger.warning(f"🛡️ Falha ao vender contrato {contract_id} por stop loss")
+                                
+                    except Exception as e:
+                        logger.error(f"🛡️ Erro monitorando contrato {contract_id}: {e}")
+                
+                # Remover contratos processados
+                for contract_id in contracts_to_remove:
+                    self.active_contracts.pop(contract_id, None)
+                    
+            except Exception as e:
+                logger.error(f"🛡️ Erro no loop de stop loss dinâmico: {e}")
+            
+            await asyncio.sleep(self.params.stop_loss_check_interval)
+
+    async def _get_contract_current_profit(self, contract_id: int) -> Optional[float]:
+        """
+        Obtém o profit atual do contrato via dados em cache do WebSocket
+        """
+        try:
+            # Verificar se temos dados recentes do WebSocket
+            if hasattr(_deriv, 'last_contract_data') and contract_id in _deriv.last_contract_data:
+                contract_data = _deriv.last_contract_data[contract_id]
+                profit = contract_data.get('profit')
+                if profit is not None:
+                    return float(profit)
+            return None
+        except Exception as e:
+            logger.error(f"Erro obtendo profit do contrato {contract_id}: {e}")
+            return None
+
+    async def _sell_contract(self, contract_id: int) -> bool:
+        """
+        Vende um contrato usando a API da Deriv
+        """
+        try:
+            if not _deriv.connected:
+                logger.warning("Deriv não conectada para venda")
+                return False
+                
+            # Preparar payload de venda
+            sell_payload = {
+                "sell": contract_id,
+                "price": 0  # Vender pelo preço atual
+            }
+            
+            # Enviar requisição de venda
+            response = await _deriv._send_and_wait(sell_payload, timeout=10)
+            
+            if response and response.get('sell'):
+                sold_for = response['sell'].get('sold_for', 0)
+                logger.info(f"🛡️ Contrato {contract_id} vendido por {sold_for}")
+                return True
+            else:
+                logger.warning(f"🛡️ Resposta inválida ao vender contrato {contract_id}: {response}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"🛡️ Erro vendendo contrato {contract_id}: {e}")
+            return False
+
+    def _add_active_contract(self, contract_id: int, stake: float, contract_data: Dict = None):
+        """
+        Adiciona contrato à lista de monitoramento de stop loss
+        """
+        if self.params.enable_dynamic_stop_loss:
+            self.active_contracts[contract_id] = {
+                'stake': stake,
+                'start_time': int(time.time()),
+                'contract_data': contract_data or {}
+            }
+            logger.info(f"🛡️ Contrato {contract_id} adicionado ao monitoramento (stake: {stake})")
+
+    def _remove_active_contract(self, contract_id: int):
+        """
+        Remove contrato da lista de monitoramento (quando expira naturalmente)
+        """
+        if contract_id in self.active_contracts:
+            self.active_contracts.pop(contract_id)
+            logger.info(f"🛡️ Contrato {contract_id} removido do monitoramento")
+
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
         """
         LÓGICA HÍBRIDA: River Online Learning (condição principal) + Indicadores Técnicos (confirmação)
