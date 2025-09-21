@@ -55,70 +55,66 @@ def test_ml_stop_loss_system():
     json_responses = {}
     
     try:
-        # Test 1: GET /api/strategy/optimize/status - Verificar parâmetros stop loss dinâmico
-        log("\n🔍 TEST 1: GET /api/strategy/optimize/status")
-        log("   Objetivo: Verificar se novos parâmetros de stop loss dinâmico estão presentes")
-        log("   Esperado: dynamic_stop_loss=true, stop_loss_percentage=0.5, stop_loss_check_interval=2, active_contracts_count")
+        # Test 1: GET /api/strategy/ml_stop_loss/status - Verificar modelo ML inicializado
+        log("\n🔍 TEST 1: GET /api/strategy/ml_stop_loss/status")
+        log("   Objetivo: Verificar se modelo ML está inicializado e configurado")
+        log("   Esperado: initialized=true, thresholds configurados, samples_processed")
         
         try:
-            response = session.get(f"{api_url}/strategy/optimize/status", timeout=15)
-            log(f"   GET /api/strategy/optimize/status: {response.status_code}")
+            response = session.get(f"{api_url}/strategy/ml_stop_loss/status", timeout=15)
+            log(f"   GET /api/strategy/ml_stop_loss/status: {response.status_code}")
             
             if response.status_code == 200:
                 status_data = response.json()
-                json_responses["optimize_status"] = status_data
+                json_responses["ml_stop_loss_status"] = status_data
                 log(f"   Response: {json.dumps(status_data, indent=2)}")
                 
-                current_config = status_data.get('current_config', {})
-                dynamic_stop_loss = current_config.get('dynamic_stop_loss')
-                stop_loss_percentage = current_config.get('stop_loss_percentage')
-                stop_loss_check_interval = current_config.get('stop_loss_check_interval')
-                active_contracts_count = current_config.get('active_contracts_count')
+                ml_status = status_data.get('ml_stop_loss', {})
+                initialized = ml_status.get('initialized')
+                samples_processed = ml_status.get('samples_processed')
+                thresholds = ml_status.get('thresholds', {})
+                accuracy = ml_status.get('accuracy')
                 
-                log(f"   📊 Stop Loss Dinâmico Status:")
-                log(f"      Dynamic Stop Loss: {dynamic_stop_loss}")
-                log(f"      Stop Loss Percentage: {stop_loss_percentage}")
-                log(f"      Stop Loss Check Interval: {stop_loss_check_interval}")
-                log(f"      Active Contracts Count: {active_contracts_count}")
+                recovery_threshold = thresholds.get('recovery_threshold')
+                loss_threshold = thresholds.get('loss_threshold')
+                max_loss_limit = thresholds.get('max_loss_limit')
+                
+                log(f"   📊 ML Stop Loss Status:")
+                log(f"      Initialized: {initialized}")
+                log(f"      Samples Processed: {samples_processed}")
+                log(f"      Accuracy: {accuracy}")
+                log(f"      Recovery Threshold: {recovery_threshold}")
+                log(f"      Loss Threshold: {loss_threshold}")
+                log(f"      Max Loss Limit: {max_loss_limit}")
                 
                 # Validate expected fields
-                has_dynamic_stop_loss = dynamic_stop_loss is not None
-                has_stop_loss_percentage = stop_loss_percentage is not None
-                has_stop_loss_check_interval = stop_loss_check_interval is not None
-                has_active_contracts_count = active_contracts_count is not None
+                is_initialized = initialized == True
+                has_samples = samples_processed is not None and samples_processed >= 0
+                has_recovery_threshold = recovery_threshold is not None
+                has_loss_threshold = loss_threshold is not None
+                has_max_loss_limit = max_loss_limit is not None
                 
-                # Check expected values
-                expected_dynamic_stop_loss = dynamic_stop_loss == True
-                expected_stop_loss_percentage = stop_loss_percentage == 0.5
-                expected_stop_loss_check_interval = stop_loss_check_interval == 2
-                expected_active_contracts_count = isinstance(active_contracts_count, int)
-                
-                if (has_dynamic_stop_loss and has_stop_loss_percentage and 
-                    has_stop_loss_check_interval and has_active_contracts_count and
-                    expected_dynamic_stop_loss and expected_stop_loss_percentage and
-                    expected_stop_loss_check_interval and expected_active_contracts_count):
-                    test_results["optimize_status_check"] = True
-                    log("✅ Test 1 OK: Parâmetros de stop loss dinâmico presentes e corretos")
-                    log(f"   🎯 dynamic_stop_loss={dynamic_stop_loss}, stop_loss_percentage={stop_loss_percentage}, check_interval={stop_loss_check_interval}s, active_contracts={active_contracts_count}")
+                if is_initialized and has_samples and has_recovery_threshold and has_loss_threshold and has_max_loss_limit:
+                    test_results["ml_stop_loss_status"] = True
+                    log("✅ Test 1 OK: Modelo ML Stop Loss inicializado e configurado")
+                    log(f"   🎯 Thresholds: recovery={recovery_threshold}, loss={loss_threshold}, max={max_loss_limit}")
                 else:
-                    log(f"❌ Test 1 FALHOU: Parâmetros ausentes ou incorretos")
-                    log(f"   dynamic_stop_loss: {has_dynamic_stop_loss} (expected=True: {expected_dynamic_stop_loss})")
-                    log(f"   stop_loss_percentage: {has_stop_loss_percentage} (expected=0.5: {expected_stop_loss_percentage})")
-                    log(f"   stop_loss_check_interval: {has_stop_loss_check_interval} (expected=2: {expected_stop_loss_check_interval})")
-                    log(f"   active_contracts_count: {has_active_contracts_count} (is_int: {expected_active_contracts_count})")
+                    log(f"❌ Test 1 FALHOU: Campos ausentes ou incorretos")
+                    log(f"   initialized: {is_initialized}, samples: {has_samples}, recovery: {has_recovery_threshold}")
+                    log(f"   loss: {has_loss_threshold}, max_loss: {has_max_loss_limit}")
             else:
-                log(f"❌ Optimize Status FALHOU - HTTP {response.status_code}")
-                json_responses["optimize_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                log(f"❌ ML Stop Loss Status FALHOU - HTTP {response.status_code}")
+                json_responses["ml_stop_loss_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
-                    json_responses["optimize_status"] = error_data
+                    json_responses["ml_stop_loss_status"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
             log(f"❌ Test 1 FALHOU - Exception: {e}")
-            json_responses["optimize_status"] = {"error": str(e)}
+            json_responses["ml_stop_loss_status"] = {"error": str(e)}
         
         # Test 2: POST /api/strategy/optimize/apply - Aplicar configurações stop loss
         log("\n🔍 TEST 2: POST /api/strategy/optimize/apply")
