@@ -130,23 +130,24 @@ def test_ml_stop_loss_system():
                 json_responses["ml_stop_loss_test"] = test_data
                 log(f"   Response: {json.dumps(test_data, indent=2)}")
                 
-                simulation = test_data.get('simulation', {})
-                prediction = test_data.get('prediction', {})
-                decision = test_data.get('decision', {})
+                test_scenario = test_data.get('test_scenario', {})
+                ml_prediction = test_data.get('ml_prediction', {})
+                ml_decision = test_data.get('ml_decision', {})
                 
                 # Simulation data
-                contract_id = simulation.get('contract_id')
-                current_profit = simulation.get('current_profit')
-                stake = simulation.get('stake')
+                contract_id = test_scenario.get('contract_id')
+                current_profit = test_scenario.get('current_profit')
+                stake = 1.0  # Default stake from simulation
                 
                 # Prediction data
-                prob_recovery = prediction.get('prob_recovery')
-                features_used = prediction.get('features_used')
-                prediction_source = prediction.get('prediction_source')
+                prob_recovery = ml_prediction.get('probability_recovery')
+                prediction_details = ml_prediction.get('prediction_details', {})
+                features_used = prediction_details.get('features_used')
+                prediction_source = prediction_details.get('prediction_source')
                 
                 # Decision data
-                should_sell = decision.get('should_sell')
-                reason = decision.get('reason')
+                should_sell = ml_decision.get('should_sell')
+                reason = ml_decision.get('reason')
                 
                 log(f"   📊 ML Test Results:")
                 log(f"      Contract ID: {contract_id}")
