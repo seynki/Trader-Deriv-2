@@ -1166,15 +1166,24 @@ class StrategyRunner:
 
     def _add_active_contract(self, contract_id: int, stake: float, contract_data: Dict = None):
         """
-        Adiciona contrato à lista de monitoramento de stop loss
+        Adiciona contrato à lista de monitoramento de stop loss inteligente
         """
         if self.params.enable_dynamic_stop_loss:
+            # Extrair informações adicionais para ML
+            buy_res = contract_data.get('buy_res', {}) if contract_data else {}
+            symbol = self.params.symbol if hasattr(self.params, 'symbol') else "R_100"
+            
             self.active_contracts[contract_id] = {
                 'stake': stake,
                 'start_time': int(time.time()),
-                'contract_data': contract_data or {}
+                'symbol': symbol,
+                'contract_type': buy_res.get('contract_type', 'UNKNOWN'),
+                'buy_price': buy_res.get('buy_price', stake),
+                'payout': buy_res.get('payout', 0),
+                'contract_data': contract_data or {},
+                'ml_predictions': []  # Histórico de predições ML
             }
-            logger.info(f"🛡️ Contrato {contract_id} adicionado ao monitoramento (stake: {stake})")
+            logger.info(f"🤖 Contrato {contract_id} adicionado ao monitoramento ML (stake: {stake}, symbol: {symbol})")
 
     def _remove_active_contract(self, contract_id: int):
         """
