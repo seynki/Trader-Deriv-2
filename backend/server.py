@@ -1181,8 +1181,41 @@ class StrategyRunner:
         Remove contrato da lista de monitoramento (quando expira naturalmente)
         """
         if contract_id in self.active_contracts:
+            # 🤖 APRENDIZADO ML: Quando contrato expira naturalmente, aprender com resultado
+            contract_data = self.active_contracts[contract_id]
+            if 'ml_features_at_decision' in contract_data:
+                try:
+                    # Obter profit final do WebSocket
+                    final_profit = None
+                    if hasattr(_deriv, 'last_contract_data') and contract_id in _deriv.last_contract_data:
+                        final_profit = _deriv.last_contract_data[contract_id].get('profit', 0)
+                    
+                    if final_profit is not None:
+                        _ml_stop_loss.learn_from_outcome(
+                            contract_id=contract_id,
+                            features_at_decision=contract_data['ml_features_at_decision'],
+                            decision_made=False,  # Não vendeu, deixou expirar
+                            final_profit=float(final_profit),
+                            stake=contract_data.get('stake', 1.0)
+                        )
+                        logger.info(f"🧠 ML aprendeu com contrato expirado {contract_id}")
+                except Exception as e:
+                    logger.warning(f"Erro no aprendizado ML para contrato {contract_id}: {e}")
+                    
             self.active_contracts.pop(contract_id)
             logger.info(f"🛡️ Contrato {contract_id} removido do monitoramento")
+
+    async def _get_recent_candles_for_ml(self, symbol: str = "R_100", count: int = 30) -> List[Dict[str, Any]]:
+        """
+        Obtém candles recentes para análise ML
+        """
+        try:
+            # Usar método existente para obter candles
+            candles = await self._get_candles(symbol=symbol, timeframe="1m", count=count)
+            return candles if candles else []
+        except Exception as e:
+            logger.warning(f"Erro obtendo candles para ML: {e}")
+            return []
 
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
         """
