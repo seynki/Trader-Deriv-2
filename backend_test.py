@@ -320,17 +320,14 @@ def test_ml_stop_loss_system():
                 json_responses["traditional_stop_loss_test"] = test_traditional_data
                 log(f"   Response: {json.dumps(test_traditional_data, indent=2)}")
                 
-                simulation = test_traditional_data.get('simulation', {})
-                decision = test_traditional_data.get('decision', {})
-                
-                # Simulation data
-                contract_id = simulation.get('contract_id')
-                current_profit = simulation.get('current_profit')
-                stake = simulation.get('stake')
+                # Extract data from traditional test response
+                contract_id = test_traditional_data.get('simulated_contract_id')
+                current_profit = test_traditional_data.get('current_profit')
+                stake = 1.0  # Default stake
                 
                 # Decision data
-                should_sell = decision.get('should_sell')
-                reason = decision.get('reason')
+                should_sell = test_traditional_data.get('would_trigger_stop_loss')
+                reason = test_traditional_data.get('message')
                 
                 log(f"   📊 Traditional Test Results:")
                 log(f"      Contract ID: {contract_id}")
