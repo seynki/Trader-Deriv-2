@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Backend Testing - Dynamic Stop Loss System Validation
-Tests the new Dynamic Stop Loss system as requested in the review
+Backend Testing - ML Stop Loss Inteligente System Validation
+Tests the new ML Stop Loss system as requested in the Portuguese review
 
 Test Plan (Portuguese Review Request):
-1) GET /api/strategy/optimize/status - Verificar novos parâmetros de stop loss dinâmico
-2) POST /api/strategy/optimize/apply - Testar aplicação das configurações
-3) GET /api/strategy/status - Verificar estado da estratégia
-4) GET /api/deriv/status - Testar conectividade Deriv
+1) GET /api/strategy/ml_stop_loss/status - verificar se modelo está inicializado e configurado
+2) POST /api/strategy/ml_stop_loss/test - simular contrato com perda e ver decisão ML
+3) POST /api/strategy/ml_stop_loss/config - testar configuração com thresholds
+4) GET /api/strategy/stop_loss/status - verificar se sistema tradicional ainda funciona como fallback
+5) POST /api/strategy/stop_loss/test - verificar se sistema tradicional ainda funciona
 
-Notes: No frontend testing. Don't execute /api/deriv/buy without explicit authorization. 
+Notes: Focus on ML functionality, not real trades (only simulations). No frontend testing.
 Use only /api prefix. DEMO environment with tokens already in backend/.env.
 """
 
