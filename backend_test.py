@@ -274,6 +274,12 @@ def test_ml_stop_loss_system():
                 log(f"      Check Interval: {check_interval}")
                 log(f"      Active Contracts: {active_contracts}")
                 
+                dynamic_stop_loss = traditional_data.get('dynamic_stop_loss', {})
+                enabled = dynamic_stop_loss.get('enabled')
+                percentage = dynamic_stop_loss.get('percentage')
+                check_interval = dynamic_stop_loss.get('check_interval')
+                active_contracts = dynamic_stop_loss.get('active_contracts')
+                
                 # Validate traditional system fields
                 has_enabled = enabled is not None
                 has_percentage = percentage is not None
