@@ -358,7 +358,7 @@ def test_ml_stop_loss_system():
         
         # Final analysis and comprehensive report
         log("\n" + "🏁" + "="*68)
-        log("RESULTADO FINAL: Sistema de Stop Loss Dinâmico")
+        log("RESULTADO FINAL: Sistema de Stop Loss Inteligente com ML")
         log("🏁" + "="*68)
         
         passed_tests = sum(test_results.values())
@@ -372,10 +372,11 @@ def test_ml_stop_loss_system():
         
         log(f"\n📋 DETALHES POR TESTE:")
         test_names = {
-            "optimize_status_check": "1) GET /api/strategy/optimize/status - Parâmetros stop loss dinâmico",
-            "optimize_apply_config": "2) POST /api/strategy/optimize/apply - Aplicar configurações",
-            "strategy_status_check": "3) GET /api/strategy/status - Verificar estado estratégia",
-            "deriv_connectivity_check": "4) GET /api/deriv/status - Confirmar conectividade Deriv"
+            "ml_stop_loss_status": "1) GET /api/strategy/ml_stop_loss/status - Status modelo ML",
+            "ml_stop_loss_test": "2) POST /api/strategy/ml_stop_loss/test - Teste predição ML",
+            "ml_stop_loss_config": "3) POST /api/strategy/ml_stop_loss/config - Configuração thresholds",
+            "traditional_stop_loss_status": "4) GET /api/strategy/stop_loss/status - Sistema tradicional status",
+            "traditional_stop_loss_test": "5) POST /api/strategy/stop_loss/test - Sistema tradicional teste"
         }
         
         for test_key, passed in test_results.items():
@@ -391,26 +392,31 @@ def test_ml_stop_loss_system():
             log(json.dumps(json_data, indent=2, ensure_ascii=False))
             log("-" * 30)
         
-        overall_success = passed_tests >= 3  # Allow 1 failure out of 4 tests
+        overall_success = passed_tests >= 4  # Allow 1 failure out of 5 tests
         
         if overall_success:
-            log("\n🎉 SISTEMA DE STOP LOSS DINÂMICO VALIDADO COM SUCESSO!")
+            log("\n🎉 SISTEMA DE STOP LOSS INTELIGENTE COM ML VALIDADO COM SUCESSO!")
             log("📋 Funcionalidades validadas:")
-            if test_results["optimize_status_check"]:
-                log("   ✅ Status: Parâmetros de stop loss dinâmico presentes e corretos")
-            if test_results["optimize_apply_config"]:
-                log("   ✅ Apply: Configurações aplicadas com sucesso")
-            if test_results["strategy_status_check"]:
-                log("   ✅ Strategy: Estado da estratégia sem problemas")
-            if test_results["deriv_connectivity_check"]:
-                log("   ✅ Deriv: Conectividade confirmada")
-            log("   🛡️ CONCLUSÃO: Sistema de stop loss dinâmico configurado e pronto!")
-            log("   🚫 NÃO executado /api/deriv/buy conforme instruções (apenas endpoints de configuração)")
+            if test_results["ml_stop_loss_status"]:
+                log("   ✅ ML Status: Modelo inicializado e configurado")
+            if test_results["ml_stop_loss_test"]:
+                log("   ✅ ML Test: Predição e decisão inteligente funcionando")
+            if test_results["ml_stop_loss_config"]:
+                log("   ✅ ML Config: Configuração de thresholds aplicada")
+            if test_results["traditional_stop_loss_status"]:
+                log("   ✅ Traditional Status: Sistema fallback disponível")
+            if test_results["traditional_stop_loss_test"]:
+                log("   ✅ Traditional Test: Sistema fallback funcionando")
+            log("   🤖 CONCLUSÃO: Sistema ML Stop Loss com 16+ features operacional!")
+            log("   🛡️ Sistema usa ML para prever recuperação de trades perdedoras")
+            log("   🧠 Aprendizado automático com resultados de trades")
+            log("   🔄 Fallback para sistema tradicional em caso de erro")
+            log("   🚫 NÃO executado /api/deriv/buy conforme instruções (apenas simulações)")
         else:
-            log("\n❌ PROBLEMAS DETECTADOS NO SISTEMA DE STOP LOSS DINÂMICO")
+            log("\n❌ PROBLEMAS DETECTADOS NO SISTEMA DE STOP LOSS INTELIGENTE")
             failed_steps = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
             log(f"   Testes que falharam: {failed_steps}")
-            log("   📋 FOCO: Verificar implementação do sistema de stop loss dinâmico")
+            log("   📋 FOCO: Verificar implementação do sistema ML Stop Loss")
         
         return overall_success, test_results, json_responses
         
