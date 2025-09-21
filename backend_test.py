@@ -184,59 +184,70 @@ def test_ml_stop_loss_system():
             log(f"❌ Test 2 FALHOU - Exception: {e}")
             json_responses["ml_stop_loss_test"] = {"error": str(e)}
         
-        # Test 3: GET /api/strategy/status - Verificar estado da estratégia
-        log("\n🔍 TEST 3: GET /api/strategy/status")
-        log("   Objetivo: Verificar que estado da estratégia não tem problemas")
+        # Test 3: POST /api/strategy/ml_stop_loss/config - Testar configuração de thresholds
+        log("\n🔍 TEST 3: POST /api/strategy/ml_stop_loss/config")
+        log("   Objetivo: Testar configuração de thresholds ML")
+        log("   Payload: recovery_threshold=0.70, loss_threshold=0.75, max_loss_limit=0.85")
+        
+        config_payload = {
+            "recovery_threshold": 0.70,
+            "loss_threshold": 0.75,
+            "max_loss_limit": 0.85
+        }
         
         try:
-            response = session.get(f"{api_url}/strategy/status", timeout=15)
-            log(f"   GET /api/strategy/status: {response.status_code}")
+            log(f"   Payload: {json.dumps(config_payload, indent=2)}")
+            
+            response = session.post(f"{api_url}/strategy/ml_stop_loss/config", json=config_payload, timeout=15)
+            log(f"   POST /api/strategy/ml_stop_loss/config: {response.status_code}")
             
             if response.status_code == 200:
-                strategy_data = response.json()
-                json_responses["strategy_status"] = strategy_data
-                log(f"   Response: {json.dumps(strategy_data, indent=2)}")
+                config_data = response.json()
+                json_responses["ml_stop_loss_config"] = config_data
+                log(f"   Response: {json.dumps(config_data, indent=2)}")
                 
-                running = strategy_data.get('running')
-                mode = strategy_data.get('mode')
-                symbol = strategy_data.get('symbol')
-                daily_pnl = strategy_data.get('daily_pnl')
-                win_rate = strategy_data.get('win_rate')
+                success = config_data.get('success')
+                message = config_data.get('message', '')
+                new_config = config_data.get('new_config', {})
                 
-                log(f"   📊 Strategy Status:")
-                log(f"      Running: {running}")
-                log(f"      Mode: {mode}")
-                log(f"      Symbol: {symbol}")
-                log(f"      Daily PnL: {daily_pnl}")
-                log(f"      Win Rate: {win_rate}%")
+                recovery_threshold = new_config.get('recovery_threshold')
+                loss_threshold = new_config.get('loss_threshold')
+                max_loss_limit = new_config.get('max_loss_limit')
                 
-                # Validate expected fields are present (values can be any)
-                has_running = running is not None
-                has_mode = mode is not None
-                has_symbol = symbol is not None
-                has_daily_pnl = daily_pnl is not None
-                has_win_rate = win_rate is not None
+                log(f"   📊 Config Results:")
+                log(f"      Success: {success}")
+                log(f"      Message: {message}")
+                log(f"      Recovery Threshold: {recovery_threshold}")
+                log(f"      Loss Threshold: {loss_threshold}")
+                log(f"      Max Loss Limit: {max_loss_limit}")
                 
-                if has_running and has_mode and has_symbol and has_daily_pnl and has_win_rate:
-                    test_results["strategy_status_check"] = True
-                    log("✅ Test 3 OK: Estado da estratégia sem problemas")
-                    log(f"   🎯 Todos os campos obrigatórios presentes")
+                # Validate configuration was applied
+                config_success = success == True
+                has_message = len(message) > 0
+                correct_recovery = recovery_threshold == 0.70
+                correct_loss = loss_threshold == 0.75
+                correct_max = max_loss_limit == 0.85
+                
+                if config_success and has_message and correct_recovery and correct_loss and correct_max:
+                    test_results["ml_stop_loss_config"] = True
+                    log("✅ Test 3 OK: Configuração ML Stop Loss aplicada com sucesso")
+                    log(f"   🎯 Thresholds atualizados: recovery={recovery_threshold}, loss={loss_threshold}, max={max_loss_limit}")
                 else:
-                    log(f"❌ Test 3 FALHOU: Campos ausentes")
-                    log(f"   running: {has_running}, mode: {has_mode}, symbol: {has_symbol}, daily_pnl: {has_daily_pnl}, win_rate: {has_win_rate}")
+                    log(f"❌ Test 3 FALHOU: success={config_success}, message={has_message}")
+                    log(f"   recovery={correct_recovery}, loss={correct_loss}, max={correct_max}")
             else:
-                log(f"❌ Strategy Status FALHOU - HTTP {response.status_code}")
-                json_responses["strategy_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                log(f"❌ ML Stop Loss Config FALHOU - HTTP {response.status_code}")
+                json_responses["ml_stop_loss_config"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
-                    json_responses["strategy_status"] = error_data
+                    json_responses["ml_stop_loss_config"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
             log(f"❌ Test 3 FALHOU - Exception: {e}")
-            json_responses["strategy_status"] = {"error": str(e)}
+            json_responses["ml_stop_loss_config"] = {"error": str(e)}
         
         # Test 4: GET /api/deriv/status - Confirmar conectividade Deriv
         log("\n🔍 TEST 4: GET /api/deriv/status")
