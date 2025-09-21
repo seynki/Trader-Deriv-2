@@ -1126,7 +1126,7 @@ class StrategyRunner:
 
     async def _sell_contract(self, contract_id: int) -> bool:
         """
-        Vende um contrato usando a API da Deriv
+        Vende um contrato usando a API da Deriv e treina ML com resultado
         """
         try:
             if not _deriv.connected:
@@ -1147,22 +1147,53 @@ class StrategyRunner:
             if response and "sell" in response:
                 sold_price = response["sell"].get("sold_for", 0)
                 logger.info(f"🛡️ Contrato {contract_id} vendido com sucesso por ${sold_price} (stop loss)")
+                
+                # 🤖 APRENDIZADO ML: Treinar com resultado da venda
+                await self._ml_learn_from_sold_contract(contract_id, float(sold_price))
+                
                 return True
             else:
                 logger.error(f"🛡️ Resposta inválida ao vender contrato {contract_id}: {response}")
-                return False
-            
-            if response and response.get('sell'):
-                sold_for = response['sell'].get('sold_for', 0)
-                logger.info(f"🛡️ Contrato {contract_id} vendido por {sold_for}")
-                return True
-            else:
-                logger.warning(f"🛡️ Resposta inválida ao vender contrato {contract_id}: {response}")
                 return False
                 
         except Exception as e:
             logger.error(f"🛡️ Erro vendendo contrato {contract_id}: {e}")
             return False
+
+    async def _ml_learn_from_sold_contract(self, contract_id: int, sold_price: float):
+        """
+        Ensina o ML com resultado de contrato vendido por stop loss
+        """
+        try:
+            if contract_id not in self.active_contracts:
+                return
+                
+            contract_data = self.active_contracts[contract_id]
+            
+            # Verificar se temos features ML salvas da decisão
+            if 'ml_features_at_decision' in contract_data:
+                features = contract_data['ml_features_at_decision']
+                stake = contract_data.get('stake', 1.0)
+                buy_price = contract_data.get('buy_price', stake)
+                
+                # Calcular profit final (sold_price - buy_price)
+                final_profit = sold_price - buy_price
+                
+                # Treinar ML com resultado
+                _ml_stop_loss.learn_from_outcome(
+                    contract_id=contract_id,
+                    features_at_decision=features,
+                    decision_made=True,  # Decidiu vender
+                    final_profit=final_profit,
+                    stake=stake
+                )
+                
+                logger.info(f"🧠 ML aprendeu com venda: Contract {contract_id}, "
+                           f"Buy: ${buy_price:.2f}, Sold: ${sold_price:.2f}, "
+                           f"Final profit: ${final_profit:.2f}")
+                
+        except Exception as e:
+            logger.warning(f"Erro no aprendizado ML para contrato vendido {contract_id}: {e}")
 
     def _add_active_contract(self, contract_id: int, stake: float, contract_data: Dict = None):
         """
