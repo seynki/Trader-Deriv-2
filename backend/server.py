@@ -433,6 +433,9 @@ class DerivWS:
 # Single global instance
 _deriv = DerivWS(DERIV_APP_ID, DERIV_API_TOKEN, DERIV_WS_URL)
 
+# 🤖 ML Stop Loss Predictor - Instância global
+_ml_stop_loss = MLStopLossPredictor()
+
 @app.on_event("startup")
 async def _startup():
     await _deriv.start()
