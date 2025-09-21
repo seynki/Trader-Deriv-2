@@ -116,67 +116,73 @@ def test_ml_stop_loss_system():
             log(f"❌ Test 1 FALHOU - Exception: {e}")
             json_responses["ml_stop_loss_status"] = {"error": str(e)}
         
-        # Test 2: POST /api/strategy/optimize/apply - Aplicar configurações stop loss
-        log("\n🔍 TEST 2: POST /api/strategy/optimize/apply")
-        log("   Objetivo: Testar aplicação das configurações incluindo stop loss dinâmico")
-        log("   Payload: enable_dynamic_stop_loss=true, stop_loss_percentage=0.40, stop_loss_check_interval=3")
-        
-        apply_payload = {
-            "enable_dynamic_stop_loss": True,
-            "stop_loss_percentage": 0.40,
-            "stop_loss_check_interval": 3,
-            "use_2min_timeframe": True,
-            "river_threshold": 0.68,
-            "max_features": 18,
-            "enable_technical_stop_loss": True,
-            "min_adx_for_trade": 25.0,
-            "ml_prob_threshold": 0.65
-        }
+        # Test 2: POST /api/strategy/ml_stop_loss/test - Simular contrato com perda e decisão ML
+        log("\n🔍 TEST 2: POST /api/strategy/ml_stop_loss/test")
+        log("   Objetivo: Simular contrato com perda e ver decisão ML")
+        log("   Esperado: Predição ML com probabilidade de recuperação e decisão inteligente")
         
         try:
-            log(f"   Payload: {json.dumps(apply_payload, indent=2)}")
-            
-            response = session.post(f"{api_url}/strategy/optimize/apply", json=apply_payload, timeout=20)
-            log(f"   POST /api/strategy/optimize/apply: {response.status_code}")
+            response = session.post(f"{api_url}/strategy/ml_stop_loss/test", json={}, timeout=20)
+            log(f"   POST /api/strategy/ml_stop_loss/test: {response.status_code}")
             
             if response.status_code == 200:
-                apply_data = response.json()
-                json_responses["optimize_apply"] = apply_data
-                log(f"   Response: {json.dumps(apply_data, indent=2)}")
+                test_data = response.json()
+                json_responses["ml_stop_loss_test"] = test_data
+                log(f"   Response: {json.dumps(test_data, indent=2)}")
                 
-                message = apply_data.get('message', '')
-                applied_config = apply_data.get('applied_config', {})
-                expected_improvement = apply_data.get('expected_improvement', '')
+                simulation = test_data.get('simulation', {})
+                prediction = test_data.get('prediction', {})
+                decision = test_data.get('decision', {})
                 
-                log(f"   📊 Apply Results:")
-                log(f"      Message: {message}")
-                log(f"      Applied Config: {applied_config}")
-                log(f"      Expected Improvement: {expected_improvement}")
+                # Simulation data
+                contract_id = simulation.get('contract_id')
+                current_profit = simulation.get('current_profit')
+                stake = simulation.get('stake')
                 
-                # Validate success message
-                success_message = "otimizações aplicadas com sucesso" in message.lower()
-                has_applied_config = isinstance(applied_config, dict) and len(applied_config) > 0
-                has_expected_improvement = isinstance(expected_improvement, str) and len(expected_improvement) > 0
+                # Prediction data
+                prob_recovery = prediction.get('prob_recovery')
+                features_used = prediction.get('features_used')
+                prediction_source = prediction.get('prediction_source')
                 
-                if success_message and has_applied_config and has_expected_improvement:
-                    test_results["optimize_apply_config"] = True
-                    log("✅ Test 2 OK: Configurações de stop loss dinâmico aplicadas com sucesso")
-                    log(f"   🎯 Configurações aplicadas: {list(applied_config.keys())}")
+                # Decision data
+                should_sell = decision.get('should_sell')
+                reason = decision.get('reason')
+                
+                log(f"   📊 ML Test Results:")
+                log(f"      Contract ID: {contract_id}")
+                log(f"      Current Profit: {current_profit}")
+                log(f"      Stake: {stake}")
+                log(f"      Prob Recovery: {prob_recovery}")
+                log(f"      Features Used: {features_used}")
+                log(f"      Prediction Source: {prediction_source}")
+                log(f"      Should Sell: {should_sell}")
+                log(f"      Reason: {reason}")
+                
+                # Validate expected fields
+                has_simulation = contract_id is not None and current_profit is not None and stake is not None
+                has_prediction = prob_recovery is not None and features_used is not None
+                has_decision = should_sell is not None and reason is not None
+                valid_prob = isinstance(prob_recovery, (int, float)) and 0 <= prob_recovery <= 1
+                
+                if has_simulation and has_prediction and has_decision and valid_prob:
+                    test_results["ml_stop_loss_test"] = True
+                    log("✅ Test 2 OK: Simulação ML Stop Loss funcionando")
+                    log(f"   🎯 Prob recuperação: {prob_recovery:.1%}, Decisão: {'VENDER' if should_sell else 'AGUARDAR'}")
                 else:
-                    log(f"❌ Test 2 FALHOU: success_msg={success_message}, config={has_applied_config}, improvement={has_expected_improvement}")
+                    log(f"❌ Test 2 FALHOU: simulation={has_simulation}, prediction={has_prediction}, decision={has_decision}, valid_prob={valid_prob}")
             else:
-                log(f"❌ Optimize Apply FALHOU - HTTP {response.status_code}")
-                json_responses["optimize_apply"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                log(f"❌ ML Stop Loss Test FALHOU - HTTP {response.status_code}")
+                json_responses["ml_stop_loss_test"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
-                    json_responses["optimize_apply"] = error_data
+                    json_responses["ml_stop_loss_test"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
             log(f"❌ Test 2 FALHOU - Exception: {e}")
-            json_responses["optimize_apply"] = {"error": str(e)}
+            json_responses["ml_stop_loss_test"] = {"error": str(e)}
         
         # Test 3: GET /api/strategy/status - Verificar estado da estratégia
         log("\n🔍 TEST 3: GET /api/strategy/status")
