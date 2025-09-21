@@ -22,6 +22,7 @@ import pandas as pd
 import io
 import river_online_model
 import ml_engine
+from ml_stop_loss import MLStopLossPredictor
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
