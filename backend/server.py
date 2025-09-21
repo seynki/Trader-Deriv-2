@@ -985,14 +985,14 @@ class StrategyRunner:
 
     async def _start_dynamic_stop_loss_monitor(self):
         """
-        🛡️ SISTEMA DE STOP LOSS DINÂMICO MELHORADO
-        Monitora contratos ativos em tempo real e sai quando atinge limite de perda
+        🤖 SISTEMA DE STOP LOSS INTELIGENTE COM MACHINE LEARNING
+        Monitora contratos ativos e usa ML para decidir quando vender
         """
         if not self.params.enable_dynamic_stop_loss:
             logger.info("🛡️ Stop Loss Dinâmico DESABILITADO")
             return
             
-        logger.info(f"🛡️ Stop Loss Dinâmico INICIADO: {self.params.stop_loss_percentage*100}% de perda, check a cada {self.params.stop_loss_check_interval}s")
+        logger.info(f"🤖 Stop Loss INTELIGENTE INICIADO: ML + {self.params.stop_loss_percentage*100}% fallback, check a cada {self.params.stop_loss_check_interval}s")
         
         while self.running:
             try:
@@ -1000,39 +1000,71 @@ class StrategyRunner:
                     await asyncio.sleep(self.params.stop_loss_check_interval)
                     continue
                 
-                logger.debug(f"🛡️ Monitorando {len(self.active_contracts)} contratos ativos...")
+                logger.debug(f"🤖 Monitorando {len(self.active_contracts)} contratos com ML...")
                 
                 # Verificar cada contrato ativo
                 contracts_to_remove = []
                 for contract_id, contract_data in list(self.active_contracts.items()):
                     try:
-                        # Obter dados atuais do contrato via WebSocket
+                        # Obter dados atuais do contrato
                         current_profit = await self._get_contract_current_profit(contract_id)
                         if current_profit is None:
-                            logger.debug(f"🛡️ Sem dados atuais para contrato {contract_id}")
+                            logger.debug(f"🤖 Sem dados atuais para contrato {contract_id}")
                             continue
                             
                         stake = contract_data.get('stake', 1.0)
-                        loss_limit = -abs(stake * self.params.stop_loss_percentage)
+                        start_time = contract_data.get('start_time', int(time.time()))
+                        symbol = contract_data.get('symbol', 'R_100')
                         
-                        # Log de monitoramento
-                        profit_percent = (current_profit / stake) * 100 if stake > 0 else 0
-                        logger.debug(f"🛡️ Contrato {contract_id}: Profit={current_profit:.2f} ({profit_percent:.1f}%), Limite={loss_limit:.2f}")
-                        
-                        # Verificar se atingiu stop loss
-                        if current_profit <= loss_limit:
-                            logger.warning(f"🛡️ STOP LOSS ATIVADO! Contract {contract_id}: Profit {current_profit:.2f} <= Limite {loss_limit:.2f} ({profit_percent:.1f}%)")
+                        # 🤖 DECISÃO INTELIGENTE COM ML
+                        try:
+                            # Obter candles recentes para análise técnica
+                            candles = await self._get_recent_candles_for_ml(symbol)
                             
-                            # Tentar vender o contrato
-                            sold_successfully = await self._sell_contract(contract_id)
-                            if sold_successfully:
-                                logger.info(f"🛡️ Contrato {contract_id} vendido com sucesso por stop loss")
-                                contracts_to_remove.append(contract_id)
-                                # Atualizar estatísticas
-                                self.consecutive_losses += 1
-                                self.last_loss_time = int(time.time())
-                            else:
-                                logger.warning(f"🛡️ Falha ao vender contrato {contract_id} por stop loss")
+                            # Usar ML para decidir
+                            should_sell, reason, ml_details = _ml_stop_loss.should_stop_loss(
+                                contract_id=contract_id,
+                                current_profit=current_profit, 
+                                stake=stake,
+                                start_time=start_time,
+                                candles=candles,
+                                symbol=symbol
+                            )
+                            
+                            # Log da decisão ML
+                            profit_percent = (current_profit / stake) * 100 if stake > 0 else 0
+                            logger.info(f"🤖 Contract {contract_id}: Profit={current_profit:.2f} ({profit_percent:.1f}%) - {reason}")
+                            
+                            if should_sell:
+                                # Armazenar features para aprendizado futuro
+                                features_at_decision = ml_details.get('features', {})
+                                contract_data['ml_features_at_decision'] = features_at_decision
+                                contract_data['ml_decision_reason'] = reason
+                                
+                                logger.warning(f"🤖 ML STOP LOSS ATIVADO! {reason}")
+                                
+                                # Tentar vender o contrato
+                                sold_successfully = await self._sell_contract(contract_id)
+                                if sold_successfully:
+                                    logger.info(f"🤖 Contrato {contract_id} vendido com sucesso por ML stop loss")
+                                    contracts_to_remove.append(contract_id)
+                                    # Atualizar estatísticas
+                                    self.consecutive_losses += 1
+                                    self.last_loss_time = int(time.time())
+                                else:
+                                    logger.warning(f"🤖 Falha ao vender contrato {contract_id} por ML stop loss")
+                            
+                        except Exception as ml_error:
+                            logger.error(f"🤖 Erro na decisão ML para contrato {contract_id}: {ml_error}")
+                            # Fallback para lógica tradicional
+                            traditional_limit = -abs(stake * self.params.stop_loss_percentage)
+                            if current_profit <= traditional_limit:
+                                logger.warning(f"🛡️ FALLBACK: Stop loss tradicional ativado para contrato {contract_id}")
+                                sold_successfully = await self._sell_contract(contract_id)
+                                if sold_successfully:
+                                    contracts_to_remove.append(contract_id)
+                                    self.consecutive_losses += 1
+                                    self.last_loss_time = int(time.time())
                                 
                     except Exception as e:
                         logger.error(f"🛡️ Erro monitorando contrato {contract_id}: {e}")
@@ -1042,7 +1074,7 @@ class StrategyRunner:
                     self.active_contracts.pop(contract_id, None)
                     
             except Exception as e:
-                logger.error(f"🛡️ Erro no loop de stop loss dinâmico: {e}")
+                logger.error(f"🛡️ Erro no loop de stop loss inteligente: {e}")
             
             await asyncio.sleep(self.params.stop_loss_check_interval)
 
