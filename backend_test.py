@@ -44,10 +44,11 @@ def test_ml_stop_loss_system():
     log("   5) POST /api/strategy/stop_loss/test - Testar sistema tradicional")
     
     test_results = {
-        "optimize_status_check": False,
-        "optimize_apply_config": False,
-        "strategy_status_check": False,
-        "deriv_connectivity_check": False
+        "ml_stop_loss_status": False,
+        "ml_stop_loss_test": False,
+        "ml_stop_loss_config": False,
+        "traditional_stop_loss_status": False,
+        "traditional_stop_loss_test": False
     }
     
     # Store all JSON responses for reporting
