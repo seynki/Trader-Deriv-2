@@ -249,56 +249,112 @@ def test_ml_stop_loss_system():
             log(f"❌ Test 3 FALHOU - Exception: {e}")
             json_responses["ml_stop_loss_config"] = {"error": str(e)}
         
-        # Test 4: GET /api/deriv/status - Confirmar conectividade Deriv
-        log("\n🔍 TEST 4: GET /api/deriv/status")
-        log("   Objetivo: Confirmar que está conectado à Deriv")
+        # Test 4: GET /api/strategy/stop_loss/status - Verificar sistema tradicional (fallback)
+        log("\n🔍 TEST 4: GET /api/strategy/stop_loss/status")
+        log("   Objetivo: Verificar se sistema tradicional ainda funciona como fallback")
         
         try:
-            response = session.get(f"{api_url}/deriv/status", timeout=15)
-            log(f"   GET /api/deriv/status: {response.status_code}")
+            response = session.get(f"{api_url}/strategy/stop_loss/status", timeout=15)
+            log(f"   GET /api/strategy/stop_loss/status: {response.status_code}")
             
             if response.status_code == 200:
-                deriv_data = response.json()
-                json_responses["deriv_status"] = deriv_data
-                log(f"   Response: {json.dumps(deriv_data, indent=2)}")
+                traditional_data = response.json()
+                json_responses["traditional_stop_loss_status"] = traditional_data
+                log(f"   Response: {json.dumps(traditional_data, indent=2)}")
                 
-                connected = deriv_data.get('connected')
-                authenticated = deriv_data.get('authenticated')
-                environment = deriv_data.get('environment')
-                symbols = deriv_data.get('symbols', [])
+                enabled = traditional_data.get('enabled')
+                percentage = traditional_data.get('percentage')
+                check_interval = traditional_data.get('check_interval')
+                active_contracts = traditional_data.get('active_contracts')
                 
-                log(f"   📊 Deriv Status:")
-                log(f"      Connected: {connected}")
-                log(f"      Authenticated: {authenticated}")
-                log(f"      Environment: {environment}")
-                log(f"      Symbols Count: {len(symbols)}")
+                log(f"   📊 Traditional Stop Loss Status:")
+                log(f"      Enabled: {enabled}")
+                log(f"      Percentage: {percentage}")
+                log(f"      Check Interval: {check_interval}")
+                log(f"      Active Contracts: {active_contracts}")
                 
-                # Validate connectivity
-                is_connected = connected == True
-                is_authenticated = authenticated == True
-                is_demo = environment == "DEMO"
-                has_symbols = isinstance(symbols, list) and len(symbols) > 0
+                # Validate traditional system fields
+                has_enabled = enabled is not None
+                has_percentage = percentage is not None
+                has_check_interval = check_interval is not None
+                has_active_contracts = active_contracts is not None
                 
-                if is_connected and is_authenticated and is_demo and has_symbols:
-                    test_results["deriv_connectivity_check"] = True
-                    log("✅ Test 4 OK: Conectividade Deriv confirmada")
-                    log(f"   🎯 Connected={connected}, Authenticated={authenticated}, Environment={environment}, Symbols={len(symbols)}")
+                if has_enabled and has_percentage and has_check_interval and has_active_contracts:
+                    test_results["traditional_stop_loss_status"] = True
+                    log("✅ Test 4 OK: Sistema tradicional de stop loss funcionando")
+                    log(f"   🎯 Fallback disponível: enabled={enabled}, percentage={percentage}")
                 else:
-                    log(f"❌ Test 4 FALHOU: Problemas de conectividade")
-                    log(f"   connected: {is_connected}, authenticated: {is_authenticated}, demo: {is_demo}, symbols: {has_symbols}")
+                    log(f"❌ Test 4 FALHOU: Campos ausentes no sistema tradicional")
+                    log(f"   enabled: {has_enabled}, percentage: {has_percentage}, interval: {has_check_interval}, contracts: {has_active_contracts}")
             else:
-                log(f"❌ Deriv Status FALHOU - HTTP {response.status_code}")
-                json_responses["deriv_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                log(f"❌ Traditional Stop Loss Status FALHOU - HTTP {response.status_code}")
+                json_responses["traditional_stop_loss_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
                 try:
                     error_data = response.json()
                     log(f"   Error: {error_data}")
-                    json_responses["deriv_status"] = error_data
+                    json_responses["traditional_stop_loss_status"] = error_data
                 except:
                     log(f"   Error text: {response.text}")
                     
         except Exception as e:
             log(f"❌ Test 4 FALHOU - Exception: {e}")
-            json_responses["deriv_status"] = {"error": str(e)}
+            json_responses["traditional_stop_loss_status"] = {"error": str(e)}
+        
+        # Test 5: POST /api/strategy/stop_loss/test - Testar sistema tradicional
+        log("\n🔍 TEST 5: POST /api/strategy/stop_loss/test")
+        log("   Objetivo: Verificar se sistema tradicional ainda funciona")
+        
+        try:
+            response = session.post(f"{api_url}/strategy/stop_loss/test", json={}, timeout=15)
+            log(f"   POST /api/strategy/stop_loss/test: {response.status_code}")
+            
+            if response.status_code == 200:
+                test_traditional_data = response.json()
+                json_responses["traditional_stop_loss_test"] = test_traditional_data
+                log(f"   Response: {json.dumps(test_traditional_data, indent=2)}")
+                
+                simulation = test_traditional_data.get('simulation', {})
+                decision = test_traditional_data.get('decision', {})
+                
+                # Simulation data
+                contract_id = simulation.get('contract_id')
+                current_profit = simulation.get('current_profit')
+                stake = simulation.get('stake')
+                
+                # Decision data
+                should_sell = decision.get('should_sell')
+                reason = decision.get('reason')
+                
+                log(f"   📊 Traditional Test Results:")
+                log(f"      Contract ID: {contract_id}")
+                log(f"      Current Profit: {current_profit}")
+                log(f"      Stake: {stake}")
+                log(f"      Should Sell: {should_sell}")
+                log(f"      Reason: {reason}")
+                
+                # Validate expected fields
+                has_simulation = contract_id is not None and current_profit is not None and stake is not None
+                has_decision = should_sell is not None and reason is not None
+                
+                if has_simulation and has_decision:
+                    test_results["traditional_stop_loss_test"] = True
+                    log("✅ Test 5 OK: Sistema tradicional de stop loss funcionando")
+                    log(f"   🎯 Decisão tradicional: {'VENDER' if should_sell else 'AGUARDAR'}")
+                else:
+                    log(f"❌ Test 5 FALHOU: simulation={has_simulation}, decision={has_decision}")
+            else:
+                log(f"❌ Traditional Stop Loss Test FALHOU - HTTP {response.status_code}")
+                json_responses["traditional_stop_loss_test"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["traditional_stop_loss_test"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 5 FALHOU - Exception: {e}")
+            json_responses["traditional_stop_loss_test"] = {"error": str(e)}
         
         # Final analysis and comprehensive report
         log("\n" + "🏁" + "="*68)
