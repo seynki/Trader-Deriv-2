@@ -2623,6 +2623,110 @@ async def test_stop_loss_system():
         logger.error(f"Erro testando stop loss: {e}")
         raise HTTPException(status_code=500, detail=f"Erro testando stop loss: {str(e)}")
 
+# 🤖 ENDPOINTS ML STOP LOSS INTELIGENTE
+@api_router.get("/strategy/ml_stop_loss/status")
+async def get_ml_stop_loss_status():
+    """Obter status do sistema ML Stop Loss"""
+    try:
+        ml_status = _ml_stop_loss.get_status()
+        
+        return {
+            "ml_stop_loss": ml_status,
+            "integration": {
+                "enabled": _strategy.params.enable_dynamic_stop_loss,
+                "traditional_fallback": f"{_strategy.params.stop_loss_percentage*100}%",
+                "check_interval": _strategy.params.stop_loss_check_interval,
+                "active_contracts_with_ml": len([
+                    c for c in _strategy.active_contracts.values() 
+                    if 'ml_predictions' in c
+                ])
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro obtendo status ML stop loss: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/strategy/ml_stop_loss/config")
+async def update_ml_stop_loss_config(config: Dict[str, Any]):
+    """Atualizar configurações do ML Stop Loss"""
+    try:
+        success = _ml_stop_loss.update_config(config)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Configurações ML Stop Loss atualizadas",
+                "new_config": _ml_stop_loss.get_status()["thresholds"]
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Erro atualizando configurações ML")
+            
+    except Exception as e:
+        logger.error(f"Erro atualizando config ML: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/strategy/ml_stop_loss/test")
+async def test_ml_stop_loss_prediction():
+    """Testar predição ML para stop loss"""
+    try:
+        if not _deriv.connected:
+            raise HTTPException(status_code=400, detail="Deriv não conectada")
+        
+        # Simular dados de contrato para teste
+        test_contract_id = 888888888
+        test_stake = 1.0
+        test_current_profit = -0.4  # 40% de perda
+        test_start_time = int(time.time()) - 300  # 5 minutos atrás
+        
+        # Obter candles recentes
+        candles = await _strategy._get_recent_candles_for_ml("R_100", 20)
+        
+        # Fazer predição ML
+        prob_recovery, ml_details = _ml_stop_loss.predict_recovery_probability(
+            contract_id=test_contract_id,
+            current_profit=test_current_profit,
+            stake=test_stake,
+            start_time=test_start_time,
+            candles=candles,
+            symbol="R_100"
+        )
+        
+        # Fazer decisão ML
+        should_sell, reason, decision_details = _ml_stop_loss.should_stop_loss(
+            contract_id=test_contract_id,
+            current_profit=test_current_profit,
+            stake=test_stake,
+            start_time=test_start_time,
+            candles=candles,
+            symbol="R_100"
+        )
+        
+        return {
+            "test_successful": True,
+            "test_scenario": {
+                "contract_id": test_contract_id,
+                "current_profit": test_current_profit,
+                "profit_percentage": (test_current_profit / test_stake) * 100,
+                "elapsed_minutes": (int(time.time()) - test_start_time) / 60,
+                "candles_analyzed": len(candles)
+            },
+            "ml_prediction": {
+                "probability_recovery": prob_recovery,
+                "prediction_details": ml_details
+            },
+            "ml_decision": {
+                "should_sell": should_sell,
+                "reason": reason,
+                "decision_details": decision_details
+            },
+            "ml_status": _ml_stop_loss.get_status()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro testando ML stop loss: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # =============================================
 # AUTO SELECTION BOT ENDPOINTS
 # =============================================
