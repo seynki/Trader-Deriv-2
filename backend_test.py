@@ -20,9 +20,9 @@ import sys
 import time
 from datetime import datetime
 
-def test_dynamic_stop_loss_system():
+def test_ml_stop_loss_system():
     """
-    Execute the Dynamic Stop Loss System validation test plan
+    Execute the ML Stop Loss Inteligente System validation test plan
     """
     
     base_url = "https://deriv-smartstop.preview.emergentagent.com"
@@ -33,14 +33,15 @@ def test_dynamic_stop_loss_system():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "🛡️" + "="*68)
-    log("SISTEMA DE STOP LOSS DINÂMICO - VALIDATION TESTING")
-    log("🛡️" + "="*68)
+    log("\n" + "🤖" + "="*68)
+    log("SISTEMA DE STOP LOSS INTELIGENTE COM ML - VALIDATION TESTING")
+    log("🤖" + "="*68)
     log("📋 Test Plan:")
-    log("   1) GET /api/strategy/optimize/status - Verificar parâmetros stop loss dinâmico")
-    log("   2) POST /api/strategy/optimize/apply - Aplicar configurações stop loss")
-    log("   3) GET /api/strategy/status - Verificar estado da estratégia")
-    log("   4) GET /api/deriv/status - Confirmar conectividade Deriv")
+    log("   1) GET /api/strategy/ml_stop_loss/status - Verificar modelo ML inicializado")
+    log("   2) POST /api/strategy/ml_stop_loss/test - Simular contrato com perda e decisão ML")
+    log("   3) POST /api/strategy/ml_stop_loss/config - Testar configuração de thresholds")
+    log("   4) GET /api/strategy/stop_loss/status - Verificar sistema tradicional (fallback)")
+    log("   5) POST /api/strategy/stop_loss/test - Testar sistema tradicional")
     
     test_results = {
         "optimize_status_check": False,
