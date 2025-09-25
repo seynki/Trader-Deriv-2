@@ -1022,7 +1022,7 @@ class StrategyRunner:
                         start_time = contract_data.get('start_time', int(time.time()))
                         symbol = contract_data.get('symbol', 'R_100')
                         
-                        # 🤖 DECISÃO INTELIGENTE COM ML
+                        # 🤖 DECISÃO INTELIGENTE COM ML + TRAILING
                         try:
                             # Obter candles recentes para análise técnica
                             candles = await self._get_recent_candles_for_ml(symbol)
