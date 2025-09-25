@@ -2559,7 +2559,13 @@ async def get_optimization_status():
             "dynamic_stop_loss": getattr(_strategy.params, 'enable_dynamic_stop_loss', False),
             "stop_loss_percentage": getattr(_strategy.params, 'stop_loss_percentage', 0.50),
             "stop_loss_check_interval": getattr(_strategy.params, 'stop_loss_check_interval', 2),
-            "active_contracts_count": len(getattr(_strategy, 'active_contracts', {}))
+            "active_contracts_count": len(getattr(_strategy, 'active_contracts', {})),
+            # 🧠 Trailing stop
+            "trailing": {
+                "enabled": getattr(_strategy.params, 'enable_trailing_stop', False),
+                "activation_profit": getattr(_strategy.params, 'trailing_activation_profit', 0.15),
+                "distance_profit": getattr(_strategy.params, 'trailing_distance_profit', 0.10)
+            }
         },
         "performance_target": {
             "current_winrate_estimate": "33% (1min) | 53% (2min)",
