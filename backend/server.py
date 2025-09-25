@@ -2519,6 +2519,17 @@ async def apply_optimization_settings(request: Dict[str, Any]):
                 _strategy.params.stop_loss_check_interval = new_interval
                 logger.info(f"🛡️ Stop loss check interval alterado para {new_interval}s")
         
+        # 🧠 TRAILING STOP
+        if "enable_trailing_stop" in request:
+            _strategy.params.enable_trailing_stop = bool(request["enable_trailing_stop"])
+            logger.info(f"🧠 Trailing stop habilitado: {_strategy.params.enable_trailing_stop}")
+        if "trailing_activation_profit" in request:
+            _strategy.params.trailing_activation_profit = float(request["trailing_activation_profit"])  # ex.: 0.15 = 15% do stake
+            logger.info(f"🧠 Trailing activation alterado para {_strategy.params.trailing_activation_profit*100:.1f}% do stake")
+        if "trailing_distance_profit" in request:
+            _strategy.params.trailing_distance_profit = float(request["trailing_distance_profit"])  # ex.: 0.10 = 10% do stake
+            logger.info(f"🧠 Trailing distance alterado para {_strategy.params.trailing_distance_profit*100:.1f}% do stake")
+        
         return {
             "success": True,
             "message": "🎯 Otimizações aplicadas com sucesso",
