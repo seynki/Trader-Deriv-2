@@ -1703,9 +1703,13 @@ class StrategyRunner:
         self.task = asyncio.create_task(self._loop())
         
         # 🛡️ STOP LOSS DINÂMICO: Iniciar monitoramento se habilitado
-        if self.params.enable_dynamic_stop_loss and not self.stop_loss_task:
+        if self.params.enable_dynamic_stop_loss:
+            # Parar task anterior se existir
+            if self.stop_loss_task and not self.stop_loss_task.done():
+                self.stop_loss_task.cancel()
+            # Iniciar novo task
             self.stop_loss_task = asyncio.create_task(self._start_dynamic_stop_loss_monitor())
-            logger.info("🛡️ Sistema de Stop Loss Dinâmico iniciado")
+            logger.info("🤖 Sistema de Stop Loss INTELIGENTE iniciado")
 
     async def stop(self):
         if self.task and not self.task.done():
