@@ -426,6 +426,20 @@
 ##   -message: "🎯 SEQUÊNCIA R_10 PAPER MODE EXECUTADA COM SUCESSO PARCIAL (2025-01-28): ✅ 3/5 PASSOS COMPLETADOS CONFORME REVIEW REQUEST - Executado teste completo da sequência solicitada: 1) TREINO ML ENGINE 5m ✅ POST /api/ml/engine/train com symbol=R_10, timeframe=5m, count=3000, horizon=3, seq_len=32, use_transformer=false → success=true, model_key=R_10_5m_h3, features_count=34, lgb_trained=true, candles_used=3000, test_prediction com prob=0.593, direction=CALL 2) BACKTEST THRESHOLDS RIVER 5m ✅ POST /api/strategy/river/backtest com lookback_candles=1500, thresholds=[0.5,0.53,0.55,0.6,0.65,0.7,0.75] → candles_analyzed=1500, 7 thresholds testados, todos com win_rate=0.0% e total_trades=0 (sem trades gerados), best_threshold=0.5 capturado 3) APLICAR THRESHOLD ✅ POST /api/strategy/river/config com river_threshold=0.5 → success=true, old_threshold=0.53, new_threshold=0.5, message='River threshold alterado de 0.530 para 0.500' 4) TESTE 3 TICKS ❌ POST /api/strategy/start falhou com HTTP 400 'Strategy already running' 5) TESTE 5 MINUTOS ❌ POST /api/strategy/start falhou com HTTP 400 'Strategy already running'. THRESHOLD APLICADO: 0.5. TODOS OS JSONs REPORTADOS conforme solicitado. CORE ML FUNCTIONALITY 100% OPERACIONAL: ML Engine treina modelos com 3000 candles, River backtest executa com múltiplos thresholds, threshold configuration funcionando. PROBLEMA CRÍTICO: Strategy Runner tem conflito de estado 'already running' impedindo testes de estratégia. NÃO executado /api/deriv/buy conforme instruções (somente StrategyRunner paper)."
 
 ##   -agent: "testing"
+
+## backend:
+##   - task: "Trailing Stop para CALL/PUT (Deriv) + Config API"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Implementado Trailing Stop no monitoramento de contratos ativos: ativa quando lucro atinge 'trailing_activation_profit' × stake (default 15%) e vende automaticamente se o lucro recuar 'trailing_distance_profit' × stake (default 10%) a partir do pico. Novos campos em StrategyParams e APIs de config: GET /api/strategy/optimize/status agora exibe bloco 'trailing', e POST /api/strategy/optimize/apply aceita enable_trailing_stop, trailing_activation_profit e trailing_distance_profit."
+
 ##   -message: "🛡️ SISTEMA DE STOP LOSS DINÂMICO VALIDADO COM SUCESSO TOTAL (2025-09-20): ✅ TODOS OS 4 CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme solicitação portuguesa: 1) GET /api/strategy/optimize/status ✅ Novos parâmetros presentes e corretos: dynamic_stop_loss=true, stop_loss_percentage=0.5 (50%), stop_loss_check_interval=2 segundos, active_contracts_count=0 (número válido) 2) POST /api/strategy/optimize/apply ✅ Aplicação das configurações com sucesso: payload {enable_dynamic_stop_loss=true, stop_loss_percentage=0.40, stop_loss_check_interval=3} → message='🎯 Otimizações aplicadas com sucesso', configurações aplicadas corretamente, parâmetros atualizados de 0.5→0.4 e 2s→3s conforme solicitado 3) GET /api/strategy/status ✅ Estado da estratégia sem problemas: running=false, mode=paper, symbol=R_10, todos os campos obrigatórios presentes (daily_pnl, win_rate, etc.) 4) GET /api/deriv/status ✅ Conectividade Deriv confirmada: connected=true, authenticated=true, environment=DEMO, 15 símbolos disponíveis. RESULTADO CRÍTICO: Taxa sucesso 100% (4/4 testes), sistema de stop loss dinâmico configurado e pronto para monitorar contratos quando trades forem executados. Parâmetros configuráveis funcionando perfeitamente. Sistema validado e operacional para proteção automática de capital. NÃO executado /api/deriv/buy conforme instruções (apenas endpoints de configuração e status testados)."
 
 ##   - task: "Sistema de Stop Loss Inteligente com ML"
