@@ -1038,6 +1038,28 @@ class StrategyRunner:
                             )
                             
                             # Log da decisão ML
+                            # 🧠 TRAILING STOP: ativa quando lucro atinge nível e acompanha pico
+                            tr = contract_data.get('trailing') if isinstance(contract_data, dict) else None
+                            if tr is not None:
+                                # Atualizar pico de lucro
+                                tr['peak_profit'] = max(float(tr.get('peak_profit', 0.0)), float(current_profit))
+                                # Ativar trailing quando atingir activation_level
+                                if not tr.get('activated') and current_profit >= float(tr.get('activation_level', 0.0)):
+                                    tr['activated'] = True
+                                    logger.info(f"🧠 Trailing ATIVADO no contrato {contract_id} (lucro atingiu {current_profit:.2f})")
+                                # Se ativo, avaliar linha de stop móvel
+                                if tr.get('activated'):
+                                    stop_line = float(tr['peak_profit']) - float(tr.get('distance', 0.0))
+                                    if current_profit <= stop_line:
+                                        logger.warning(f"🧠 Trailing disparou: profit {current_profit:.2f} <= stop_line {stop_line:.2f} (peak {tr['peak_profit']:.2f})")
+                                        sold_successfully = await self._sell_contract(contract_id)
+                                        if sold_successfully:
+                                            contracts_to_remove.append(contract_id)
+                                            self.consecutive_losses += 1 if current_profit < 0 else 0
+                                            self.last_loss_time = int(time.time()) if current_profit < 0 else self.last_loss_time
+                                        # pular outras decisões após venda
+                                        continue
+
                             profit_percent = (current_profit / stake) * 100 if stake > 0 else 0
                             logger.info(f"🤖 Contract {contract_id}: Profit={current_profit:.2f} ({profit_percent:.1f}%) - {reason}")
                             
