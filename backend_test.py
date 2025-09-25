@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Backend Testing - ML Stop Loss Inteligente System Validation
-Tests the new ML Stop Loss system as requested in the Portuguese review
+Backend Testing - Trailing Stop System Validation
+Tests the newly implemented Trailing Stop functionality as requested in the Portuguese review
 
 Test Plan (Portuguese Review Request):
-1) GET /api/strategy/ml_stop_loss/status - verificar se modelo está inicializado e configurado
-2) POST /api/strategy/ml_stop_loss/test - simular contrato com perda e ver decisão ML
-3) POST /api/strategy/ml_stop_loss/config - testar configuração com thresholds
-4) GET /api/strategy/stop_loss/status - verificar se sistema tradicional ainda funciona como fallback
-5) POST /api/strategy/stop_loss/test - verificar se sistema tradicional ainda funciona
+1) GET /api/deriv/status - verificar saúde da API (connected=true, authenticated=true)
+2) GET /api/strategy/optimize/status - validar presença das novas configs trailing
+3) POST /api/strategy/optimize/apply - aplicar configuração trailing mais agressiva
+4) POST /api/strategy/start - iniciar StrategyRunner em modo live DEMO
+5) Monitor 40-60s - chamar GET /api/strategy/status a cada 10s (4-6 vezes)
+6) POST /api/strategy/stop - parar estratégia e confirmar running=false
 
-Notes: Focus on ML functionality, not real trades (only simulations). No frontend testing.
+Notes: Focus on trailing stop functionality, DEMO mode only. No frontend testing.
 Use only /api prefix. DEMO environment with tokens already in backend/.env.
 """
 
