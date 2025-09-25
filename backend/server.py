@@ -713,6 +713,10 @@ class StrategyParams(BaseModel):
     enable_dynamic_stop_loss: bool = True  # Habilitar stop loss dinâmico em tempo real
     stop_loss_percentage: float = 0.50  # 50% de perda para ativar stop loss
     stop_loss_check_interval: int = 2  # Verificar a cada 2 segundos
+    # 🧠 TRAILING STOP (lucro protegido)
+    enable_trailing_stop: bool = True  # Habilitar trailing stop
+    trailing_activation_profit: float = 0.15  # Ativar trailing quando lucro >= 15% do stake
+    trailing_distance_profit: float = 0.10  # Distância do trailing: 10% do stake
 
 class StrategyStatus(BaseModel):
     running: bool
