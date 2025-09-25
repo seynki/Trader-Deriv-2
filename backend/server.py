@@ -1468,21 +1468,53 @@ class StrategyRunner:
                         last_price = float(m.get("price"))
                         collected += 1
                         
-                        # 🛡️ VERIFICAR STOP LOSS EM TEMPO REAL
-                        if self.params.enable_dynamic_stop_loss and entry_price and loss_limit:
+                        # 🤖 VERIFICAR STOP LOSS INTELIGENTE ML EM TEMPO REAL
+                        if self.params.enable_dynamic_stop_loss and entry_price:
                             # Calcular P&L atual baseado na direção
                             if side == "RISE":  # CALL
                                 current_profit = (stake * 0.95) if last_price > entry_price else (-stake)
-                            else:  # PUT
+                            else:  # PUT  
                                 current_profit = (stake * 0.95) if last_price < entry_price else (-stake)
                             
-                            # Verificar se atingiu stop loss
-                            if current_profit <= loss_limit:
-                                stop_loss_triggered = True
-                                logger.warning(f"🛡️ STOP LOSS PAPER ATIVADO! {symbol}: Profit {current_profit:.2f} <= Limite {loss_limit:.2f}")
-                                logger.info(f"🛡️ Entry: {entry_price:.5f}, Current: {last_price:.5f}, Side: {side}")
-                                profit = current_profit
-                                break
+                            # 🤖 USAR ML PARA DECISÃO INTELIGENTE DE STOP LOSS
+                            try:
+                                # Gerar ID fictício para simulação
+                                paper_contract_id = int(time.time() * 1000) % 1000000000
+                                
+                                # Obter candles recentes para ML
+                                candles = await self._get_recent_candles_for_ml(symbol, 20)
+                                
+                                # Usar ML para decisão
+                                should_sell, reason, ml_details = _ml_stop_loss.should_stop_loss(
+                                    contract_id=paper_contract_id,
+                                    current_profit=current_profit,
+                                    stake=stake,
+                                    start_time=int(t0),
+                                    candles=candles,
+                                    symbol=symbol
+                                )
+                                
+                                if should_sell:
+                                    stop_loss_triggered = True
+                                    logger.warning(f"🤖 ML STOP LOSS PAPER ATIVADO! {reason}")
+                                    logger.info(f"🤖 Entry: {entry_price:.5f}, Current: {last_price:.5f}, Side: {side}, P&L: {current_profit:.2f}")
+                                    profit = current_profit
+                                    
+                                    # Aprendizado ML (simulado)
+                                    features = ml_details.get('features', {})
+                                    # Note: Em paper mode, não temos resultado final real, então simular baseado na tendência
+                                    break
+                                else:
+                                    logger.debug(f"🤖 ML AGUARDANDO: {reason} (P&L: {current_profit:.2f})")
+                                    
+                            except Exception as ml_error:
+                                logger.error(f"🤖 Erro ML stop loss paper: {ml_error}")
+                                # Fallback para lógica tradicional
+                                if current_profit <= loss_limit:
+                                    stop_loss_triggered = True
+                                    logger.warning(f"🛡️ FALLBACK STOP LOSS PAPER: {symbol} profit={current_profit:.2f}")
+                                    profit = current_profit
+                                    break
                                 
                 except asyncio.TimeoutError:
                     pass
