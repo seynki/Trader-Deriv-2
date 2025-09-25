@@ -998,6 +998,7 @@ class StrategyRunner:
         while self.running:
             try:
                 if not self.active_contracts:
+                    logger.debug(f"🤖 Stop Loss: Nenhum contrato ativo para monitorar")
                     await asyncio.sleep(self.params.stop_loss_check_interval)
                     continue
                 
