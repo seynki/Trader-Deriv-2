@@ -1221,6 +1221,15 @@ class StrategyRunner:
                 'ml_predictions': []  # Histórico de predições ML
             }
             logger.info(f"🤖 Contrato {contract_id} adicionado ao monitoramento ML (stake: {stake}, symbol: {symbol})")
+            # 🧠 Trailing stop setup
+            if getattr(self.params, 'enable_trailing_stop', False):
+                self.active_contracts[contract_id]['trailing'] = {
+                    'activated': False,
+                    'peak_profit': 0.0,
+                    'activation_level': float(getattr(self.params, 'trailing_activation_profit', 0.15)) * float(stake),
+                    'distance': float(getattr(self.params, 'trailing_distance_profit', 0.10)) * float(stake)
+                }
+
 
     def _remove_active_contract(self, contract_id: int):
         """
