@@ -1377,4 +1377,4 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    test_ml_stop_loss_system()
+    test_trailing_stop_system()
