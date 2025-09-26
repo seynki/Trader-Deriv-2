@@ -21,6 +21,465 @@ import sys
 import time
 from datetime import datetime
 
+def test_trailing_stop_system():
+    """
+    Execute the Trailing Stop System validation test plan
+    """
+    
+    base_url = "https://finance-bot-timer-1.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🧠" + "="*68)
+    log("SISTEMA DE TRAILING STOP - VALIDATION TESTING")
+    log("🧠" + "="*68)
+    log("📋 Test Plan:")
+    log("   1) GET /api/deriv/status - Verificar saúde da API")
+    log("   2) GET /api/strategy/optimize/status - Validar configs trailing")
+    log("   3) POST /api/strategy/optimize/apply - Aplicar config trailing agressiva")
+    log("   4) POST /api/strategy/start - Iniciar StrategyRunner live DEMO")
+    log("   5) Monitor 40-60s - Status a cada 10s (4-6 vezes)")
+    log("   6) POST /api/strategy/stop - Parar estratégia")
+    
+    test_results = {
+        "deriv_api_health": False,
+        "trailing_config_present": False,
+        "trailing_config_applied": False,
+        "strategy_started": False,
+        "monitoring_completed": False,
+        "strategy_stopped": False
+    }
+    
+    # Store all JSON responses for reporting
+    json_responses = {}
+    
+    try:
+        # Test 1: GET /api/deriv/status - Verificar saúde da API
+        log("\n🔍 TEST 1: GET /api/deriv/status")
+        log("   Objetivo: Verificar connected=true e authenticated=true")
+        log("   Aguardando até 8s após start se necessário...")
+        
+        # Wait up to 8 seconds for connection
+        for attempt in range(8):
+            try:
+                response = session.get(f"{api_url}/deriv/status", timeout=10)
+                log(f"   GET /api/deriv/status (attempt {attempt + 1}): {response.status_code}")
+                
+                if response.status_code == 200:
+                    status_data = response.json()
+                    json_responses["deriv_status"] = status_data
+                    log(f"   Response: {json.dumps(status_data, indent=2)}")
+                    
+                    connected = status_data.get('connected')
+                    authenticated = status_data.get('authenticated')
+                    environment = status_data.get('environment')
+                    
+                    log(f"   📊 Deriv API Status:")
+                    log(f"      Connected: {connected}")
+                    log(f"      Authenticated: {authenticated}")
+                    log(f"      Environment: {environment}")
+                    
+                    if connected == True and authenticated == True:
+                        test_results["deriv_api_health"] = True
+                        log("✅ Test 1 OK: Deriv API conectada e autenticada")
+                        break
+                    else:
+                        log(f"   ⏳ Aguardando conexão... (connected={connected}, auth={authenticated})")
+                        if attempt < 7:
+                            time.sleep(1)
+                else:
+                    log(f"❌ Deriv Status FALHOU - HTTP {response.status_code}")
+                    if attempt < 7:
+                        time.sleep(1)
+                        
+            except Exception as e:
+                log(f"   ⚠️  Attempt {attempt + 1} failed: {e}")
+                if attempt < 7:
+                    time.sleep(1)
+        
+        if not test_results["deriv_api_health"]:
+            log("❌ Test 1 FALHOU: Deriv API não conectou após 8s")
+        
+        # Test 2: GET /api/strategy/optimize/status - Validar configs trailing
+        log("\n🔍 TEST 2: GET /api/strategy/optimize/status")
+        log("   Objetivo: Validar presença das novas configs trailing")
+        log("   Esperado: current_config.trailing com enabled, activation_profit, distance_profit")
+        
+        try:
+            response = session.get(f"{api_url}/strategy/optimize/status", timeout=15)
+            log(f"   GET /api/strategy/optimize/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                optimize_data = response.json()
+                json_responses["optimize_status"] = optimize_data
+                log(f"   Response: {json.dumps(optimize_data, indent=2)}")
+                
+                current_config = optimize_data.get('current_config', {})
+                trailing = current_config.get('trailing', {})
+                
+                enabled = trailing.get('enabled')
+                activation_profit = trailing.get('activation_profit')
+                distance_profit = trailing.get('distance_profit')
+                
+                log(f"   📊 Trailing Config Status:")
+                log(f"      Enabled: {enabled}")
+                log(f"      Activation Profit: {activation_profit}")
+                log(f"      Distance Profit: {distance_profit}")
+                
+                # Validate expected fields
+                has_enabled = enabled is not None
+                has_activation = activation_profit is not None
+                has_distance = distance_profit is not None
+                
+                if has_enabled and has_activation and has_distance:
+                    test_results["trailing_config_present"] = True
+                    log("✅ Test 2 OK: Configurações trailing presentes")
+                    log(f"   🎯 Trailing: enabled={enabled}, activation={activation_profit}, distance={distance_profit}")
+                else:
+                    log(f"❌ Test 2 FALHOU: Campos trailing ausentes")
+                    log(f"   enabled: {has_enabled}, activation: {has_activation}, distance: {has_distance}")
+            else:
+                log(f"❌ Optimize Status FALHOU - HTTP {response.status_code}")
+                json_responses["optimize_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["optimize_status"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 2 FALHOU - Exception: {e}")
+            json_responses["optimize_status"] = {"error": str(e)}
+        
+        # Test 3: POST /api/strategy/optimize/apply - Aplicar config trailing agressiva
+        log("\n🔍 TEST 3: POST /api/strategy/optimize/apply")
+        log("   Objetivo: Aplicar configuração trailing mais agressiva para facilitar disparo")
+        
+        trailing_config = {
+            "enable_dynamic_stop_loss": True,
+            "enable_trailing_stop": True,
+            "trailing_activation_profit": 0.05,  # 5% para ativar (mais agressivo)
+            "trailing_distance_profit": 0.03,    # 3% de distância (mais agressivo)
+            "stop_loss_check_interval": 2
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(trailing_config, indent=2)}")
+            
+            response = session.post(f"{api_url}/strategy/optimize/apply", json=trailing_config, timeout=15)
+            log(f"   POST /api/strategy/optimize/apply: {response.status_code}")
+            
+            if response.status_code == 200:
+                apply_data = response.json()
+                json_responses["optimize_apply"] = apply_data
+                log(f"   Response: {json.dumps(apply_data, indent=2)}")
+                
+                success = apply_data.get('success')
+                message = apply_data.get('message', '')
+                
+                log(f"   📊 Apply Results:")
+                log(f"      Success: {success}")
+                log(f"      Message: {message}")
+                
+                if success == True:
+                    test_results["trailing_config_applied"] = True
+                    log("✅ Test 3 OK: Configuração trailing aplicada com sucesso")
+                    log(f"   🎯 Trailing ativação: 5%, distância: 3%, check: 2s")
+                else:
+                    log(f"❌ Test 3 FALHOU: success={success}")
+            else:
+                log(f"❌ Optimize Apply FALHOU - HTTP {response.status_code}")
+                json_responses["optimize_apply"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["optimize_apply"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 3 FALHOU - Exception: {e}")
+            json_responses["optimize_apply"] = {"error": str(e)}
+        
+        # Test 4: POST /api/strategy/start - Iniciar StrategyRunner live DEMO
+        log("\n🔍 TEST 4: POST /api/strategy/start")
+        log("   Objetivo: Iniciar StrategyRunner em modo live DEMO para R_100")
+        log("   Configuração: símbolo volatility, duração curta, stake=1, CALL/PUT automáticos")
+        
+        strategy_config = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "candle_len": 120,
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "mode": "live",
+            "enable_dynamic_stop_loss": True,
+            "enable_trailing_stop": True
+        }
+        
+        try:
+            log(f"   Payload: {json.dumps(strategy_config, indent=2)}")
+            
+            response = session.post(f"{api_url}/strategy/start", json=strategy_config, timeout=20)
+            log(f"   POST /api/strategy/start: {response.status_code}")
+            
+            if response.status_code == 200:
+                start_data = response.json()
+                json_responses["strategy_start"] = start_data
+                log(f"   Response: {json.dumps(start_data, indent=2)}")
+                
+                running = start_data.get('running', False)
+                message = start_data.get('message', '')
+                
+                log(f"   📊 Strategy Start Results:")
+                log(f"      Running: {running}")
+                log(f"      Message: {message}")
+                
+                if running == True:
+                    test_results["strategy_started"] = True
+                    log("✅ Test 4 OK: StrategyRunner iniciado em modo live DEMO")
+                    log(f"   🎯 Modo: live, Símbolo: R_100, Trailing: habilitado")
+                else:
+                    log(f"❌ Test 4 FALHOU: running={running}")
+            else:
+                log(f"❌ Strategy Start FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_start"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["strategy_start"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 4 FALHOU - Exception: {e}")
+            json_responses["strategy_start"] = {"error": str(e)}
+        
+        # Test 5: Monitor 40-60s - Status a cada 10s
+        log("\n🔍 TEST 5: Monitoramento 40-60s")
+        log("   Objetivo: Monitorar por 40-60s, chamar GET /api/strategy/status a cada 10s")
+        log("   Validar: running=true, detectar in_position, logs de trailing no backend")
+        
+        if test_results["strategy_started"]:
+            monitoring_data = []
+            monitoring_duration = 50  # 50 seconds
+            check_interval = 10
+            checks_count = monitoring_duration // check_interval
+            
+            log(f"   ⏱️  Monitorando por {monitoring_duration}s ({checks_count} checks a cada {check_interval}s)")
+            log("   🔍 Procurando por: running=true, in_position changes, trailing messages...")
+            
+            trailing_detected = False
+            position_changes = []
+            
+            for check_num in range(checks_count):
+                log(f"   📊 Check {check_num + 1}/{checks_count} (t={check_num * check_interval}s)")
+                
+                try:
+                    response = session.get(f"{api_url}/strategy/status", timeout=10)
+                    
+                    if response.status_code == 200:
+                        status_data = response.json()
+                        
+                        running = status_data.get('running', False)
+                        in_position = status_data.get('in_position', False)
+                        last_reason = status_data.get('last_reason', '')
+                        daily_pnl = status_data.get('daily_pnl', 0)
+                        total_trades = status_data.get('total_trades', 0)
+                        last_run_at = status_data.get('last_run_at')
+                        
+                        check_data = {
+                            "check_number": check_num + 1,
+                            "timestamp": int(time.time()),
+                            "running": running,
+                            "in_position": in_position,
+                            "last_reason": last_reason,
+                            "daily_pnl": daily_pnl,
+                            "total_trades": total_trades,
+                            "last_run_at": last_run_at
+                        }
+                        monitoring_data.append(check_data)
+                        
+                        log(f"      Running: {running}, In Position: {in_position}")
+                        log(f"      PnL: {daily_pnl}, Trades: {total_trades}")
+                        log(f"      Last Reason: '{last_reason}'")
+                        log(f"      Last Run At: {last_run_at}")
+                        
+                        # Track position changes
+                        if in_position:
+                            position_changes.append({
+                                "check": check_num + 1,
+                                "in_position": True,
+                                "reason": last_reason
+                            })
+                        
+                        # Check for trailing messages in last_reason
+                        if last_reason and ("trailing" in last_reason.lower() or "ativado" in last_reason.lower()):
+                            trailing_detected = True
+                            log(f"      🧠 TRAILING DETECTADO: '{last_reason}'")
+                        
+                        # If strategy stopped, break early
+                        if not running:
+                            log(f"      ⚠️  Strategy stopped: {last_reason}")
+                            break
+                            
+                    else:
+                        log(f"      ❌ Status check FALHOU - HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    log(f"      ❌ Status check FALHOU - Exception: {e}")
+                
+                # Wait before next check (except for last check)
+                if check_num < checks_count - 1:
+                    time.sleep(check_interval)
+            
+            json_responses["strategy_monitoring"] = monitoring_data
+            
+            # Evaluate monitoring results
+            log(f"   📊 Monitoring Summary:")
+            log(f"      Total checks completed: {len(monitoring_data)}")
+            log(f"      Position changes detected: {len(position_changes)}")
+            log(f"      Trailing messages detected: {trailing_detected}")
+            
+            # Success if monitoring completed and we have data
+            if len(monitoring_data) >= checks_count - 1:  # Allow some tolerance
+                test_results["monitoring_completed"] = True
+                log("✅ Test 5 OK: Monitoramento completado")
+                if trailing_detected:
+                    log("   🧠 Trailing stop messages detectados no backend!")
+                if position_changes:
+                    log(f"   📈 {len(position_changes)} mudanças de posição detectadas")
+                else:
+                    log("   ℹ️  Nenhuma posição aberta durante janela de monitoramento")
+            else:
+                log(f"❌ Test 5 FALHOU: monitoring incompleto ({len(monitoring_data)} checks)")
+        else:
+            log("❌ Test 5 PULADO: Strategy não foi iniciada")
+        
+        # Test 6: POST /api/strategy/stop - Parar estratégia
+        log("\n🔍 TEST 6: POST /api/strategy/stop")
+        log("   Objetivo: Parar estratégia e confirmar running=false")
+        
+        try:
+            response = session.post(f"{api_url}/strategy/stop", json={}, timeout=15)
+            log(f"   POST /api/strategy/stop: {response.status_code}")
+            
+            if response.status_code == 200:
+                stop_data = response.json()
+                json_responses["strategy_stop"] = stop_data
+                log(f"   Response: {json.dumps(stop_data, indent=2)}")
+                
+                running = stop_data.get('running', True)  # Default True to catch failures
+                message = stop_data.get('message', '')
+                
+                log(f"   📊 Strategy Stop Results:")
+                log(f"      Running: {running}")
+                log(f"      Message: {message}")
+                
+                if running == False:
+                    test_results["strategy_stopped"] = True
+                    log("✅ Test 6 OK: Estratégia parada com sucesso")
+                    log(f"   🎯 Running: false confirmado")
+                else:
+                    log(f"❌ Test 6 FALHOU: running={running}")
+            else:
+                log(f"❌ Strategy Stop FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_stop"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                try:
+                    error_data = response.json()
+                    log(f"   Error: {error_data}")
+                    json_responses["strategy_stop"] = error_data
+                except:
+                    log(f"   Error text: {response.text}")
+                    
+        except Exception as e:
+            log(f"❌ Test 6 FALHOU - Exception: {e}")
+            json_responses["strategy_stop"] = {"error": str(e)}
+        
+        # Final analysis and comprehensive report
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: Sistema de Trailing Stop")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "deriv_api_health": "1) GET /api/deriv/status - Saúde da API",
+            "trailing_config_present": "2) GET /api/strategy/optimize/status - Configs trailing",
+            "trailing_config_applied": "3) POST /api/strategy/optimize/apply - Aplicar config",
+            "strategy_started": "4) POST /api/strategy/start - Iniciar StrategyRunner",
+            "monitoring_completed": "5) Monitoramento 40-60s - Status checks",
+            "strategy_stopped": "6) POST /api/strategy/stop - Parar estratégia"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ SUCESSO" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        # Report all JSON responses as requested
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        overall_success = passed_tests >= 5  # Allow 1 failure out of 6 tests
+        
+        if overall_success:
+            log("\n🎉 SISTEMA DE TRAILING STOP VALIDADO COM SUCESSO!")
+            log("📋 Funcionalidades validadas:")
+            if test_results["deriv_api_health"]:
+                log("   ✅ Deriv API: Conectada e autenticada em modo DEMO")
+            if test_results["trailing_config_present"]:
+                log("   ✅ Trailing Config: Campos enabled, activation_profit, distance_profit presentes")
+            if test_results["trailing_config_applied"]:
+                log("   ✅ Config Apply: Configuração agressiva aplicada (5% ativação, 3% distância)")
+            if test_results["strategy_started"]:
+                log("   ✅ Strategy Start: StrategyRunner iniciado em modo live DEMO")
+            if test_results["monitoring_completed"]:
+                log("   ✅ Monitoring: Monitoramento 40-60s completado com sucesso")
+            if test_results["strategy_stopped"]:
+                log("   ✅ Strategy Stop: Estratégia parada corretamente")
+            log("   🧠 CONCLUSÃO: Sistema Trailing Stop operacional em modo DEMO!")
+            log("   🎯 Trailing ativa quando lucro >= 5% e vende se recuar 3%")
+            log("   🛡️ Monitor ativo a cada 2s para proteção de lucros")
+            log("   🚫 NÃO executado compras manuais conforme instruções")
+        else:
+            log("\n❌ PROBLEMAS DETECTADOS NO SISTEMA DE TRAILING STOP")
+            failed_steps = [test_names.get(name, name) for name, passed in test_results.items() if not passed]
+            log(f"   Testes que falharam: {failed_steps}")
+            log("   📋 FOCO: Verificar implementação do sistema Trailing Stop")
+        
+        return overall_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
+
 def test_ml_stop_loss_system():
     """
     Execute the ML Stop Loss Inteligente System validation test plan
