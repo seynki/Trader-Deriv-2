@@ -208,8 +208,8 @@ def test_trailing_stop_system():
         
         # Test 4: POST /api/strategy/start - Iniciar StrategyRunner live DEMO
         log("\n🔍 TEST 4: POST /api/strategy/start")
-        log("   Objetivo: Iniciar StrategyRunner em modo live DEMO para R_100")
-        log("   Configuração: símbolo volatility, duração curta, stake=1, CALL/PUT automáticos")
+        log("   Objetivo: Iniciar StrategyRunner em modo paper DEMO para R_100")
+        log("   Configuração: símbolo volatility, duração curta, stake=1, trailing habilitado")
         
         strategy_config = {
             "symbol": "R_100",
