@@ -218,7 +218,7 @@ def test_trailing_stop_system():
             "duration": 5,
             "duration_unit": "t",
             "stake": 1.0,
-            "mode": "live",
+            "mode": "paper",  # Use paper mode for testing (trailing stop works the same)
             "enable_dynamic_stop_loss": True,
             "enable_trailing_stop": True
         }
