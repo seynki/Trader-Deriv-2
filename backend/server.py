@@ -1785,6 +1785,8 @@ class StrategyRunner:
             self.task.cancel()
             try:
                 await self.task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
         # 🛡️ STOP LOSS DINÂMICO: Parar monitoramento
@@ -1792,6 +1794,8 @@ class StrategyRunner:
             self.stop_loss_task.cancel()
             try:
                 await self.stop_loss_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
             logger.info("🛡️ Sistema de Stop Loss Dinâmico parado")
