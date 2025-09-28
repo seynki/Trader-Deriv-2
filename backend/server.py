@@ -90,6 +90,9 @@ class BuyRequest(BaseModel):
     product_type: Optional[str] = None
     growth_rate: Optional[float] = None  # for ACCUMULATOR (e.g., 0.03)
     extra: Optional[Dict[str, Any]] = None  # passthrough
+    # Novo: TP/SL em USD por trade (apenas sessão atual)
+    take_profit_usd: Optional[float] = Field(default=None, description="Valor de lucro em USD para encerrar a operação")
+    stop_loss_usd: Optional[float] = Field(default=None, description="Valor de perda em USD para encerrar a operação")
 
 class RiskManager:
     """Monitora contratos CALL/PUT por TP/SL (USD) por trade e vende automaticamente ao atingir limites.
