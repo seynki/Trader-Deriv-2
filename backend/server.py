@@ -739,25 +739,6 @@ async def deriv_buy(req: BuyRequest):
         "payout": b.get("payout"),
         "transaction_id": b.get("transaction_id"),
     }
-
-    await _deriv._send({
-        "buy": prop["id"],
-        "price": req.stake,
-        "req_id": req_id,
-    })
-    try:
-        data = await asyncio.wait_for(fut, timeout=12)
-    except asyncio.TimeoutError:
-        _deriv.pending.pop(req_id, None)
-        raise HTTPException(status_code=504, detail="Timeout waiting for buy response")
-    if data.get("error"):
-        raise HTTPException(status_code=400, detail=data["error"].get("message", "buy error"))
-    b = data.get("buy", {})
-    cid = b.get("contract_id")
-    # Garante que começaremos a acompanhar o contrato para emitir sinais de expiração/profit
-    try:
-        if cid:
-            await _deriv.ensure_contract_subscription(cid)
     except Exception:
         pass
     return {
