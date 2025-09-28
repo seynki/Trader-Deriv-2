@@ -1081,12 +1081,12 @@ class StrategyRunner:
             return
             
         logger.info(f"🤖 Stop Loss INTELIGENTE INICIADO: ML + {self.params.stop_loss_percentage*100}% fallback, check a cada {self.params.stop_loss_check_interval}s")
-        print(f"🤖 DEBUG: Stop Loss INTELIGENTE monitor iniciado!")  # Log adicional para debug
+        print("🤖 DEBUG: Stop Loss INTELIGENTE monitor iniciado!")  # Log adicional para debug
         
         while self.running:
             try:
                 if not self.active_contracts:
-                    logger.debug(f"🤖 Stop Loss: Nenhum contrato ativo para monitorar")
+                    logger.debug("🤖 Stop Loss: Nenhum contrato ativo para monitorar")
                     await asyncio.sleep(self.params.stop_loss_check_interval)
                     continue
                 
@@ -2403,7 +2403,7 @@ async def river_backtest_run(request: RiverBacktestRequest):
                                 "river_prob": prob_up
                             })
                             
-                except Exception as e:
+                except Exception:
                     continue
             
             # Calcular métricas
