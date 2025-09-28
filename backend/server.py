@@ -1081,7 +1081,7 @@ class StrategyRunner:
             return
             
         logger.info(f"🤖 Stop Loss INTELIGENTE INICIADO: ML + {self.params.stop_loss_percentage*100}% fallback, check a cada {self.params.stop_loss_check_interval}s")
-        print("🤖 DEBUG: Stop Loss INTELIGENTE monitor iniciado!")  # Log adicional para debug
+        print("Stop Loss INTELIGENTE monitor iniciado")  # Log adicional para debug
         
         while self.running:
             try:
