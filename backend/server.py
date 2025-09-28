@@ -436,6 +436,13 @@ class DerivWS:
                                 self.stats_recorded[cid_int] = True
                         except Exception as se:
                             logger.warning(f"Global stats add failed: {se}")
+                        # Encaminhar updates ao RiskManager (TP/SL por trade)
+                        try:
+                            if cid_int is not None:
+                                await _risk.on_contract_update(cid_int, poc)
+                        except Exception as re:
+                            logger.debug(f"RiskManager update erro: {re}")
+
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
