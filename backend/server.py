@@ -94,6 +94,9 @@ class BuyRequest(BaseModel):
     take_profit_usd: Optional[float] = Field(default=None, description="Valor de lucro em USD para encerrar a operação")
     stop_loss_usd: Optional[float] = Field(default=None, description="Valor de perda em USD para encerrar a operação")
 
+# Instância global de RiskManager (é inicializada sob demanda quando chegam contratos)
+_risk: Optional["RiskManager"] = None
+
 class RiskManager:
     """Monitora contratos CALL/PUT por TP/SL (USD) por trade e vende automaticamente ao atingir limites.
     Não persiste em banco; escopo apenas da sessão atual.
