@@ -634,7 +634,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <>
               <div className="flex items-center gap-2">
                 <span className="text-sm opacity-80">Take Profit (USD)</span>
-                <Input className="w-28" type="number" step="0.01" value={tp} onChange={(e) => setTp(e.target.value === '' ? '' : Number(e.target.value))} placeholder="ex: 0.05" />
+                <Input className="w-28" type="text" inputMode="decimal" step="0.01" value={tp} onChange={(e) => setTp(e.target.value)} placeholder="ex: 0.05" />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm opacity-80">Stop Loss (USD)</span>
