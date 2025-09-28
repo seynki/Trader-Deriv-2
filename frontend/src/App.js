@@ -377,7 +377,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
 
   function buildPayloadForSide(side) {
     if (contractEngine === "CALLPUT") {
-      return {
+      const payload = {
         type: "CALLPUT",
         symbol,
         contract_type: side, // CALL ou PUT
@@ -386,6 +386,10 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         stake: Number(stake),
         currency: "USD",
       };
+      // Incluir TP/SL em USD quando preenchidos
+      if (tp !== '' && tp !== null && !Number.isNaN(Number(tp))) payload.take_profit_usd = Number(tp);
+      if (sl !== '' && sl !== null && !Number.isNaN(Number(sl))) payload.stop_loss_usd = Number(sl);
+      return payload;
     }
     if (contractEngine === "ACCUMULATOR") {
       return {
