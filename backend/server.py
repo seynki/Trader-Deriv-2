@@ -447,10 +447,6 @@ class DerivWS:
                         except Exception as re:
                             logger.debug(f"RiskManager update erro: {re}")
 
-                                await _risk.on_contract_update(cid_int, poc)
-                        except Exception as re:
-                            logger.debug(f"RiskManager update erro: {re}")
-
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
                     elif msg_type == "error":
