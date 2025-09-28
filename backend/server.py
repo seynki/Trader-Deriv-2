@@ -715,10 +715,10 @@ async def deriv_buy(req: BuyRequest):
     # Garante que começaremos a acompanhar o contrato para emitir sinais de expiração/profit
     try:
         if cid:
-            await _deriv.ensure_contract_subscription(cid)
+            await _deriv.ensure_contract_subscription(int(cid))
     except Exception:
         pass
-    # Registrar TP/SL simples por trade no RiskManager
+    # Registrar TP/SL simples por trade no RiskManager (somente para CALL/PUT)
     try:
         if cid and (req.take_profit_usd is not None or req.stop_loss_usd is not None):
             await _risk.register(int(cid), req.take_profit_usd, req.stop_loss_usd)
