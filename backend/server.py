@@ -319,13 +319,6 @@ class DerivWS:
         except asyncio.TimeoutError:
             logger.warning(f"Timeout aguardando resposta para req_id {req_id}")
             return None
-                        # Encaminhar update ao RiskManager (TP/SL por contrato)
-                        try:
-                            if cid_int is not None:
-                                await _risk.on_contract_update(cid_int, poc)
-                        except Exception as re:
-                            logger.debug(f"RiskManager update erro: {re}")
-
         except Exception as e:
             logger.error(f"Erro em _send_and_wait: {e}")
             return None
