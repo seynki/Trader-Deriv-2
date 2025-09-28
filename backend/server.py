@@ -725,6 +725,9 @@ async def deriv_buy(req: BuyRequest):
     # Registrar TP/SL simples por trade no RiskManager (somente para CALL/PUT)
     try:
         if cid and (req.take_profit_usd is not None or req.stop_loss_usd is not None):
+            global _risk
+            if _risk is None:
+                _risk = RiskManager(_deriv)
             await _risk.register(int(cid), req.take_profit_usd, req.stop_loss_usd)
     except Exception:
         logger.debug("RiskManager register falhou (seguindo sem TP/SL)")
