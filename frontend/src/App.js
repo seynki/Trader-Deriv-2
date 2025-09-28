@@ -628,6 +628,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
                 <Input className="w-24" type="number" value={sl} onChange={(e) => setSl(Number(e.target.value||20))} />
               </div>
             </>
+          )}
           {/* CALL/PUT: TP/SL em USD por trade */}
           {contractEngine === "CALLPUT" && (
             <>
