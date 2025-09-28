@@ -91,6 +91,67 @@ class BuyRequest(BaseModel):
     growth_rate: Optional[float] = None  # for ACCUMULATOR (e.g., 0.03)
     extra: Optional[Dict[str, Any]] = None  # passthrough
 
+class RiskManager:
+    """Monitora contratos CALL/PUT por TP/SL (USD) por trade e vende automaticamente ao atingir limites.
+    Não persiste em banco; escopo apenas da sessão atual.
+    """
+    def __init__(self, deriv: "DerivWS"):
+        self.deriv = deriv
+        self.contracts: Dict[int, Dict[str, Any]] = {}
+        self._lock = asyncio.Lock()
+
+    async def register(self, contract_id: int, tp_usd: Optional[float], sl_usd: Optional[float]):
+        # Ignorar se nenhum limite foi informado
+        if tp_usd is None and sl_usd is None:
+            return
+        async with self._lock:
+            self.contracts[int(contract_id)] = {
+                "tp_usd": (float(tp_usd) if tp_usd is not None else None),
+                "sl_usd": (float(sl_usd) if sl_usd is not None else None),
+                "created_at": int(time.time()),
+                "armed": True,
+            }
+        # Garantir assinatura do contrato para receber updates
+        try:
+            await self.deriv.ensure_contract_subscription(int(contract_id))
+        except Exception:
+            pass
+        logger.info(f"🛡️ RiskManager registrado p/ contrato {contract_id}: TP={tp_usd} SL={sl_usd}")
+
+    async def on_contract_update(self, contract_id: int, poc: Dict[str, Any]):
+        cfg = self.contracts.get(int(contract_id))
+        if not cfg or not cfg.get("armed"):
+            return
+        try:
+            profit = float(poc.get("profit") or 0.0)
+        except Exception:
+            return
+        # Se expirou, limpar registro
+        if bool(poc.get("is_expired")):
+            async with self._lock:
+                self.contracts.pop(int(contract_id), None)
+            return
+        tp = cfg.get("tp_usd")
+        sl = cfg.get("sl_usd")
+        sell_reason: Optional[str] = None
+        if tp is not None and profit >= float(tp):
+            sell_reason = f"TP atingido: lucro {profit:.2f} >= {float(tp):.2f}"
+        if sl is not None and profit <= -abs(float(sl)):
+            sell_reason = sell_reason or f"SL atingido: lucro {profit:.2f} <= -{abs(float(sl)):.2f}"
+        if sell_reason:
+            logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
+            try:
+                resp = await self.deriv._send_and_wait({"sell": int(contract_id), "price": 0}, timeout=10)
+                if resp and resp.get("sell"):
+                    sold_for = resp["sell"].get("sold_for")
+                    logger.info(f"✅ RiskManager: contrato {contract_id} vendido por {sold_for}")
+                    async with self._lock:
+                        self.contracts.pop(int(contract_id), None)
+                else:
+                    logger.warning(f"⚠️ RiskManager: falha ao vender {contract_id}: {resp}")
+            except Exception as e:
+                logger.error(f"Erro ao vender contrato {contract_id} via RiskManager: {e}")
+
 class SellRequest(BaseModel):
     contract_id: int
     price: Optional[float] = None  # 0 = market
