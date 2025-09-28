@@ -439,6 +439,14 @@ _risk = None
 
                         try:
                             if cid_int is not None:
+                        try:
+                            # Inicializar RiskManager on-demand (após _deriv criado)
+                            global _risk
+                            if _risk is None:
+                                _risk = RiskManager(_deriv)
+                        except Exception:
+                            pass
+
                                 await _risk.on_contract_update(cid_int, poc)
                         except Exception as re:
                             logger.debug(f"RiskManager update erro: {re}")
