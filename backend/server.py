@@ -436,9 +436,6 @@ class DerivWS:
                         # Encaminhar updates ao RiskManager (TP/SL por trade)
                         try:
                             if cid_int is not None:
-# Instância global de RiskManager (TP/SL por operação)
-_risk = RiskManager(_deriv)
-
                                 await _risk.on_contract_update(cid_int, poc)
                         except Exception as re:
                             logger.debug(f"RiskManager update erro: {re}")
