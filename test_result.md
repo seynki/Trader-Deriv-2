@@ -664,6 +664,37 @@
 ##   -agent: "testing"
 ##   -message: "🔧 TESTE BACKEND APÓS MODIFICAÇÕES DO FRONTEND EXECUTADO COM SUCESSO TOTAL (2025-09-14): ✅ TODOS OS 4 TESTES PASSARAM (100% SUCCESS RATE) - Executado teste rápido conforme review request português após modificações frontend: 1) CONECTIVIDADE BÁSICA ✅ GET /api/status retorna 200 'Hello World', GET /api/deriv/status retorna 200 com connected=true, authenticated=true, environment=DEMO 2) RIVER STATUS ✅ GET /api/ml/river/status retorna 200 com initialized=true, samples=47, acc=0.702, logloss=0.603, model_path válido - disponível para painel de estratégia 3) ESTRATÉGIA STATUS ✅ GET /api/strategy/status retorna 200 com estrutura completa: running=false, mode=paper, symbol=R_100, wins/losses/total_trades=0, win_rate=0.0%, global_daily_pnl=0.0 4) ENDPOINTS AUTO-BOT ✅ GET /api/auto-bot/status retorna 200 com running=false, min_winrate=0.85, conservative_mode=true, GET /api/auto-bot/results retorna 200. RESULTADO CRÍTICO: Backend continua funcionando PERFEITAMENTE após modificações frontend - todos os endpoints necessários respondem corretamente mesmo com remoção das abas 'Bot Automático', 'Modelo atual (ML)', 'Aprendizado Online' do frontend. River status disponível para novo painel 'Estratégia (ADX/RSI/MACD/BB)' com informações River upd. Sistema backend mantém funcionalidade completa independente das mudanças de UI. SUCCESS RATE: 100% (4/4 testes passaram)."
 
+
+## backend:
+##   - task: "TP/SL por trade (CALL/PUT) + RiskManager + integração buy/WS"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Adicionado RiskManager que monitora cada contrato CALL/PUT e vende automaticamente quando atinge Take Profit (USD) ou Stop Loss (USD) definidos por trade. Campos novos em BuyRequest: take_profit_usd, stop_loss_usd. Integração: registra no /api/deriv/buy após compra, acompanha via WS proposal_open_contract e executa 'sell' quando condições são atendidas. Não persiste em banco; escopo de sessão apenas."
+##
+## frontend:
+##   - task: "Automação: campos Take Profit (USD) e Stop Loss (USD) para CALL/PUT"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/frontend/src/App.js"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Na aba Automação, quando o tipo é CALL/PUT, exibe campos Take Profit (USD) e Stop Loss (USD). O payload enviado para POST /api/deriv/buy inclui take_profit_usd e stop_loss_usd quando preenchidos. Exemplo: stake=1, TP=0.05, SL=1." 
+##
+## agent_communication:
+##   -agent: "main"
+##   -message: "Para validar o RiskManager, preciso autorização para executar 1 trade DEMO via /api/deriv/buy (stake=1 USD, take_profit_usd=0.05, stop_loss_usd=1.00) e acompanhar auto-venda quando lucro >= 0.05 USD ou perda <= -1.00 USD. Se preferir, posso testar apenas proposta (sem buy) e aguardar sua autorização para o teste de venda automática."
+
 ## backend:
 ##   - task: "Sistema Híbrido de Trading (River + Indicadores Técnicos)"
 ##     implemented: true
