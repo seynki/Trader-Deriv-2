@@ -434,6 +434,9 @@ class DerivWS:
                         except Exception as se:
                             logger.warning(f"Global stats add failed: {se}")
                         # Encaminhar updates ao RiskManager (TP/SL por trade)
+# Instância global de RiskManager (TP/SL por operação)
+_risk = None
+
                         try:
                             if cid_int is not None:
                                 await _risk.on_contract_update(cid_int, poc)
