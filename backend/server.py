@@ -735,9 +735,6 @@ async def deriv_buy(req: BuyRequest):
         "payout": b.get("payout"),
         "transaction_id": b.get("transaction_id"),
     }
-    except Exception:
-        pass
-    return {
         "message": "purchased",
         "contract_id": b.get("contract_id"),
         "buy_price": b.get("buy_price") or b.get("price"),
