@@ -94,6 +94,9 @@ class BuyRequest(BaseModel):
 class RiskManager:
     """Monitora contratos CALL/PUT por TP/SL (USD) por trade e vende automaticamente ao atingir limites.
     Não persiste em banco; escopo apenas da sessão atual.
+# Instância global de RiskManager (TP/SL por operação)
+_risk = RiskManager(_deriv)
+
     """
     def __init__(self, deriv: "DerivWS"):
         self.deriv = deriv
