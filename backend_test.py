@@ -19,9 +19,9 @@ import sys
 import time
 from datetime import datetime
 
-def test_trailing_stop_system():
+def test_risk_manager_take_profit_stop_loss():
     """
-    Execute the Trailing Stop System validation test plan
+    Execute the RiskManager Take Profit / Stop Loss validation test plan
     """
     
     base_url = "https://trading-limit-check.preview.emergentagent.com"
@@ -32,24 +32,22 @@ def test_trailing_stop_system():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "🧠" + "="*68)
-    log("SISTEMA DE TRAILING STOP - VALIDATION TESTING")
-    log("🧠" + "="*68)
+    log("\n" + "🛡️" + "="*68)
+    log("RISKMANAGER TAKE PROFIT / STOP LOSS - VALIDATION TESTING")
+    log("🛡️" + "="*68)
     log("📋 Test Plan:")
-    log("   1) GET /api/deriv/status - Verificar saúde da API")
-    log("   2) GET /api/strategy/optimize/status - Validar configs trailing")
-    log("   3) POST /api/strategy/optimize/apply - Aplicar config trailing agressiva")
-    log("   4) POST /api/strategy/start - Iniciar StrategyRunner live DEMO")
-    log("   5) Monitor 40-60s - Status a cada 10s (4-6 vezes)")
-    log("   6) POST /api/strategy/stop - Parar estratégia")
+    log("   1) GET /api/deriv/status - aguardar 5s, deve retornar connected=true")
+    log("   2) POST /api/deriv/buy - criar trade com TP configurado (take_profit_usd: 0.05)")
+    log("   3) Monitor logs - procurar por mensagens específicas do RiskManager")
+    log("   4) Verificar auto-close - aguardar até 60s para venda automática quando profit >= 0.05")
     
     test_results = {
-        "deriv_api_health": False,
-        "trailing_config_present": False,
-        "trailing_config_applied": False,
-        "strategy_started": False,
-        "monitoring_completed": False,
-        "strategy_stopped": False
+        "deriv_connectivity": False,
+        "trade_created_with_tp": False,
+        "risk_manager_active": False,
+        "subscription_working": False,
+        "contract_updates_received": False,
+        "auto_close_working": False
     }
     
     # Store all JSON responses for reporting
