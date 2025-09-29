@@ -132,18 +132,30 @@ class RiskManager:
             profit = float(poc.get("profit") or 0.0)
         except Exception:
             return
+        
+        # Log detalhado para debug
+        tp = cfg.get("tp_usd")
+        sl = cfg.get("sl_usd")
+        logger.debug(f"🔍 RiskManager contrato {contract_id}: profit={profit:.4f}, TP={tp}, SL={sl}, is_expired={bool(poc.get('is_expired'))}")
+        
         # Se expirou, limpar registro
         if bool(poc.get("is_expired")):
             async with self._lock:
                 self.contracts.pop(int(contract_id), None)
+            logger.debug(f"🏁 RiskManager: contrato {contract_id} expirou, removendo do monitoramento")
             return
-        tp = cfg.get("tp_usd")
-        sl = cfg.get("sl_usd")
+        
         sell_reason: Optional[str] = None
+        
+        # Verificar Take Profit primeiro (prioridade)
         if tp is not None and profit >= float(tp):
-            sell_reason = f"TP atingido: lucro {profit:.2f} >= {float(tp):.2f}"
-        if sl is not None and profit <= -abs(float(sl)):
-            sell_reason = sell_reason or f"SL atingido: lucro {profit:.2f} <= -{abs(float(sl)):.2f}"
+            sell_reason = f"TP atingido: lucro {profit:.4f} >= {float(tp):.4f}"
+            logger.info(f"🎯 {sell_reason}")
+        # Só verificar Stop Loss se TP não foi atingido
+        elif sl is not None and profit <= -abs(float(sl)):
+            sell_reason = f"SL atingido: lucro {profit:.4f} <= -{abs(float(sl)):.4f}"
+            logger.info(f"🛑 {sell_reason}")
+        
         if sell_reason:
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
             try:
