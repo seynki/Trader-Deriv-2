@@ -456,10 +456,11 @@ class DerivWS:
                             global _risk
                             if _risk is None:
                                 _risk = RiskManager(_deriv)
+                                logger.info("🛡️ RiskManager inicializado")
                             if cid_int is not None:
                                 await _risk.on_contract_update(cid_int, poc)
                         except Exception as re:
-                            logger.debug(f"RiskManager update erro: {re}")
+                            logger.error(f"❌ RiskManager update erro para contrato {cid_int}: {re}", exc_info=True)
 
                     elif msg_type == "heartbeat":
                         self.last_heartbeat = int(time.time())
