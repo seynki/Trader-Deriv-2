@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Backend Testing - Trailing Stop System Validation
-Tests the newly implemented Trailing Stop functionality as requested in the Portuguese review
+Backend Testing - RiskManager Take Profit / Stop Loss Validation
+Tests the RiskManager TP/SL functionality as requested in the Portuguese review
 
 Test Plan (Portuguese Review Request):
-1) GET /api/deriv/status - verificar saúde da API (connected=true, authenticated=true)
-2) GET /api/strategy/optimize/status - validar presença das novas configs trailing
-3) POST /api/strategy/optimize/apply - aplicar configuração trailing mais agressiva
-4) POST /api/strategy/start - iniciar StrategyRunner em modo live DEMO
-5) Monitor 40-60s - chamar GET /api/strategy/status a cada 10s (4-6 vezes)
-6) POST /api/strategy/stop - parar estratégia e confirmar running=false
+1) GET /api/deriv/status - aguardar 5s, deve retornar connected=true
+2) POST /api/deriv/buy - criar trade com TP configurado (take_profit_usd: 0.05)
+3) Monitor logs - procurar por mensagens específicas do RiskManager
+4) Verificar auto-close - aguardar até 60s para venda automática quando profit >= 0.05
 
-Notes: Focus on trailing stop functionality, DEMO mode only. No frontend testing.
+Notes: Focus on RiskManager TP/SL functionality, DEMO mode only. No frontend testing.
 Use only /api prefix. DEMO environment with tokens already in backend/.env.
 """
 
