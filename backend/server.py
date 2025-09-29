@@ -109,6 +109,7 @@ class RiskManager:
     async def register(self, contract_id: int, tp_usd: Optional[float], sl_usd: Optional[float]):
         # Ignorar se nenhum limite foi informado
         if tp_usd is None and sl_usd is None:
+            logger.debug(f"⏭️ RiskManager: contrato {contract_id} sem TP/SL configurado, ignorando")
             return
         async with self._lock:
             self.contracts[int(contract_id)] = {
@@ -120,9 +121,10 @@ class RiskManager:
         # Garantir assinatura do contrato para receber updates
         try:
             await self.deriv.ensure_contract_subscription(int(contract_id))
-        except Exception:
-            pass
-        logger.info(f"🛡️ RiskManager registrado p/ contrato {contract_id}: TP={tp_usd} SL={sl_usd}")
+            logger.info(f"✅ RiskManager: subscription OK para contrato {contract_id}")
+        except Exception as e:
+            logger.error(f"❌ RiskManager: falha ao subscrever contrato {contract_id}: {e}")
+        logger.info(f"🛡️ RiskManager ATIVO p/ contrato {contract_id}: TP={tp_usd} USD, SL={sl_usd} USD")
 
     async def on_contract_update(self, contract_id: int, poc: Dict[str, Any]):
         cfg = self.contracts.get(int(contract_id))
