@@ -292,7 +292,7 @@
 ##   run_ui: false
 ## test_plan:
 ##   current_focus:
-##     - "Sistema de Stop Loss Dinâmico"
+##     - "RiskManager Take Profit / Stop Loss Validation"
 ##   stuck_tasks:
 ##     - "None"
 ##   test_all: false
