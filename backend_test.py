@@ -1319,4 +1319,24 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    test_trailing_stop_system()
+    print("🛡️ INICIANDO TESTE DO RISKMANAGER TAKE PROFIT / STOP LOSS")
+    print("="*70)
+    
+    try:
+        success, results, responses = test_risk_manager_take_profit_stop_loss()
+        
+        if success:
+            print("\n🎉 TESTE CONCLUÍDO COM SUCESSO!")
+            print("✅ RiskManager Take Profit / Stop Loss funcionando corretamente")
+        else:
+            print("\n❌ TESTE FALHOU!")
+            print("⚠️  Verificar implementação do RiskManager")
+            
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+        
+    except Exception as e:
+        print(f"\n💥 ERRO CRÍTICO: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
