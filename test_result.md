@@ -677,6 +677,9 @@
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Adicionado RiskManager que monitora cada contrato CALL/PUT e vende automaticamente quando atinge Take Profit (USD) ou Stop Loss (USD) definidos por trade. Campos novos em BuyRequest: take_profit_usd, stop_loss_usd. Integração: registra no /api/deriv/buy após compra, acompanha via WS proposal_open_contract e executa 'sell' quando condições são atendidas. Não persiste em banco; escopo de sessão apenas."
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "🔧 CORREÇÃO APLICADA (2025-09-29): Identificado e corrigido bug na lógica de verificação do RiskManager.on_contract_update(). Problemas encontrados: 1) Lógica de verificação TP/SL não usava elif, permitindo avaliação de ambas condições mesmo quando TP já foi atingido 2) Logs insuficientes para debug. Correções implementadas: 1) Alterado para usar elif na verificação de SL (linha 154) - só verifica SL se TP não foi atingido 2) Adicionados logs detalhados (debug) em on_contract_update para rastrear profit, TP, SL e is_expired 3) Melhorado registro com logs mais informativos (INFO level) indicando quando TP ou SL é atingido 4) Adicionado tratamento de exceção mais robusto com exc_info=True 5) Logs mais claros no método register() mostrando se subscription foi bem-sucedida. Sistema agora deve fechar trades automaticamente quando lucro atinge TP configurado."
 ##
 ## frontend:
 ##   - task: "Automação: campos Take Profit (USD) e Stop Loss (USD) para CALL/PUT"
