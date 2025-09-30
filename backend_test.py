@@ -206,32 +206,60 @@ def test_riskmanager_take_profit_immediate():
             log("❌ Test 2 FALHOU: Nenhum contrato foi criado (CALL nem PUT)")
             return False, test_results, json_responses
         
-        # Test 3: Aguardar 5 segundos
-        log("\n🔍 TEST 3: Aguardar 5 segundos")
-        log("   Para o contrato ter algum profit/loss")
+        # Test 3: WebSocket monitoring for RiskManager activity
+        log("\n🔍 TEST 3: Monitoramento WebSocket para atividade RiskManager")
+        log("   Abrir WebSocket /api/ws/contract/{contract_id} e monitorar por até 45s")
+        log("   Procurar por:")
+        log("      - Mensagens de profit atualizando")
+        log("      - Logs do backend: '🛡️ RiskManager ATIVO p/ contrato'")
+        log("      - Quando profit >= 0.05: '🎯 TP atingido'")
+        log("      - Tentativa de venda: '🛑 RiskManager vendendo contrato'")
         
-        log("   ⏱️  Aguardando 5 segundos...")
-        time.sleep(5)
-        
-        # Try to get contract status to verify it has profit/loss
+        # Try to get contract status via WebSocket
         try:
-            # We'll use WebSocket to check contract status if possible
             import websocket
             import threading
             import json as json_lib
             
-            ws_url = f"wss://trading-limit-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+            ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
             log(f"   📡 Conectando WebSocket: {ws_url}")
             
             messages_received = []
             connection_established = False
+            tp_triggered = False
+            sell_attempted = False
+            max_profit_seen = 0.0
+            monitoring_start_time = time.time()
             
             def on_message(ws, message):
-                nonlocal messages_received
+                nonlocal messages_received, tp_triggered, sell_attempted, max_profit_seen
                 try:
                     data = json_lib.loads(message)
                     messages_received.append(data)
-                    log(f"   📨 Contract update: profit={data.get('profit', 'N/A')}, status={data.get('status', 'N/A')}")
+                    
+                    profit = data.get('profit', 0)
+                    status = data.get('status', 'unknown')
+                    is_expired = data.get('is_expired', False)
+                    
+                    if profit is not None:
+                        profit_float = float(profit)
+                        max_profit_seen = max(max_profit_seen, profit_float)
+                        
+                        elapsed = time.time() - monitoring_start_time
+                        log(f"   📨 Contract update (t={elapsed:.1f}s): profit={profit_float:.4f}, status={status}, expired={is_expired}")
+                        
+                        # Check if TP threshold reached
+                        if profit_float >= 0.05:
+                            if not tp_triggered:
+                                tp_triggered = True
+                                log(f"   🎯 TP THRESHOLD ATINGIDO! profit={profit_float:.4f} >= 0.05")
+                                log(f"   ⏱️  Aguardando logs do RiskManager...")
+                        
+                        # Check if contract was sold (profit drops significantly or status changes)
+                        if tp_triggered and (is_expired or status == 'sold'):
+                            sell_attempted = True
+                            log(f"   🛑 CONTRATO FINALIZADO: status={status}, expired={is_expired}")
+                    
                 except Exception as e:
                     log(f"   ⚠️  Error parsing WebSocket message: {e}")
             
@@ -258,30 +286,69 @@ def test_riskmanager_take_profit_immediate():
             ws_thread.daemon = True
             ws_thread.start()
             
-            # Wait for connection and messages
-            time.sleep(3)
+            # Monitor for up to 45 seconds
+            monitoring_duration = 45
+            log(f"   ⏱️  Monitorando por até {monitoring_duration} segundos...")
             
-            if len(messages_received) > 0:
-                test_results["contract_has_profit_loss"] = True
-                log("✅ Test 3 OK: Contrato tem updates de profit/loss")
+            for second in range(monitoring_duration):
+                time.sleep(1)
+                elapsed = second + 1
                 
-                # Get latest profit value
-                latest_msg = messages_received[-1]
-                current_profit = latest_msg.get('profit', 0)
-                log(f"   💰 Current profit: {current_profit}")
-            else:
-                log("⚠️  Test 3: Nenhum update recebido, mas continuando...")
-                test_results["contract_has_profit_loss"] = True  # Assume it's working
+                if elapsed % 10 == 0:  # Log every 10 seconds
+                    log(f"   📊 Status (t={elapsed}s): messages={len(messages_received)}, max_profit={max_profit_seen:.4f}, tp_triggered={tp_triggered}")
+                
+                # If TP was triggered and contract was sold/expired, we can stop early
+                if tp_triggered and sell_attempted:
+                    log(f"   🎉 TP triggered e contrato finalizado em {elapsed}s - parando monitoramento")
+                    break
+                
+                # If contract expired naturally without TP, also stop
+                if len(messages_received) > 0:
+                    latest_msg = messages_received[-1]
+                    if latest_msg.get('is_expired', False):
+                        log(f"   ⏰ Contrato expirou naturalmente em {elapsed}s")
+                        break
             
             # Close WebSocket
             ws.close()
             
+            # Evaluate results
+            if connection_established and len(messages_received) > 0:
+                test_results["websocket_monitoring"] = True
+                log("✅ Test 3 OK: WebSocket monitoring funcionando")
+                log(f"   📊 Mensagens recebidas: {len(messages_received)}")
+                log(f"   💰 Profit máximo observado: {max_profit_seen:.4f}")
+                
+                if tp_triggered:
+                    test_results["tp_trigger_detection"] = True
+                    log("✅ TP TRIGGER DETECTADO: profit >= 0.05 USD observado")
+                    
+                    if sell_attempted:
+                        test_results["automatic_sell_attempt"] = True
+                        log("✅ VENDA AUTOMÁTICA DETECTADA: contrato finalizado após TP")
+                    else:
+                        log("⚠️  TP atingido mas venda automática não detectada via WebSocket")
+                else:
+                    log(f"ℹ️  TP não atingido durante monitoramento (max profit: {max_profit_seen:.4f})")
+            else:
+                log("❌ Test 3 FALHOU: WebSocket não conectou ou não recebeu mensagens")
+            
+            # Store monitoring data
+            json_responses["websocket_monitoring"] = {
+                "messages_count": len(messages_received),
+                "max_profit_seen": max_profit_seen,
+                "tp_triggered": tp_triggered,
+                "sell_attempted": sell_attempted,
+                "connection_established": connection_established,
+                "sample_messages": messages_received[:5] if messages_received else []
+            }
+            
         except ImportError:
-            log("   ⚠️  WebSocket library not available, assumindo que contrato tem profit/loss")
-            test_results["contract_has_profit_loss"] = True
+            log("   ❌ WebSocket library not available")
+            json_responses["websocket_monitoring"] = {"error": "websocket library not available"}
         except Exception as e:
-            log(f"   ⚠️  WebSocket test failed: {e}, assumindo que contrato tem profit/loss")
-            test_results["contract_has_profit_loss"] = True
+            log(f"   ❌ WebSocket monitoring failed: {e}")
+            json_responses["websocket_monitoring"] = {"error": str(e)}
         
         # Test 4: POST /api/deriv/sell - testar venda manual via API
         log("\n🔍 TEST 4: Testar venda manual via API")
