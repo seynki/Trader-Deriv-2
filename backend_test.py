@@ -480,10 +480,12 @@ def test_riskmanager_take_profit_immediate():
         log(f"\n📋 DETALHES POR TESTE:")
         test_names = {
             "deriv_connectivity": "1) Conectividade - GET /api/deriv/status",
-            "contract_created": "2) Criar contrato - POST /api/deriv/buy",
-            "contract_has_profit_loss": "3) Aguardar profit/loss - 5 segundos",
-            "sell_api_working": "4) Venda manual - POST /api/deriv/sell",
-            "sell_response_time_ok": "5) Tempo de resposta - < 15 segundos"
+            "contract_created_with_tp": "2) Criar contrato com TP - POST /api/deriv/buy",
+            "websocket_monitoring": "3) Monitoramento WebSocket - /api/ws/contract/{id}",
+            "riskmanager_activation": "4) RiskManager ativo - logs e atividade",
+            "tp_trigger_detection": "5) TP trigger detectado - profit >= 0.05 USD",
+            "automatic_sell_attempt": "6) Venda automática - tentativa de sell",
+            "metrics_update": "7) Métricas globais - GET /api/strategy/status"
         }
         
         for test_key, passed in test_results.items():
