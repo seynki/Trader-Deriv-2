@@ -186,7 +186,7 @@ class RiskManager:
             return
             
         try:
-            profit = float(poc.get("profit") or 0.0)
+            profit = self._extract_profit(poc)
         except Exception:
             return
         
