@@ -32,9 +32,9 @@ import sys
 import time
 from datetime import datetime
 
-def test_sell_api_diagnostic():
+def test_riskmanager_take_profit_immediate():
     """
-    Execute the SELL API diagnostic test plan as requested in Portuguese review
+    Execute the RiskManager Take Profit immediate test plan as requested in Portuguese review
     """
     
     base_url = "https://auto-trading-check.preview.emergentagent.com"
@@ -45,16 +45,21 @@ def test_sell_api_diagnostic():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "🔍" + "="*68)
-    log("TESTE DIAGNÓSTICO DA API SELL (Venda de Contratos)")
-    log("🔍" + "="*68)
+    log("\n" + "🛡️" + "="*68)
+    log("TESTE RISKMANAGER TAKE PROFIT IMEDIATO (Conta REAL)")
+    log("🛡️" + "="*68)
     log("📋 Test Plan:")
-    log("   1) GET /api/deriv/status - aguardar 5s, deve retornar connected=true")
-    log("   2) POST /api/deriv/buy - criar contrato de teste R_100 CALL")
-    log("   3) Aguardar 5 segundos para o contrato ter algum profit/loss")
-    log("   4) POST /api/deriv/sell - testar venda manual via API")
-    log("   5) Analisar logs - procurar por mensagens de 'sell' nos logs")
-    log("   OBJETIVO: Determinar por que a API sell não está funcionando")
+    log("   1) Confirmar conectividade: GET /api/deriv/status → connected=true, authenticated=true")
+    log("   2) Realizar uma compra CALL/PUT com TP 0.05 USD para R_10 (ticks): POST /api/deriv/buy")
+    log("   3) Abrir WebSocket /api/ws/contract/{contract_id} e monitorar mensagens por até 45s")
+    log("   4) Critérios de sucesso:")
+    log("      - Ver logs do backend: '🛡️ RiskManager ATIVO p/ contrato', '🔍 RiskManager contrato ...'")
+    log("      - Quando profit >= 0.05: '🎯 TP atingido' seguido de '🛑 RiskManager vendendo contrato'")
+    log("      - Confirmar tentativa de venda automática: '📤 Tentativa ... vender contrato'")
+    log("      - Idealmente: '✅ RiskManager: contrato ... vendido' (ou múltiplas tentativas)")
+    log("   5) Se venda automática falhar por timeout, validar mecanismo de tentativas")
+    log("   6) GET /api/strategy/status para confirmar atualização de métricas globais")
+    log("   OBJETIVO: Validar que RiskManager fecha imediatamente quando profit atual >= 0.05 USD")
     
     test_results = {
         "deriv_connectivity": False,
