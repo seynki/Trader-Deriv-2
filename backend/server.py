@@ -219,39 +219,8 @@ class RiskManager:
             self._selling.add(int(contract_id))
             
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
-            try:
-                # Deriv API sell: requer apenas contract_id como sell e price=0 para venda a mercado
-                sell_payload = {
-                    "sell": int(contract_id),
-                    "price": 0  # 0 = venda a preço de mercado
-                }
-                logger.info(f"📤 Enviando sell request: {sell_payload}")
-                resp = await self.deriv._send_and_wait(sell_payload, timeout=15)
-                logger.info(f"📥 Sell response recebida: {resp}")
-                
-                if resp and resp.get("sell"):
-                    sold_for = resp["sell"].get("sold_for")
-                    logger.info(f"✅ RiskManager: contrato {contract_id} vendido por {sold_for} USD")
-                    async with self._lock:
-                        self.contracts.pop(int(contract_id), None)
-                        self._selling.discard(int(contract_id))
-                elif resp and resp.get("error"):
-                    error_msg = resp["error"].get("message", "Unknown error")
-                    logger.error(f"❌ RiskManager: erro Deriv API ao vender {contract_id}: {error_msg}")
-                    # Remover do set para permitir nova tentativa
-                    self._selling.discard(int(contract_id))
-                else:
-                    logger.warning(f"⚠️ RiskManager: resposta inesperada ao vender {contract_id}: {resp}")
-                    # Remover do set para permitir nova tentativa
-                    self._selling.discard(int(contract_id))
-            except asyncio.TimeoutError:
-                logger.error(f"⏱️ RiskManager: TIMEOUT ao tentar vender contrato {contract_id}")
-                # Remover do set para permitir nova tentativa no próximo update
-                self._selling.discard(int(contract_id))
-            except Exception as e:
-                logger.error(f"❌ Erro ao vender contrato {contract_id} via RiskManager: {e}", exc_info=True)
-                # Remover do set para permitir nova tentativa
-                self._selling.discard(int(contract_id))
+            # Disparar venda em background com múltiplas tentativas para não travar o loop
+            asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=10, delay=1.5))
 
 class SellRequest(BaseModel):
     contract_id: int
