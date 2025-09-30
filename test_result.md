@@ -298,6 +298,9 @@
 ##   stuck_tasks:
 ##     - "None"
 ##   test_all: false
+##   -agent: "user"
+##   -message: "Robô não parou trade mesmo com Take Profit 0.05 USD atingido. Quer que feche imediatamente o contrato aberto quando lucro atual subir de 0.05 USD. Teste em conta REAL. Parâmetros: R_10, CALL/PUT, período 20 (5t?), cooldown 30s, stake 1.00, TP 0.05, SL 1.00. Reset do acumulado ao iniciar o robô."
+
 ##   test_priority: "high_first"
 ## agent_communication:
 ##   -agent: "testing"
