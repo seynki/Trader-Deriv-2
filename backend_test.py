@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """
-Backend Testing - RiskManager Take Profit / Stop Loss Validation
-Tests the RiskManager TP/SL functionality as requested in the Portuguese review
+Backend Testing - SELL API Diagnostic Testing
+Tests the /api/deriv/sell API functionality as requested in the Portuguese review
 
 Test Plan (Portuguese Review Request):
 1) GET /api/deriv/status - aguardar 5s, deve retornar connected=true
-2) POST /api/deriv/buy - criar trade com TP configurado (take_profit_usd: 0.05)
-3) Monitor logs - procurar por mensagens específicas do RiskManager
-4) Verificar auto-close - aguardar até 60s para venda automática quando profit >= 0.05
+2) POST /api/deriv/buy - criar contrato de teste R_100 CALL
+3) Aguardar 5 segundos para o contrato ter algum profit/loss
+4) POST /api/deriv/sell - testar venda manual via API
+5) Analisar logs - procurar por mensagens de "sell" nos logs
 
-Notes: Focus on RiskManager TP/SL functionality, DEMO mode only. No frontend testing.
-Use only /api prefix. DEMO environment with tokens already in backend/.env.
+Objetivo: Determinar se o problema é:
+- A API /api/deriv/sell não está implementada corretamente
+- A Deriv API não está respondendo
+- O formato da requisição está incorreto
+- Há um problema com timeouts
+
+Notes: NÃO usar Take Profit neste teste - queremos testar a venda manual primeiro.
+DEMO mode only. No frontend testing. Use only /api prefix.
 """
 
 import requests
