@@ -170,6 +170,18 @@
 ##       -agent: "testing"
 ##       -comment: "ONLINE LEARNING TESTING COMPLETADO (2025-01-28): ✅ SISTEMA ATIVO E CONFIGURADO - GET /api/ml/online/progress retorna 2 modelos ativos (online_model_R100_auto com 78 features, online_model_demo com 77 features), total_updates=0 (esperado sem trades executados), current_accuracy 0.60 e 0.61 respectivamente. Sistema de retreinamento ML configurado e pronto para adaptar após cada trade. Modelos online inicializados automaticamente no startup conforme implementado. Infraestrutura de online learning funcionando corretamente."
 ##       -working: true
+##   - task: "RiskManager: TP imediato (lucro atual) + retries de venda"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Melhorei RiskManager: 1) Novo _extract_profit calcula profit por bid_price-buy_price quando campo 'profit' não vier; 2) Venda assíncrona com múltiplas tentativas (_sell_with_retries) para evitar travar loop e contornar timeouts intermitentes da Deriv; 3) Disparo de venda via asyncio.create_task assim que profit atual >= TP (prioridade) — fecha imediatamente contrato aberto; 4) Mantido SL. Objetivo: garantir fechamento assim que lucro atual atingir 0.05 USD."
+
 ##       -agent: "testing"
 ##       -comment: "ONLINE LEARNING CONTINUITY TESTING COMPLETADO (2025-01-28): ✅ SISTEMA DE RETREINAMENTO AUTOMÁTICO ATIVO E CONFIGURADO - Durante teste de continuidade do Strategy Runner: GET /api/ml/online/progress retorna 2 modelos ativos (online_model_demo com 77 features accuracy=0.614, online_model_R100_auto com 78 features accuracy=0.602), total_updates=0 (esperado pois nenhum trade foi executado durante teste), status='AGUARDANDO TRADES', retreinamento_automatico configurado para 'após cada trade' funcionando para 'trades reais' e 'paper trades'. Sistema pronto para retreinar automaticamente quando trades ocorrerem. Infraestrutura de online learning funcionando perfeitamente e integrada ao Strategy Runner."
 ## backend:
