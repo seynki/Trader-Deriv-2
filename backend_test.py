@@ -63,10 +63,12 @@ def test_riskmanager_take_profit_immediate():
     
     test_results = {
         "deriv_connectivity": False,
-        "contract_created": False,
-        "contract_has_profit_loss": False,
-        "sell_api_working": False,
-        "sell_response_time_ok": False
+        "contract_created_with_tp": False,
+        "websocket_monitoring": False,
+        "riskmanager_activation": False,
+        "tp_trigger_detection": False,
+        "automatic_sell_attempt": False,
+        "metrics_update": False
     }
     
     # Store all JSON responses for reporting
