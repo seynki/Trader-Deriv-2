@@ -161,16 +161,29 @@ class RiskManager:
         if sell_reason:
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
             try:
-                resp = await self.deriv._send_and_wait({"sell": int(contract_id), "price": 0}, timeout=10)
+                # Deriv API sell: requer apenas contract_id como sell e price=0 para venda a mercado
+                sell_payload = {
+                    "sell": int(contract_id),
+                    "price": 0  # 0 = venda a preço de mercado
+                }
+                logger.info(f"📤 Enviando sell request: {sell_payload}")
+                resp = await self.deriv._send_and_wait(sell_payload, timeout=15)
+                logger.info(f"📥 Sell response recebida: {resp}")
+                
                 if resp and resp.get("sell"):
                     sold_for = resp["sell"].get("sold_for")
-                    logger.info(f"✅ RiskManager: contrato {contract_id} vendido por {sold_for}")
+                    logger.info(f"✅ RiskManager: contrato {contract_id} vendido por {sold_for} USD")
                     async with self._lock:
                         self.contracts.pop(int(contract_id), None)
+                elif resp and resp.get("error"):
+                    error_msg = resp["error"].get("message", "Unknown error")
+                    logger.error(f"❌ RiskManager: erro Deriv API ao vender {contract_id}: {error_msg}")
                 else:
-                    logger.warning(f"⚠️ RiskManager: falha ao vender {contract_id}: {resp}")
+                    logger.warning(f"⚠️ RiskManager: resposta inesperada ao vender {contract_id}: {resp}")
+            except asyncio.TimeoutError:
+                logger.error(f"⏱️ RiskManager: TIMEOUT ao tentar vender contrato {contract_id} - não desarmando para tentar novamente")
             except Exception as e:
-                logger.error(f"Erro ao vender contrato {contract_id} via RiskManager: {e}")
+                logger.error(f"❌ Erro ao vender contrato {contract_id} via RiskManager: {e}", exc_info=True)
 
 class SellRequest(BaseModel):
     contract_id: int
