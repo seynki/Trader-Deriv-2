@@ -102,6 +102,8 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
+## user_problem_statement: "Robô Deriv não fechou contrato ao ultrapassar Take Profit 0.05 USD (lucro atual). Precisa fechar imediatamente quando profit atual >= 0.05 USD e validar em conta REAL."
+
 ## user_problem_statement: "Remover seções específicas do robô de trading: remover aba 'Aprendizado Online' (mantendo 'River upd'), remover 'Modelo atual (ML)' e suas funções, remover 'Bot automático' e suas funções. Mover 'River upd' para o painel 'Estratégia (ADX/RSI/MACD/BB)' junto com 'Modo: paper • Símbolo: R_100'."
 
 ## backend:
