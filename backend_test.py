@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
-Backend Testing - SELL API Diagnostic Testing
-Tests the /api/deriv/sell API functionality as requested in the Portuguese review
+Backend Testing - RiskManager Take Profit Immediate Testing
+Tests the RiskManager Take Profit functionality in REAL account as requested
 
 Test Plan (Portuguese Review Request):
-1) GET /api/deriv/status - aguardar 5s, deve retornar connected=true
-2) POST /api/deriv/buy - criar contrato de teste R_100 CALL
-3) Aguardar 5 segundos para o contrato ter algum profit/loss
-4) POST /api/deriv/sell - testar venda manual via API
-5) Analisar logs - procurar por mensagens de "sell" nos logs
+1) Confirmar conectividade: GET /api/deriv/status → connected=true, authenticated=true
+2) Realizar uma compra CALL/PUT com TP 0.05 USD para R_10 (ticks): POST /api/deriv/buy
+3) Abrir WebSocket /api/ws/contract/{contract_id} e monitorar mensagens por até 45s
+4) Critérios de sucesso:
+   - Ver logs do backend com mensagens: "🛡️ RiskManager ATIVO p/ contrato", "🔍 RiskManager contrato ...", 
+     e principalmente quando profit >= 0.05, deve logar "🎯 TP atingido" seguido de "🛑 RiskManager vendendo contrato"
+   - Confirmar tentativa de venda automática: logs "📤 Tentativa ... vender contrato" e, idealmente, 
+     resposta com sucesso "✅ RiskManager: contrato ... vendido" (ou múltiplas tentativas caso haja timeout)
+   - O contrato deve não permanecer aberto após atingir TP; aceitar variação de latência até 2-4s
+5) Se venda automática falhar por timeout, validar que o mecanismo de tentativas continua até expirar ou conseguir vender
+6) Ao final, GET /api/strategy/status para confirmar atualização de métricas globais quando expirar
 
-Objetivo: Determinar se o problema é:
-- A API /api/deriv/sell não está implementada corretamente
-- A Deriv API não está respondendo
-- O formato da requisição está incorreto
-- Há um problema com timeouts
+Observações importantes:
+- Usar a conta REAL conforme instruções do usuário. Não alterar .env nem URLs. Não testar frontend.
+- Forçar condições de mercado: caso o CALL não atinja rapidamente 0.05 de lucro, tentar PUT em seguida com o mesmo TP
+- Parar o teste após um caso positivo
+- Relatar contract_id(s), tempo aproximado entre atingir TP e disparo de venda, e se a venda foi concluída com sucesso antes da expiração
+- Registrar no test_result.md automaticamente os resultados e qualquer falha
 
-Notes: NÃO usar Take Profit neste teste - queremos testar a venda manual primeiro.
-DEMO mode only. No frontend testing. Use only /api prefix.
+Notes: REAL account mode. No frontend testing. Use only /api prefix.
 """
 
 import requests
