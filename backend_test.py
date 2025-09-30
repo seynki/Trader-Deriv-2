@@ -410,30 +410,62 @@ def test_riskmanager_take_profit_immediate():
             log(f"❌ Test 4 FALHOU - Exception: {e}")
             json_responses["backend_logs_analysis"] = {"error": str(e)}
         
-        # Test 5: Analisar logs (simulated)
-        log("\n🔍 TEST 5: Analisar logs")
-        log("   Procurar por mensagens de 'sell' nos logs")
-        log("   Verificar se há erros da API Deriv")
-        log("   Verificar req_id e respostas")
+        # Test 5: Check global metrics update
+        log("\n🔍 TEST 5: Verificar atualização de métricas globais")
+        log("   GET /api/strategy/status")
+        log("   Confirmar que métricas foram atualizadas quando contrato expirou")
+        log("   Verificar wins/losses/total_trades e global_daily_pnl")
         
-        # Since we can't directly access backend logs in this environment,
-        # we'll analyze the responses we got
-        log("   📊 Análise das respostas recebidas:")
-        
-        if "deriv_sell" in json_responses:
-            sell_response = json_responses["deriv_sell"]
-            if isinstance(sell_response, dict) and "error" not in sell_response:
-                log("   ✅ Resposta de sell válida recebida")
-                log("   ✅ Nenhum erro de timeout detectado na resposta")
-                log("   ✅ API /api/deriv/sell está implementada corretamente")
+        try:
+            # Wait a moment for metrics to update
+            log("   ⏱️  Aguardando 3s para métricas atualizarem...")
+            time.sleep(3)
+            
+            response = session.get(f"{api_url}/strategy/status", timeout=15)
+            log(f"   GET /api/strategy/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                json_responses["strategy_status"] = status_data
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                
+                wins = status_data.get('wins', 0)
+                losses = status_data.get('losses', 0)
+                total_trades = status_data.get('total_trades', 0)
+                win_rate = status_data.get('win_rate', 0.0)
+                global_daily_pnl = status_data.get('global_daily_pnl', 0.0)
+                
+                log(f"   📊 Global Metrics:")
+                log(f"      Wins: {wins}")
+                log(f"      Losses: {losses}")
+                log(f"      Total Trades: {total_trades}")
+                log(f"      Win Rate: {win_rate}%")
+                log(f"      Global Daily PnL: {global_daily_pnl}")
+                
+                # Check if metrics were updated (total_trades > 0 indicates activity)
+                if total_trades > 0:
+                    test_results["metrics_update"] = True
+                    log("✅ Test 5 OK: Métricas globais foram atualizadas")
+                    log(f"   🎯 Total trades: {total_trades} (indica atividade)")
+                    
+                    # Consistency check
+                    if wins + losses == total_trades:
+                        log("✅ Consistência: wins + losses = total_trades")
+                    else:
+                        log(f"⚠️  Inconsistência: {wins} + {losses} ≠ {total_trades}")
+                else:
+                    log("ℹ️  Métricas ainda não atualizadas (total_trades = 0)")
             else:
-                log("   ❌ Erro na resposta de sell detectado")
-                if "error" in sell_response:
-                    log(f"   ❌ Erro: {sell_response['error']}")
+                log(f"❌ Strategy Status FALHOU - HTTP {response.status_code}")
+                json_responses["strategy_status"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                
+        except Exception as e:
+            log(f"❌ Test 5 FALHOU - Exception: {e}")
+            json_responses["strategy_status"] = {"error": str(e)}
         
         # Final analysis and comprehensive report
         log("\n" + "🏁" + "="*68)
-        log("RESULTADO FINAL: Diagnóstico da API SELL")
+        log("RESULTADO FINAL: RiskManager Take Profit Imediato")
         log("🏁" + "="*68)
         
         passed_tests = sum(test_results.values())
