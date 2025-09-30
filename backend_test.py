@@ -31,6 +31,11 @@ import json
 import sys
 import time
 from datetime import datetime
+try:
+    import websocket
+except ImportError:
+    print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
+    websocket = None
 
 def test_riskmanager_take_profit_immediate():
     """
