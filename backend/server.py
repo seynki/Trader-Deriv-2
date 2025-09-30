@@ -107,6 +107,55 @@ class RiskManager:
         self._lock = asyncio.Lock()
         self._selling: set = set()  # Contratos que estão sendo vendidos no momento
 
+
+    def _extract_profit(self, poc: Dict[str, Any]) -> float:
+        """Lucro ATUAL do contrato.
+        Preferir campo 'profit'. Se ausente, calcular por bid_price - buy_price (USD).
+        """
+        try:
+            p = poc.get("profit")
+            if p is not None:
+                return float(p)
+            buy = float(poc.get("buy_price") or 0.0)
+            bid = float(poc.get("bid_price") or 0.0)
+            return round(bid - buy, 6)
+        except Exception:
+            return 0.0
+
+    async def _sell_with_retries(self, contract_id: int, reason: str, attempts: int = 8, delay: float = 1.0):
+        """Tenta vender o contrato com várias tentativas em background.
+        Remove o contrato do monitoramento quando conseguir ou quando expirar.
+        """
+        try:
+            for i in range(1, attempts + 1):
+                try:
+                    # Se já expirou, sair
+                    if hasattr(self.deriv, 'last_contract_data') and contract_id in self.deriv.last_contract_data:
+                        if bool(self.deriv.last_contract_data[contract_id].get('is_expired')):
+                            logger.info(f"🏁 RiskManager: contrato {contract_id} já expirou antes de vender (tentativa {i}/{attempts})")
+                            break
+                    sell_payload = {"sell": int(contract_id), "price": 0}
+                    logger.info(f"📤 Tentativa {i}/{attempts} de vender contrato {contract_id} - {reason}")
+                    resp = await self.deriv._send_and_wait(sell_payload, timeout=12)
+                    if resp and resp.get("sell"):
+                        sold_for = resp["sell"].get("sold_for")
+                        logger.info(f"✅ RiskManager: contrato {contract_id} vendido por {sold_for} USD")
+                        async with self._lock:
+                            self.contracts.pop(int(contract_id), None)
+                            self._selling.discard(int(contract_id))
+                        return
+                    err_msg = resp.get("error", {}).get("message") if (resp and isinstance(resp, dict)) else None
+                    logger.warning(f"⚠️ Venda não concluída (tentativa {i}): {err_msg or resp}")
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ TIMEOUT na venda do contrato {contract_id} (tentativa {i}/{attempts})")
+                except Exception as e:
+                    logger.error(f"❌ Erro na venda do contrato {contract_id} (tentativa {i}/{attempts}): {e}")
+                await asyncio.sleep(delay)
+        finally:
+            # liberar para próxima tentativa em novo update, se ainda não removido
+            async with self._lock:
+                self._selling.discard(int(contract_id))
+
     async def register(self, contract_id: int, tp_usd: Optional[float], sl_usd: Optional[float]):
         # Ignorar se nenhum limite foi informado
         if tp_usd is None and sl_usd is None:
