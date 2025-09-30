@@ -105,6 +105,7 @@ class RiskManager:
         self.deriv = deriv
         self.contracts: Dict[int, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+        self._selling: set = set()  # Contratos que estão sendo vendidos no momento
 
     async def register(self, contract_id: int, tp_usd: Optional[float], sl_usd: Optional[float]):
         # Ignorar se nenhum limite foi informado
