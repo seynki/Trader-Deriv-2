@@ -1474,15 +1474,15 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🛡️ INICIANDO TESTE DO RISKMANAGER TAKE PROFIT / STOP LOSS")
+    print("🛡️ INICIANDO TESTE DO RISKMANAGER TAKE PROFIT IMEDIATO")
     print("="*70)
     
     try:
-        success, results, responses = test_risk_manager_take_profit_stop_loss()
+        success, results, responses = test_riskmanager_take_profit_immediate()
         
         if success:
             print("\n🎉 TESTE CONCLUÍDO COM SUCESSO!")
-            print("✅ RiskManager Take Profit / Stop Loss funcionando corretamente")
+            print("✅ RiskManager Take Profit Imediato funcionando corretamente")
         else:
             print("\n❌ TESTE FALHOU!")
             print("⚠️  Verificar implementação do RiskManager")
