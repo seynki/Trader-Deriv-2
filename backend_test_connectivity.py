@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 class TradingSystemConnectivityTester:
-    def __init__(self, base_url="https://trading-limit-check.preview.emergentagent.com"):
+    def __init__(self, base_url="https://auto-trading-check.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0

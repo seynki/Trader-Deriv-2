@@ -30,7 +30,7 @@ async def test_ml_audit_baseline_r10():
     Do NOT execute /api/deriv/buy directly. Report all returned JSONs.
     """
     
-    base_url = "https://trading-limit-check.preview.emergentagent.com"
+    base_url = "https://auto-trading-check.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})

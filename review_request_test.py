@@ -14,7 +14,7 @@ import json
 import time
 from datetime import datetime
 
-BASE_URL = "https://trading-limit-check.preview.emergentagent.com"
+BASE_URL = "https://auto-trading-check.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def log(message):
