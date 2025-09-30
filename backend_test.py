@@ -77,10 +77,10 @@ def test_riskmanager_take_profit_immediate():
     buy_price = None
     
     try:
-        # Test 1: GET /api/deriv/status - aguardar 5s, deve retornar connected=true
+        # Test 1: GET /api/deriv/status - confirmar conectividade
         log("\n🔍 TEST 1: Conectividade")
-        log("   GET /api/deriv/status (aguardar 5s)")
-        log("   Verificar connected=true")
+        log("   GET /api/deriv/status")
+        log("   Verificar connected=true, authenticated=true")
         
         # Wait up to 5 seconds for connection
         for attempt in range(5):
@@ -105,6 +105,10 @@ def test_riskmanager_take_profit_immediate():
                     if connected == True and authenticated == True:
                         test_results["deriv_connectivity"] = True
                         log("✅ Test 1 OK: Deriv API conectada e autenticada")
+                        if environment == "REAL":
+                            log("   🎯 CONTA REAL confirmada conforme solicitado")
+                        else:
+                            log(f"   ⚠️  Environment: {environment} (esperado REAL)")
                         break
                     else:
                         log(f"   ⏳ Aguardando conexão... (connected={connected}, auth={authenticated})")
