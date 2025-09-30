@@ -128,20 +128,32 @@ def test_riskmanager_take_profit_immediate():
             log("❌ Test 1 FALHOU: Deriv API não conectou após 5s")
             return False, test_results, json_responses
         
-        # Test 2: POST /api/deriv/buy - criar contrato de teste
-        log("\n🔍 TEST 2: Criar um contrato de teste")
+        # Test 2: POST /api/deriv/buy - criar contrato com TP 0.05 USD
+        log("\n🔍 TEST 2: Criar contrato com Take Profit 0.05 USD")
         log("   POST /api/deriv/buy")
-        log("   Body: R_100, CALLPUT, CALL, 20 ticks, stake=1.0, USD")
+        log("   Body: R_10, CALLPUT, CALL, 5 ticks, stake=1.0, USD, take_profit_usd=0.05")
         
-        buy_payload = {
-            "symbol": "R_100",
-            "type": "CALLPUT",
-            "contract_type": "CALL",
-            "duration": 20,
-            "duration_unit": "t",
-            "stake": 1.0,
-            "currency": "USD"
-        }
+        # Try CALL first, then PUT if needed to force market conditions
+        contract_types_to_try = ["CALL", "PUT"]
+        contract_created = False
+        
+        for contract_type in contract_types_to_try:
+            if contract_created:
+                break
+                
+            log(f"   🎯 Tentando {contract_type}...")
+            
+            buy_payload = {
+                "symbol": "R_10",
+                "type": "CALLPUT", 
+                "contract_type": contract_type,
+                "duration": 5,
+                "duration_unit": "t",
+                "stake": 1.0,
+                "currency": "USD",
+                "take_profit_usd": 0.05,
+                "stop_loss_usd": 0.0
+            }
         
         try:
             log(f"   Payload: {json.dumps(buy_payload, indent=2)}")
