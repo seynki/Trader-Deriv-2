@@ -368,8 +368,8 @@ class DerivWS:
         if not self.ws or not self.connected:
             return None
             
-        # Gerar req_id único
-        req_id = f"sl_{int(time.time() * 1000)}_{hash(str(payload)) % 10000}"
+        # Gerar req_id único (inteiro, conforme validação da Deriv)
+        req_id = int(time.time() * 1000)
         payload["req_id"] = req_id
         
         # Criar future para aguardar resposta
