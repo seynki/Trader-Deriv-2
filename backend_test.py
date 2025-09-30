@@ -155,49 +155,55 @@ def test_riskmanager_take_profit_immediate():
                 "stop_loss_usd": 0.0
             }
         
-        try:
-            log(f"   Payload: {json.dumps(buy_payload, indent=2)}")
-            
-            response = session.post(f"{api_url}/deriv/buy", json=buy_payload, timeout=20)
-            log(f"   POST /api/deriv/buy: {response.status_code}")
-            
-            if response.status_code == 200:
-                buy_data = response.json()
-                json_responses["deriv_buy"] = buy_data
-                log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            try:
+                log(f"   Payload: {json.dumps(buy_payload, indent=2)}")
                 
-                contract_id = buy_data.get('contract_id')
-                buy_price = buy_data.get('buy_price')
-                payout = buy_data.get('payout')
-                transaction_id = buy_data.get('transaction_id')
+                response = session.post(f"{api_url}/deriv/buy", json=buy_payload, timeout=20)
+                log(f"   POST /api/deriv/buy ({contract_type}): {response.status_code}")
                 
-                log(f"   📊 Contract Created:")
-                log(f"      Contract ID: {contract_id}")
-                log(f"      Buy Price: {buy_price}")
-                log(f"      Payout: {payout}")
-                log(f"      Transaction ID: {transaction_id}")
-                
-                if contract_id is not None:
-                    test_results["contract_created"] = True
-                    log("✅ Test 2 OK: Contrato criado com sucesso")
-                    log(f"   🎯 Contract ID capturado: {contract_id}")
-                else:
-                    log(f"❌ Test 2 FALHOU: contract_id não retornado")
-                    return False, test_results, json_responses
-            else:
-                log(f"❌ Deriv Buy FALHOU - HTTP {response.status_code}")
-                json_responses["deriv_buy"] = {"error": f"HTTP {response.status_code}", "text": response.text}
-                try:
-                    error_data = response.json()
-                    log(f"   Error: {error_data}")
-                    json_responses["deriv_buy"] = error_data
-                except:
-                    log(f"   Error text: {response.text}")
-                return False, test_results, json_responses
+                if response.status_code == 200:
+                    buy_data = response.json()
+                    json_responses[f"deriv_buy_{contract_type.lower()}"] = buy_data
+                    log(f"   Response: {json.dumps(buy_data, indent=2)}")
                     
-        except Exception as e:
-            log(f"❌ Test 2 FALHOU - Exception: {e}")
-            json_responses["deriv_buy"] = {"error": str(e)}
+                    contract_id = buy_data.get('contract_id')
+                    buy_price = buy_data.get('buy_price')
+                    payout = buy_data.get('payout')
+                    transaction_id = buy_data.get('transaction_id')
+                    
+                    log(f"   📊 Contract Created ({contract_type}):")
+                    log(f"      Contract ID: {contract_id}")
+                    log(f"      Buy Price: {buy_price}")
+                    log(f"      Payout: {payout}")
+                    log(f"      Transaction ID: {transaction_id}")
+                    log(f"      Take Profit: 0.05 USD")
+                    log(f"      Stop Loss: 0.0 USD")
+                    
+                    if contract_id is not None:
+                        test_results["contract_created_with_tp"] = True
+                        log(f"✅ Test 2 OK: Contrato {contract_type} criado com TP 0.05 USD")
+                        log(f"   🎯 Contract ID capturado: {contract_id}")
+                        log(f"   🛡️ RiskManager deve estar monitorando este contrato")
+                        contract_created = True
+                        break
+                    else:
+                        log(f"❌ Contract ID não retornado para {contract_type}")
+                else:
+                    log(f"❌ Deriv Buy {contract_type} FALHOU - HTTP {response.status_code}")
+                    json_responses[f"deriv_buy_{contract_type.lower()}"] = {"error": f"HTTP {response.status_code}", "text": response.text}
+                    try:
+                        error_data = response.json()
+                        log(f"   Error: {error_data}")
+                        json_responses[f"deriv_buy_{contract_type.lower()}"] = error_data
+                    except:
+                        log(f"   Error text: {response.text}")
+                        
+            except Exception as e:
+                log(f"❌ Test 2 {contract_type} FALHOU - Exception: {e}")
+                json_responses[f"deriv_buy_{contract_type.lower()}"] = {"error": str(e)}
+        
+        if not contract_created:
+            log("❌ Test 2 FALHOU: Nenhum contrato foi criado (CALL nem PUT)")
             return False, test_results, json_responses
         
         # Test 3: Aguardar 5 segundos
