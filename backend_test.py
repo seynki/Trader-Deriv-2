@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime
 
-def test_risk_manager_take_profit_stop_loss():
+def test_sell_api_diagnostic():
     """
     Execute the RiskManager Take Profit / Stop Loss validation test plan
     """
