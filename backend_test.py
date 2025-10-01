@@ -1934,18 +1934,21 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🛡️ INICIANDO TESTE DO RISKMANAGER TAKE PROFIT IMEDIATO")
+    print("🛡️ INICIANDO TESTE ESPECÍFICO: RiskManager NÃO vende na perda")
     print("="*70)
     
     try:
-        success, results, responses = test_riskmanager_take_profit_immediate()
+        success, results, responses = test_riskmanager_no_sell_at_loss()
         
         if success:
             print("\n🎉 TESTE CONCLUÍDO COM SUCESSO!")
-            print("✅ RiskManager Take Profit Imediato funcionando corretamente")
+            print("✅ RiskManager NÃO vende na perda - funcionando corretamente")
+            print("✅ Sistema respeitou a regra: nunca vender quando profit < 0.00")
+            print("✅ Venda automática quando profit >= 0.05 USD funcionando")
         else:
             print("\n❌ TESTE FALHOU!")
             print("⚠️  Verificar implementação do RiskManager")
+            print("🚨 Possível violação: venda durante profit negativo")
             
         # Exit with appropriate code
         sys.exit(0 if success else 1)
