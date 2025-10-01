@@ -232,7 +232,8 @@ class RiskManager:
             
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
             # Disparar venda em background com múltiplas tentativas para não travar o loop
-            asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=10, delay=1.5))
+            # Regras: vender SOMENTE quando lucro atual >= TP (min_profit) e NUNCA com lucro negativo
+            asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=12, delay=1.0, min_profit=float(tp) if tp is not None else None, require_non_negative=True))
 
 class SellRequest(BaseModel):
     contract_id: int
