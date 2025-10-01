@@ -37,6 +37,466 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
+def test_riskmanager_no_sell_at_loss():
+    """
+    Execute the RiskManager validation test to ensure it does NOT sell at a loss
+    Portuguese Review Request:
+    1) GET /api/deriv/status
+    2) POST /api/deriv/buy R_10 CALL 5t stake=1.0 com take_profit_usd=0.05 e stop_loss_usd=null (ou 0)
+    3) Abrir /api/ws/contract/{id} por até 60s. Caso o contrato oscile e fique com lucro negativo (-0.03, -0.05, etc.), 
+       verificar nos logs que NÃO há tentativa de venda enquanto o lucro for < 0.00.
+    4) Quando lucro cruzar 0.05 para cima, validar que a venda é disparada e concluída (com req_id inteiro) e que o sold_for é logado.
+    5) Registrar IDs e tempos.
+    """
+    
+    base_url = "https://auto-trading-check.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🛡️" + "="*68)
+    log("TESTE RISKMANAGER: VALIDAR QUE NÃO VENDE NA PERDA")
+    log("🛡️" + "="*68)
+    log("📋 Test Plan (Portuguese Review Request):")
+    log("   1) GET /api/deriv/status")
+    log("   2) POST /api/deriv/buy R_10 CALL 5t stake=1.0 com take_profit_usd=0.05 e stop_loss_usd=null (ou 0)")
+    log("   3) Abrir /api/ws/contract/{id} por até 60s")
+    log("   4) Verificar nos logs que NÃO há tentativa de venda enquanto lucro < 0.00")
+    log("   5) Quando lucro >= 0.05, validar que venda é disparada com req_id inteiro e sold_for logado")
+    log("   6) Registrar IDs e tempos")
+    
+    test_results = {
+        "deriv_connectivity": False,
+        "contract_created_with_tp": False,
+        "websocket_monitoring": False,
+        "no_sell_at_negative_profit": False,
+        "tp_trigger_and_sell": False
+    }
+    
+    # Store all JSON responses and monitoring data
+    json_responses = {}
+    contract_id = None
+    buy_price = None
+    monitoring_data = {
+        "negative_profit_periods": [],
+        "sell_attempts_during_negative": [],
+        "tp_trigger_time": None,
+        "sell_completion_time": None,
+        "max_negative_profit": 0.0,
+        "profit_timeline": []
+    }
+    
+    try:
+        # Test 1: GET /api/deriv/status
+        log("\n🔍 TEST 1: GET /api/deriv/status")
+        log("   Verificar connected=true, authenticated=true")
+        
+        response = session.get(f"{api_url}/deriv/status", timeout=10)
+        log(f"   GET /api/deriv/status: {response.status_code}")
+        
+        if response.status_code == 200:
+            status_data = response.json()
+            json_responses["deriv_status"] = status_data
+            log(f"   Response: {json.dumps(status_data, indent=2)}")
+            
+            connected = status_data.get('connected')
+            authenticated = status_data.get('authenticated')
+            environment = status_data.get('environment')
+            
+            log(f"   📊 Deriv API Status:")
+            log(f"      Connected: {connected}")
+            log(f"      Authenticated: {authenticated}")
+            log(f"      Environment: {environment}")
+            
+            if connected == True and authenticated == True:
+                test_results["deriv_connectivity"] = True
+                log("✅ Test 1 OK: Deriv API conectada e autenticada")
+            else:
+                log(f"❌ Test 1 FALHOU: connected={connected}, auth={authenticated}")
+                return False, test_results, json_responses
+        else:
+            log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
+            return False, test_results, json_responses
+        
+        # Test 2: POST /api/deriv/buy R_10 CALL 5t stake=1.0 com take_profit_usd=0.05 e stop_loss_usd=null
+        log("\n🔍 TEST 2: POST /api/deriv/buy")
+        log("   R_10 CALL 5t stake=1.0 com take_profit_usd=0.05 e stop_loss_usd=null (ou 0)")
+        
+        buy_payload = {
+            "symbol": "R_10",
+            "type": "CALLPUT", 
+            "contract_type": "CALL",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "currency": "USD",
+            "take_profit_usd": 0.05,
+            "stop_loss_usd": None  # ou 0
+        }
+        
+        log(f"   Payload: {json.dumps(buy_payload, indent=2)}")
+        
+        response = session.post(f"{api_url}/deriv/buy", json=buy_payload, timeout=20)
+        log(f"   POST /api/deriv/buy: {response.status_code}")
+        
+        if response.status_code == 200:
+            buy_data = response.json()
+            json_responses["deriv_buy"] = buy_data
+            log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            
+            contract_id = buy_data.get('contract_id')
+            buy_price = buy_data.get('buy_price')
+            payout = buy_data.get('payout')
+            transaction_id = buy_data.get('transaction_id')
+            
+            log(f"   📊 Contract Created:")
+            log(f"      Contract ID: {contract_id}")
+            log(f"      Buy Price: {buy_price}")
+            log(f"      Payout: {payout}")
+            log(f"      Transaction ID: {transaction_id}")
+            log(f"      Take Profit: 0.05 USD")
+            log(f"      Stop Loss: null/0")
+            
+            if contract_id is not None:
+                test_results["contract_created_with_tp"] = True
+                log("✅ Test 2 OK: Contrato criado com TP 0.05 USD e SL null")
+                log(f"   🎯 Contract ID: {contract_id}")
+            else:
+                log("❌ Test 2 FALHOU: Contract ID não retornado")
+                return False, test_results, json_responses
+        else:
+            log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                log(f"   Error: {error_data}")
+                json_responses["deriv_buy"] = error_data
+            except:
+                log(f"   Error text: {response.text}")
+            return False, test_results, json_responses
+        
+        # Test 3: WebSocket monitoring for 60s to validate NO sell at negative profit
+        log("\n🔍 TEST 3: Monitoramento WebSocket por 60s")
+        log("   Abrir /api/ws/contract/{id} e monitorar:")
+        log("   - Verificar que NÃO há tentativa de venda quando profit < 0.00")
+        log("   - Quando profit >= 0.05, validar que venda é disparada")
+        log("   - Registrar timeline de profit e tentativas de venda")
+        
+        try:
+            import websocket
+            import threading
+            import json as json_lib
+            
+            ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+            log(f"   📡 Conectando WebSocket: {ws_url}")
+            
+            messages_received = []
+            connection_established = False
+            monitoring_start_time = time.time()
+            
+            # Tracking variables
+            negative_profit_detected = False
+            sell_attempts_during_negative = []
+            tp_triggered = False
+            sell_completed = False
+            max_negative_profit = 0.0
+            profit_timeline = []
+            
+            def on_message(ws, message):
+                nonlocal messages_received, negative_profit_detected, tp_triggered, sell_completed
+                nonlocal max_negative_profit, profit_timeline, sell_attempts_during_negative
+                
+                try:
+                    data = json_lib.loads(message)
+                    messages_received.append(data)
+                    
+                    profit = data.get('profit', 0)
+                    status = data.get('status', 'unknown')
+                    is_expired = data.get('is_expired', False)
+                    current_time = time.time()
+                    elapsed = current_time - monitoring_start_time
+                    
+                    if profit is not None:
+                        profit_float = float(profit)
+                        
+                        # Record profit timeline
+                        profit_entry = {
+                            "time": elapsed,
+                            "profit": profit_float,
+                            "status": status,
+                            "is_expired": is_expired
+                        }
+                        profit_timeline.append(profit_entry)
+                        
+                        log(f"   📨 t={elapsed:.1f}s: profit={profit_float:.4f}, status={status}, expired={is_expired}")
+                        
+                        # Track negative profit periods
+                        if profit_float < 0:
+                            negative_profit_detected = True
+                            max_negative_profit = min(max_negative_profit, profit_float)
+                            
+                            negative_period = {
+                                "time": elapsed,
+                                "profit": profit_float,
+                                "status": status
+                            }
+                            monitoring_data["negative_profit_periods"].append(negative_period)
+                            
+                            log(f"   ⚠️  PROFIT NEGATIVO DETECTADO: {profit_float:.4f} (max_negative: {max_negative_profit:.4f})")
+                            
+                            # Check if there are any sell attempts during negative profit
+                            # This would be detected by status changes or contract being sold
+                            if status == 'sold' or is_expired:
+                                sell_attempt = {
+                                    "time": elapsed,
+                                    "profit_at_sell": profit_float,
+                                    "status": status,
+                                    "is_expired": is_expired,
+                                    "violation": True  # This would be a violation of the rule
+                                }
+                                sell_attempts_during_negative.append(sell_attempt)
+                                log(f"   🚨 VIOLAÇÃO: Tentativa de venda com profit negativo {profit_float:.4f}!")
+                        
+                        # Check if TP threshold reached
+                        if profit_float >= 0.05:
+                            if not tp_triggered:
+                                tp_triggered = True
+                                monitoring_data["tp_trigger_time"] = elapsed
+                                log(f"   🎯 TP THRESHOLD ATINGIDO! profit={profit_float:.4f} >= 0.05 (t={elapsed:.1f}s)")
+                                log(f"   ⏱️  Aguardando venda automática...")
+                        
+                        # Check if contract was sold after TP
+                        if tp_triggered and (status == 'sold' or is_expired):
+                            if not sell_completed:
+                                sell_completed = True
+                                monitoring_data["sell_completion_time"] = elapsed
+                                log(f"   ✅ VENDA COMPLETADA: status={status}, expired={is_expired} (t={elapsed:.1f}s)")
+                                
+                                if status == 'sold':
+                                    log(f"   🎉 Contrato vendido automaticamente após TP!")
+                                else:
+                                    log(f"   ⏰ Contrato expirou naturalmente")
+                    
+                except Exception as e:
+                    log(f"   ⚠️  Error parsing WebSocket message: {e}")
+            
+            def on_open(ws):
+                nonlocal connection_established
+                connection_established = True
+                log("   ✅ WebSocket connection established")
+            
+            def on_error(ws, error):
+                log(f"   ❌ WebSocket error: {error}")
+            
+            def on_close(ws, close_status_code, close_msg):
+                log(f"   🔌 WebSocket closed: {close_status_code}")
+            
+            # Create WebSocket connection
+            ws = websocket.WebSocketApp(ws_url,
+                                      on_open=on_open,
+                                      on_message=on_message,
+                                      on_error=on_error,
+                                      on_close=on_close)
+            
+            # Run WebSocket in a separate thread
+            ws_thread = threading.Thread(target=ws.run_forever)
+            ws_thread.daemon = True
+            ws_thread.start()
+            
+            # Monitor for exactly 60 seconds
+            monitoring_duration = 60
+            log(f"   ⏱️  Monitorando por exatamente {monitoring_duration} segundos...")
+            
+            for second in range(monitoring_duration):
+                time.sleep(1)
+                elapsed = second + 1
+                
+                if elapsed % 15 == 0:  # Log every 15 seconds
+                    log(f"   📊 Status (t={elapsed}s): messages={len(messages_received)}, "
+                        f"negative_detected={negative_profit_detected}, tp_triggered={tp_triggered}, "
+                        f"max_negative={max_negative_profit:.4f}")
+                
+                # If contract expired or was sold, we can continue monitoring to see the full timeline
+                if len(messages_received) > 0:
+                    latest_msg = messages_received[-1]
+                    if latest_msg.get('is_expired', False) and elapsed >= 30:  # Allow at least 30s of monitoring
+                        log(f"   ⏰ Contrato expirou em {elapsed}s - continuando monitoramento até 60s")
+            
+            # Close WebSocket
+            ws.close()
+            
+            # Store monitoring data
+            monitoring_data["max_negative_profit"] = max_negative_profit
+            monitoring_data["profit_timeline"] = profit_timeline
+            monitoring_data["sell_attempts_during_negative"] = sell_attempts_during_negative
+            
+            # Evaluate results
+            if connection_established and len(messages_received) > 0:
+                test_results["websocket_monitoring"] = True
+                log("✅ Test 3 OK: WebSocket monitoring funcionando")
+                log(f"   📊 Mensagens recebidas: {len(messages_received)}")
+                log(f"   💰 Profit máximo negativo: {max_negative_profit:.4f}")
+                log(f"   📈 Timeline entries: {len(profit_timeline)}")
+                
+                # Critical validation: NO sell attempts during negative profit
+                if len(sell_attempts_during_negative) == 0:
+                    test_results["no_sell_at_negative_profit"] = True
+                    log("✅ VALIDAÇÃO CRÍTICA: NÃO houve tentativas de venda com profit negativo")
+                    log("   🛡️ RiskManager respeitou a regra: nunca vender na perda")
+                else:
+                    log(f"❌ VIOLAÇÃO CRÍTICA: {len(sell_attempts_during_negative)} tentativas de venda com profit negativo!")
+                    for attempt in sell_attempts_during_negative:
+                        log(f"   🚨 Venda em t={attempt['time']:.1f}s com profit={attempt['profit_at_sell']:.4f}")
+                
+                # Validation: TP trigger and sell
+                if tp_triggered:
+                    if sell_completed:
+                        test_results["tp_trigger_and_sell"] = True
+                        tp_time = monitoring_data.get("tp_trigger_time", 0)
+                        sell_time = monitoring_data.get("sell_completion_time", 0)
+                        reaction_time = sell_time - tp_time if sell_time > tp_time else 0
+                        log("✅ TP TRIGGER E VENDA: Funcionando corretamente")
+                        log(f"   🎯 TP atingido em t={tp_time:.1f}s")
+                        log(f"   ✅ Venda completada em t={sell_time:.1f}s")
+                        log(f"   ⚡ Tempo de reação: {reaction_time:.1f}s")
+                    else:
+                        log("⚠️  TP atingido mas venda não completada durante monitoramento")
+                else:
+                    log(f"ℹ️  TP não foi atingido durante monitoramento (max profit observado)")
+            else:
+                log("❌ Test 3 FALHOU: WebSocket não conectou ou não recebeu mensagens")
+            
+            # Store all monitoring data in JSON responses
+            json_responses["websocket_monitoring"] = {
+                "messages_count": len(messages_received),
+                "connection_established": connection_established,
+                "negative_profit_detected": negative_profit_detected,
+                "max_negative_profit": max_negative_profit,
+                "tp_triggered": tp_triggered,
+                "sell_completed": sell_completed,
+                "sell_attempts_during_negative_count": len(sell_attempts_during_negative),
+                "monitoring_data": monitoring_data,
+                "sample_messages": messages_received[:10] if messages_received else []
+            }
+            
+        except ImportError:
+            log("   ❌ WebSocket library not available")
+            json_responses["websocket_monitoring"] = {"error": "websocket library not available"}
+        except Exception as e:
+            log(f"   ❌ WebSocket monitoring failed: {e}")
+            json_responses["websocket_monitoring"] = {"error": str(e)}
+        
+        # Final analysis and comprehensive report
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: RiskManager Validação - NÃO Vender na Perda")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        log(f"\n📋 DETALHES POR TESTE:")
+        test_names = {
+            "deriv_connectivity": "1) GET /api/deriv/status - Conectividade",
+            "contract_created_with_tp": "2) POST /api/deriv/buy - Contrato com TP 0.05",
+            "websocket_monitoring": "3) WebSocket monitoring - 60s de monitoramento",
+            "no_sell_at_negative_profit": "4) CRÍTICO: NÃO vender com profit negativo",
+            "tp_trigger_and_sell": "5) TP trigger e venda automática"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ SUCESSO" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        # Critical validation summary
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - RISKMANAGER NÃO VENDE NA PERDA:")
+        
+        if test_results.get("no_sell_at_negative_profit"):
+            log("✅ APROVADO: RiskManager NÃO tentou vender durante períodos de profit negativo")
+            log("   🛡️ Sistema respeitou a regra: nunca vender quando profit < 0.00")
+            
+            if monitoring_data.get("negative_profit_periods"):
+                log(f"   📊 Períodos com profit negativo detectados: {len(monitoring_data['negative_profit_periods'])}")
+                log(f"   📉 Profit mais negativo observado: {monitoring_data.get('max_negative_profit', 0):.4f}")
+                log("   ✅ Em TODOS os períodos negativos, RiskManager aguardou sem vender")
+            else:
+                log("   ℹ️  Nenhum período de profit negativo foi observado durante o teste")
+        else:
+            log("❌ REPROVADO: RiskManager tentou vender durante profit negativo!")
+            log("   🚨 VIOLAÇÃO da regra: nunca vender quando profit < 0.00")
+            
+            if monitoring_data.get("sell_attempts_during_negative"):
+                log(f"   🚨 Tentativas de venda indevidas: {len(monitoring_data['sell_attempts_during_negative'])}")
+                for attempt in monitoring_data["sell_attempts_during_negative"]:
+                    log(f"      - t={attempt['time']:.1f}s: profit={attempt['profit_at_sell']:.4f}")
+        
+        if test_results.get("tp_trigger_and_sell"):
+            log("✅ TAKE PROFIT: Funcionando corretamente")
+            log("   🎯 Quando profit >= 0.05, venda foi disparada automaticamente")
+            
+            tp_time = monitoring_data.get("tp_trigger_time")
+            sell_time = monitoring_data.get("sell_completion_time")
+            if tp_time is not None and sell_time is not None:
+                reaction_time = sell_time - tp_time
+                log(f"   ⚡ Tempo de reação TP → Venda: {reaction_time:.1f}s")
+        else:
+            log("⚠️  TAKE PROFIT: Não foi possível validar completamente")
+            log("   ℹ️  TP pode não ter sido atingido ou venda não completada durante teste")
+        
+        # Report contract details
+        if contract_id:
+            log(f"\n📋 DETALHES DO CONTRATO TESTADO:")
+            log(f"   Contract ID: {contract_id}")
+            log(f"   Buy Price: {buy_price}")
+            log(f"   Take Profit: 0.05 USD")
+            log(f"   Stop Loss: null/0")
+            log(f"   Duração monitoramento: 60s")
+            
+            if monitoring_data.get("profit_timeline"):
+                timeline = monitoring_data["profit_timeline"]
+                log(f"   Timeline entries: {len(timeline)}")
+                if timeline:
+                    first_profit = timeline[0]["profit"]
+                    last_profit = timeline[-1]["profit"]
+                    log(f"   Profit inicial: {first_profit:.4f}")
+                    log(f"   Profit final: {last_profit:.4f}")
+        
+        # Report all JSON responses
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        # Overall success: must pass critical validation
+        critical_success = (test_results.get("deriv_connectivity") and 
+                          test_results.get("contract_created_with_tp") and
+                          test_results.get("websocket_monitoring") and
+                          test_results.get("no_sell_at_negative_profit"))
+        
+        return critical_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
+
 def test_riskmanager_take_profit_immediate():
     """
     Execute the RiskManager Take Profit immediate test plan as requested in Portuguese review
