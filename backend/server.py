@@ -122,8 +122,9 @@ class RiskManager:
         except Exception:
             return 0.0
 
-    async def _sell_with_retries(self, contract_id: int, reason: str, attempts: int = 8, delay: float = 1.0):
+    async def _sell_with_retries(self, contract_id: int, reason: str, attempts: int = 8, delay: float = 1.0, min_profit: Optional[float] = None, require_non_negative: bool = True):
         """Tenta vender o contrato com várias tentativas em background.
+        Revalida o lucro ATUAL antes de cada tentativa: só vende se lucro >= min_profit (quando informado) e, se require_non_negative=True, nunca vende com lucro negativo.
         Remove o contrato do monitoramento quando conseguir ou quando expirar.
         """
         try:
@@ -134,6 +135,17 @@ class RiskManager:
                         if bool(self.deriv.last_contract_data[contract_id].get('is_expired')):
                             logger.info(f"🏁 RiskManager: contrato {contract_id} já expirou antes de vender (tentativa {i}/{attempts})")
                             break
+                        # Validar lucro atual
+                        poc = self.deriv.last_contract_data[contract_id]
+                        current_profit = self._extract_profit(poc)
+                        if require_non_negative and current_profit < 0:
+                            logger.info(f"⏸️ Lucro negativo ({current_profit:.2f}). Aguardando voltar ao positivo para vender contrato {contract_id}...")
+                            await asyncio.sleep(delay)
+                            continue
+                        if min_profit is not None and current_profit < float(min_profit):
+                            logger.info(f"⏸️ Profit {current_profit:.2f} < TP {float(min_profit):.2f}. Aguardando atingir TP para vender contrato {contract_id}...")
+                            await asyncio.sleep(delay)
+                            continue
                     sell_payload = {"sell": int(contract_id), "price": 0}
                     logger.info(f"📤 Tentativa {i}/{attempts} de vender contrato {contract_id} - {reason}")
                     resp = await self.deriv._send_and_wait(sell_payload, timeout=12)
