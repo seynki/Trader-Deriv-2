@@ -172,9 +172,9 @@
 ##       -working: true
 ##   - task: "RiskManager: TP imediato (lucro atual) + retries de venda"
 ##     implemented: true
-##     working: true
+##     working: false
 ##     file: "/app/backend/server.py"
-##     stuck_count: 0
+##     stuck_count: 1
 ##     priority: "high"
 ##     needs_retesting: false
 ##     status_history:
