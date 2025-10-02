@@ -39,7 +39,7 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
-def test_riskmanager_tp_sl_separation():
+def test_riskmanager_final_fix_validation():
     """
     Test the updated RiskManager behavior for TP/SL separation as per review request:
     1. When only TP is defined (stake 1.00, take_profit_usd 0.05), bot never sells at loss and only sells when profit >= +0.05 USD
