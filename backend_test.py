@@ -331,7 +331,7 @@ def monitor_contract_websocket(contract_id, duration, expected_behavior, log_fun
         import threading
         import json as json_lib
         
-        ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+        ws_url = f"wss://deriv-bot-finance.preview.emergentagent.com/api/ws/contract/{contract_id}"
         log_func(f"   📡 Conectando WebSocket: {ws_url}")
         
         result = {
@@ -599,7 +599,7 @@ def test_riskmanager_no_sell_at_loss():
             import threading
             import json as json_lib
             
-            ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+            ws_url = f"wss://deriv-bot-finance.preview.emergentagent.com/api/ws/contract/{contract_id}"
             log(f"   📡 Conectando WebSocket: {ws_url}")
             
             messages_received = []
@@ -1096,7 +1096,7 @@ def test_riskmanager_take_profit_immediate():
             import threading
             import json as json_lib
             
-            ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+            ws_url = f"wss://deriv-bot-finance.preview.emergentagent.com/api/ws/contract/{contract_id}"
             log(f"   📡 Conectando WebSocket: {ws_url}")
             
             messages_received = []
