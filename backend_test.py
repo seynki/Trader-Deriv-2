@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 """
-Backend Testing - RiskManager Take Profit Immediate Testing
-Tests the RiskManager Take Profit functionality in REAL account as requested
+Backend Testing - RiskManager TP/SL Final Fix Validation
+Tests the updated RiskManager behavior for TP-only and SL-only scenarios
+
+RETESTE APÓS FIX FINAL: Corrigi a lógica para SL-only (require_non_negative=False quando SL disparar). 
+Por favor revalidar ambos cenários.
 
 Test Plan (Portuguese Review Request):
-1) Confirmar conectividade: GET /api/deriv/status → connected=true, authenticated=true
-2) Realizar uma compra CALL/PUT com TP 0.05 USD para R_10 (ticks): POST /api/deriv/buy
-3) Abrir WebSocket /api/ws/contract/{contract_id} e monitorar mensagens por até 45s
-4) Critérios de sucesso:
-   - Ver logs do backend com mensagens: "🛡️ RiskManager ATIVO p/ contrato", "🔍 RiskManager contrato ...", 
-     e principalmente quando profit >= 0.05, deve logar "🎯 TP atingido" seguido de "🛑 RiskManager vendendo contrato"
-   - Confirmar tentativa de venda automática: logs "📤 Tentativa ... vender contrato" e, idealmente, 
-     resposta com sucesso "✅ RiskManager: contrato ... vendido" (ou múltiplas tentativas caso haja timeout)
-   - O contrato deve não permanecer aberto após atingir TP; aceitar variação de latência até 2-4s
-5) Se venda automática falhar por timeout, validar que o mecanismo de tentativas continua até expirar ou conseguir vender
-6) Ao final, GET /api/strategy/status para confirmar atualização de métricas globais quando expirar
+Cenários a validar (usar conta configurada):
+A) TP-ONLY (sem SL)
+1) GET /api/deriv/status → connected=true, authenticated=true
+2) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t', stake:1.0, currency:'USD', take_profit_usd:0.05, stop_loss_usd:null}
+3) WS /api/ws/contract/{id} por até 60s
+   - NÃO vender quando profit < 0 (ex.: -0.05)
+   - Vender imediatamente ao atingir profit >= +0.05
 
-Observações importantes:
-- Usar a conta REAL conforme instruções do usuário. Não alterar .env nem URLs. Não testar frontend.
-- Forçar condições de mercado: caso o CALL não atinja rapidamente 0.05 de lucro, tentar PUT em seguida com o mesmo TP
-- Parar o teste após um caso positivo
-- Relatar contract_id(s), tempo aproximado entre atingir TP e disparo de venda, e se a venda foi concluída com sucesso antes da expiração
-- Registrar no test_result.md automaticamente os resultados e qualquer falha
+B) SL-ONLY (sem TP)
+1) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'PUT', duration:5, duration_unit:'t', stake:1.0, currency:'USD', stop_loss_usd:0.05, take_profit_usd:null}
+2) WS /api/ws/contract/{id} por até 60s
+   - Vender imediatamente quando profit <= -0.05 (permitir venda com lucro negativo agora)
 
-Notes: REAL account mode. No frontend testing. Use only /api prefix.
+O que registrar:
+- contract_id de cada cenário
+- Logs chaves: '🛡️ RiskManager ATIVO...', '🎯 TP atingido...' (A), '🛑 SL atingido...' (B), 
+- Confirmar que para SL-only não aparece mais a mensagem de bloqueio '⏸️ Lucro negativo... aguardando voltar ao positivo' e que a venda é disparada.
+
+Notes: Use configured account. No frontend testing. Use only /api prefix.
 """
 
 import requests
