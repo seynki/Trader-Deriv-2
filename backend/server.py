@@ -230,8 +230,8 @@ class RiskManager:
         if tp is not None and profit >= float(tp):
             sell_reason = f"TP atingido: lucro {profit:.4f} >= {float(tp):.4f}"
             logger.info(f"🎯 {sell_reason}")
-        # Só verificar Stop Loss se TP não foi atingido
-        elif sl is not None and profit <= -abs(float(sl)):
+        # Só verificar Stop Loss se TP não foi atingido e SL estiver ativo (>0)
+        elif sl is not None and float(sl) > 0.0 and profit <= -abs(float(sl)):
             sell_reason = f"SL atingido: lucro {profit:.4f} <= -{abs(float(sl)):.4f}"
             logger.info(f"🛑 {sell_reason}")
         
@@ -242,7 +242,9 @@ class RiskManager:
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
             # Disparar venda em background com múltiplas tentativas para não travar o loop
             # Regras: vender SOMENTE quando lucro atual >= TP (min_profit) e NUNCA com lucro negativo
-            asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=12, delay=1.0, min_profit=float(tp) if tp is not None else None, require_non_negative=True))
+            min_profit = float(tp) if tp is not None else (0.0 if (sl is not None and float(sl) > 0.0) else None)
+            require_non_negative = True if (tp is not None and (sl is None or float(sl) <= 0.0)) else True
+            asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=12, delay=1.0, min_profit=min_profit, require_non_negative=require_non_negative))
 
 class SellRequest(BaseModel):
     contract_id: int
