@@ -169,14 +169,23 @@ class RiskManager:
                 self._selling.discard(int(contract_id))
 
     async def register(self, contract_id: int, tp_usd: Optional[float], sl_usd: Optional[float]):
+        """Registra limites de TP/SL por contrato.
+        - Qualquer valor <= 0 é tratado como desabilitado (None)
+        - Se apenas TP for informado, NUNCA venderemos por perda
+        - Se SL for informado (>0), venda por perda é permitida
+        """
+        # Normalizar entradas: 0 ou negativos = desabilitado
+        tp_norm = float(tp_usd) if (tp_usd is not None and float(tp_usd) > 0.0) else None
+        sl_norm = float(sl_usd) if (sl_usd is not None and float(sl_usd) > 0.0) else None
+
         # Ignorar se nenhum limite foi informado
-        if tp_usd is None and sl_usd is None:
+        if tp_norm is None and sl_norm is None:
             logger.debug(f"⏭️ RiskManager: contrato {contract_id} sem TP/SL configurado, ignorando")
             return
         async with self._lock:
             self.contracts[int(contract_id)] = {
-                "tp_usd": (float(tp_usd) if tp_usd is not None else None),
-                "sl_usd": (float(sl_usd) if sl_usd is not None else None),
+                "tp_usd": tp_norm,
+                "sl_usd": sl_norm,
                 "created_at": int(time.time()),
                 "armed": True,
             }
@@ -186,7 +195,7 @@ class RiskManager:
             logger.info(f"✅ RiskManager: subscription OK para contrato {contract_id}")
         except Exception as e:
             logger.error(f"❌ RiskManager: falha ao subscrever contrato {contract_id}: {e}")
-        logger.info(f"🛡️ RiskManager ATIVO p/ contrato {contract_id}: TP={tp_usd} USD, SL={sl_usd} USD")
+        logger.info(f"🛡️ RiskManager ATIVO p/ contrato {contract_id}: TP={tp_norm} USD, SL={sl_norm} USD")
 
     async def on_contract_update(self, contract_id: int, poc: Dict[str, Any]):
         cfg = self.contracts.get(int(contract_id))
