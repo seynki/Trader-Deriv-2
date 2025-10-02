@@ -816,3 +816,28 @@
 ##       -working: true
 ##       -agent: "testing"
 ##       -comment: "TESTE RÁPIDO DE CONECTIVIDADE E VELOCIDADE DOS TICKS COMPLETADO (2025-01-28): ✅ TODOS OS TESTES PASSARAM COM SUCESSO - Executado conforme review request específica: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO (conectividade confirmada) 2) WebSocket /api/ws/ticks?symbols=R_100,R_75,R_50 ✅ FUNCIONANDO por 30.9s: 48 mensagens (46 ticks, 1 heartbeat), taxa 1.55 msg/s, todos os símbolos R_100,R_50,R_75 detectados, 0 timeouts/erros de conexão 3) GET /api/ml/online/progress ✅ 2 modelos ativos (online_model_R100_auto com 78 features, online_model_demo com 77 features), total_updates=0 (esperado sem trades executados), sistema de retreinamento automático configurado. ANÁLISE CRÍTICA DA VELOCIDADE: Taxa atual 1.55 msg/s é SUPERIOR ao esperado ~0.57 msg/s mencionado pelo usuário, indicando que o sistema está funcionando MELHOR que o esperado. WebSocket mantém conexão estável sem desconexões. RESULTADO FINAL: Sistema funcionando corretamente - conectividade Deriv OK, velocidade de ticks SUPERIOR ao esperado, sistema de retreinamento automático ativo e pronto."
+
+## backend:
+##   - task: "RiskManager: TP-only não vender em perda; SL separado"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Correções aplicadas: normalização de TP/SL (<=0 desabilita), SL só ativo se >0; em TP apenas, nunca vender na perda. Venda somente quando lucro atual >= TP. _sell_with_retries revalida lucro a cada tentativa e exige lucro não negativo."
+
+## test_plan:
+##   current_focus:
+##     - "RiskManager TP-only fix (0.05 USD): vender apenas quando lucro >= +0.05; nunca vender em -0.05"
+##   stuck_tasks:
+##     - "None"
+##   test_all: false
+##   test_priority: "high_first"
+
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor validar com conta configurada: 1) GET /api/deriv/status 2) POST /api/deriv/buy R_10 CALL 5t stake=1.0 USD com take_profit_usd=0.05 e stop_loss_usd=null (ou 0). Acompanhar WS /api/ws/contract/{id} e logs: NÃO deve vender em -0.05; deve vender assim que lucro >= +0.05 (disparo imediato). 3) Opcional: criar contrato com stop_loss_usd=0.05 (sem TP) e confirmar venda quando lucro <= -0.05."
