@@ -2344,21 +2344,21 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🛡️ INICIANDO TESTE ESPECÍFICO: RiskManager NÃO vende na perda")
+    print("🛡️ RETESTE APÓS FIX FINAL: RiskManager TP/SL Separation")
     print("="*70)
     
     try:
-        success, results, responses = test_riskmanager_no_sell_at_loss()
+        success, results, responses = test_riskmanager_final_fix_validation()
         
         if success:
-            print("\n🎉 TESTE CONCLUÍDO COM SUCESSO!")
-            print("✅ RiskManager NÃO vende na perda - funcionando corretamente")
-            print("✅ Sistema respeitou a regra: nunca vender quando profit < 0.00")
-            print("✅ Venda automática quando profit >= 0.05 USD funcionando")
+            print("\n🎉 RETESTE CONCLUÍDO COM SUCESSO!")
+            print("✅ TP-ONLY: NÃO vende na perda, vende imediatamente ao atingir TP >= 0.05")
+            print("✅ SL-ONLY: Vende imediatamente quando profit <= -0.05 (permite lucro negativo)")
+            print("✅ Fix aplicado: require_non_negative=False para SL-only funcionando")
         else:
-            print("\n❌ TESTE FALHOU!")
-            print("⚠️  Verificar implementação do RiskManager")
-            print("🚨 Possível violação: venda durante profit negativo")
+            print("\n❌ RETESTE FALHOU!")
+            print("⚠️  Verificar correção da lógica SL-only")
+            print("🚨 Possível problema: SL-only ainda bloqueando venda com lucro negativo")
             
         # Exit with appropriate code
         sys.exit(0 if success else 1)
