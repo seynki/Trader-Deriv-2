@@ -124,7 +124,10 @@ class RiskManager:
 
     async def _sell_with_retries(self, contract_id: int, reason: str, attempts: int = 8, delay: float = 1.0, min_profit: Optional[float] = None, require_non_negative: bool = True):
         """Tenta vender o contrato com várias tentativas em background.
-        Revalida o lucro ATUAL antes de cada tentativa: só vende se lucro >= min_profit (quando informado) e, se require_non_negative=True, nunca vende com lucro negativo.
+        Revalida o lucro ATUAL antes de cada tentativa: 
+        - Se min_profit for informado, só vende se lucro >= min_profit
+        - Se min_profit for None e o motivo for SL, permite vender independentemente do lucro, mas NUNCA com lucro negativo se require_non_negative=True
+        - Quando apenas TP estiver configurado (sem SL), nunca vende com lucro negativo e exige lucro >= TP
         Remove o contrato do monitoramento quando conseguir ou quando expirar.
         """
         try:
