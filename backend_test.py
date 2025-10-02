@@ -41,11 +41,13 @@ except ImportError:
 
 def test_riskmanager_final_fix_validation():
     """
-    Test the updated RiskManager behavior for TP/SL separation as per review request:
-    1. When only TP is defined (stake 1.00, take_profit_usd 0.05), bot never sells at loss and only sells when profit >= +0.05 USD
-    2. SL is only considered if stop_loss_usd > 0. Any value 0/null disables SL
-    3. Normalization in register: values <= 0 are treated as None (disabled)
-    4. _sell_with_retries revalidates profit and requires non-negative profit for TP-only
+    RETESTE APÓS FIX FINAL: Validar correção da lógica SL-only (require_non_negative=False quando SL disparar)
+    
+    Cenários a validar:
+    A) TP-ONLY (sem SL): NÃO vender quando profit < 0, vender imediatamente ao atingir profit >= +0.05
+    B) SL-ONLY (sem TP): Vender imediatamente quando profit <= -0.05 (permitir venda com lucro negativo)
+    
+    Confirmar que para SL-only não aparece mais '⏸️ Lucro negativo... aguardando voltar ao positivo'
     """
     
     base_url = "https://deriv-bot-finance.preview.emergentagent.com"
