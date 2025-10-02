@@ -228,13 +228,17 @@ class RiskManager:
             return
         
         sell_reason: Optional[str] = None
+        triggered_tp = False
+        triggered_sl = False
         
         # Verificar Take Profit primeiro (prioridade)
         if tp is not None and profit >= float(tp):
+            triggered_tp = True
             sell_reason = f"TP atingido: lucro {profit:.4f} >= {float(tp):.4f}"
             logger.info(f"🎯 {sell_reason}")
         # Só verificar Stop Loss se TP não foi atingido e SL estiver ativo (>0)
         elif sl is not None and float(sl) > 0.0 and profit <= -abs(float(sl)):
+            triggered_sl = True
             sell_reason = f"SL atingido: lucro {profit:.4f} <= -{abs(float(sl)):.4f}"
             logger.info(f"🛑 {sell_reason}")
         
@@ -244,9 +248,18 @@ class RiskManager:
             
             logger.info(f"🛑 RiskManager vendendo contrato {contract_id} - {sell_reason}")
             # Disparar venda em background com múltiplas tentativas para não travar o loop
-            # Regras: vender SOMENTE quando lucro atual >= TP (min_profit) e NUNCA com lucro negativo
-            min_profit = float(tp) if tp is not None else (0.0 if (sl is not None and float(sl) > 0.0) else None)
-            require_non_negative = True if (tp is not None and (sl is None or float(sl) <= 0.0)) else True
+            # Regras:
+            # - TP: vender SOMENTE quando lucro atual >= TP e NUNCA com lucro negativo
+            # - SL: vender independentemente do lucro ser negativo (permitir venda com prejuízo)
+            if triggered_tp:
+                min_profit = float(tp)
+                require_non_negative = True
+            elif triggered_sl:
+                min_profit = None
+                require_non_negative = False
+            else:
+                min_profit = None
+                require_non_negative = True
             asyncio.create_task(self._sell_with_retries(int(contract_id), sell_reason, attempts=12, delay=1.0, min_profit=min_profit, require_non_negative=require_non_negative))
 
 class SellRequest(BaseModel):
