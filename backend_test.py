@@ -87,7 +87,8 @@ def test_riskmanager_final_fix_validation():
         "tp_only_sell_at_tp": False,
         "sl_only_contract_created": False,
         "sl_only_websocket_monitoring": False,
-        "sl_only_sell_at_sl": False
+        "sl_only_sell_at_sl": False,
+        "sl_only_no_blocking_message": False
     }
     
     json_responses = {}
