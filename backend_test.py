@@ -37,6 +37,406 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
+def test_riskmanager_tp_sl_separation():
+    """
+    Test the updated RiskManager behavior for TP/SL separation as per review request:
+    1. When only TP is defined (stake 1.00, take_profit_usd 0.05), bot never sells at loss and only sells when profit >= +0.05 USD
+    2. SL is only considered if stop_loss_usd > 0. Any value 0/null disables SL
+    3. Normalization in register: values <= 0 are treated as None (disabled)
+    4. _sell_with_retries revalidates profit and requires non-negative profit for TP-only
+    """
+    
+    base_url = "https://deriv-bot-finance.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🛡️" + "="*68)
+    log("TESTE RISKMANAGER: TP/SL SEPARATION - UPDATED BEHAVIOR")
+    log("🛡️" + "="*68)
+    log("📋 Test Plan (Portuguese Review Request):")
+    log("   1) GET /api/deriv/status → connected=true, authenticated=true")
+    log("   2) POST /api/deriv/buy com body:")
+    log("      {symbol:'R_10', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t',")
+    log("       stake:1.0, currency:'USD', take_profit_usd:0.05, stop_loss_usd:null}")
+    log("   3) Abrir WebSocket /api/ws/contract/{contract_id} por até 60s")
+    log("      - Confirmar que NÃO há venda quando profit estiver negativo (ex.: -0.05)")
+    log("      - Confirmar venda imediata assim que profit >= +0.05")
+    log("   4) Opcional: Testar SL separado")
+    log("      {symbol:'R_10', type:'CALLPUT', contract_type:'PUT', duration:5, duration_unit:'t',")
+    log("       stake:1.0, currency:'USD', stop_loss_usd:0.05, take_profit_usd:null}")
+    log("      - Deve vender quando profit <= -0.05 (sem TP ativo)")
+    
+    test_results = {
+        "deriv_connectivity": False,
+        "tp_only_contract_created": False,
+        "tp_only_websocket_monitoring": False,
+        "tp_only_no_sell_at_negative": False,
+        "tp_only_sell_at_tp": False,
+        "sl_only_contract_created": False,
+        "sl_only_websocket_monitoring": False,
+        "sl_only_sell_at_sl": False
+    }
+    
+    json_responses = {}
+    
+    try:
+        # Test 1: GET /api/deriv/status
+        log("\n🔍 TEST 1: GET /api/deriv/status")
+        
+        response = session.get(f"{api_url}/deriv/status", timeout=10)
+        log(f"   GET /api/deriv/status: {response.status_code}")
+        
+        if response.status_code == 200:
+            status_data = response.json()
+            json_responses["deriv_status"] = status_data
+            log(f"   Response: {json.dumps(status_data, indent=2)}")
+            
+            connected = status_data.get('connected')
+            authenticated = status_data.get('authenticated')
+            
+            if connected == True and authenticated == True:
+                test_results["deriv_connectivity"] = True
+                log("✅ Test 1 OK: Deriv API conectada e autenticada")
+            else:
+                log(f"❌ Test 1 FALHOU: connected={connected}, auth={authenticated}")
+                return False, test_results, json_responses
+        else:
+            log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
+            return False, test_results, json_responses
+        
+        # Test 2: TP-only scenario
+        log("\n🔍 TEST 2: TP-only scenario")
+        log("   POST /api/deriv/buy com take_profit_usd=0.05, stop_loss_usd=null")
+        
+        tp_only_payload = {
+            "symbol": "R_10",
+            "type": "CALLPUT", 
+            "contract_type": "CALL",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "currency": "USD",
+            "take_profit_usd": 0.05,
+            "stop_loss_usd": None
+        }
+        
+        log(f"   Payload: {json.dumps(tp_only_payload, indent=2)}")
+        
+        response = session.post(f"{api_url}/deriv/buy", json=tp_only_payload, timeout=20)
+        log(f"   POST /api/deriv/buy (TP-only): {response.status_code}")
+        
+        tp_contract_id = None
+        if response.status_code == 200:
+            buy_data = response.json()
+            json_responses["deriv_buy_tp_only"] = buy_data
+            log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            
+            tp_contract_id = buy_data.get('contract_id')
+            if tp_contract_id is not None:
+                test_results["tp_only_contract_created"] = True
+                log("✅ Test 2 OK: Contrato TP-only criado")
+                log(f"   🎯 Contract ID: {tp_contract_id}")
+            else:
+                log("❌ Test 2 FALHOU: Contract ID não retornado")
+        else:
+            log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                json_responses["deriv_buy_tp_only"] = error_data
+                log(f"   Error: {error_data}")
+            except:
+                log(f"   Error text: {response.text}")
+        
+        # Test 3: Monitor TP-only contract
+        if tp_contract_id:
+            log("\n🔍 TEST 3: Monitor TP-only contract via WebSocket")
+            log("   Verificar comportamento: NÃO vender com profit negativo, vender quando profit >= 0.05")
+            
+            tp_monitoring_result = monitor_contract_websocket(
+                contract_id=tp_contract_id,
+                duration=60,
+                expected_behavior="tp_only",
+                log_func=log
+            )
+            
+            if tp_monitoring_result["connection_established"]:
+                test_results["tp_only_websocket_monitoring"] = True
+                log("✅ Test 3 OK: WebSocket monitoring TP-only funcionando")
+                
+                if tp_monitoring_result["no_sell_at_negative"]:
+                    test_results["tp_only_no_sell_at_negative"] = True
+                    log("✅ TP-ONLY RULE 1: NÃO vendeu com profit negativo")
+                else:
+                    log("❌ TP-ONLY RULE 1 VIOLADA: Vendeu com profit negativo!")
+                
+                if tp_monitoring_result["sell_at_tp"]:
+                    test_results["tp_only_sell_at_tp"] = True
+                    log("✅ TP-ONLY RULE 2: Vendeu quando profit >= 0.05")
+                else:
+                    log("ℹ️  TP-ONLY RULE 2: TP não foi atingido durante monitoramento")
+            
+            json_responses["tp_only_monitoring"] = tp_monitoring_result
+        
+        # Test 4: SL-only scenario (optional)
+        log("\n🔍 TEST 4: SL-only scenario (opcional)")
+        log("   POST /api/deriv/buy com stop_loss_usd=0.05, take_profit_usd=null")
+        
+        sl_only_payload = {
+            "symbol": "R_10",
+            "type": "CALLPUT", 
+            "contract_type": "PUT",
+            "duration": 5,
+            "duration_unit": "t",
+            "stake": 1.0,
+            "currency": "USD",
+            "stop_loss_usd": 0.05,
+            "take_profit_usd": None
+        }
+        
+        log(f"   Payload: {json.dumps(sl_only_payload, indent=2)}")
+        
+        response = session.post(f"{api_url}/deriv/buy", json=sl_only_payload, timeout=20)
+        log(f"   POST /api/deriv/buy (SL-only): {response.status_code}")
+        
+        sl_contract_id = None
+        if response.status_code == 200:
+            buy_data = response.json()
+            json_responses["deriv_buy_sl_only"] = buy_data
+            log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            
+            sl_contract_id = buy_data.get('contract_id')
+            if sl_contract_id is not None:
+                test_results["sl_only_contract_created"] = True
+                log("✅ Test 4 OK: Contrato SL-only criado")
+                log(f"   🎯 Contract ID: {sl_contract_id}")
+            else:
+                log("❌ Test 4 FALHOU: Contract ID não retornado")
+        else:
+            log(f"❌ Test 4 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                json_responses["deriv_buy_sl_only"] = error_data
+                log(f"   Error: {error_data}")
+            except:
+                log(f"   Error text: {response.text}")
+        
+        # Test 5: Monitor SL-only contract
+        if sl_contract_id:
+            log("\n🔍 TEST 5: Monitor SL-only contract via WebSocket")
+            log("   Verificar comportamento: Vender quando profit <= -0.05 (sem TP ativo)")
+            
+            sl_monitoring_result = monitor_contract_websocket(
+                contract_id=sl_contract_id,
+                duration=60,
+                expected_behavior="sl_only",
+                log_func=log
+            )
+            
+            if sl_monitoring_result["connection_established"]:
+                test_results["sl_only_websocket_monitoring"] = True
+                log("✅ Test 5 OK: WebSocket monitoring SL-only funcionando")
+                
+                if sl_monitoring_result["sell_at_sl"]:
+                    test_results["sl_only_sell_at_sl"] = True
+                    log("✅ SL-ONLY RULE: Vendeu quando profit <= -0.05")
+                else:
+                    log("ℹ️  SL-ONLY RULE: SL não foi atingido durante monitoramento")
+            
+            json_responses["sl_only_monitoring"] = sl_monitoring_result
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: RiskManager TP/SL Separation")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        # Critical validation
+        tp_critical_success = (test_results.get("deriv_connectivity") and 
+                              test_results.get("tp_only_contract_created") and
+                              test_results.get("tp_only_websocket_monitoring") and
+                              test_results.get("tp_only_no_sell_at_negative"))
+        
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - TP/SL SEPARATION:")
+        if tp_critical_success:
+            log("✅ TP-ONLY BEHAVIOR: Funcionando corretamente")
+            log("   - Contrato criado com TP=0.05, SL=null")
+            log("   - NÃO vende com profit negativo")
+            if test_results.get("tp_only_sell_at_tp"):
+                log("   - Vende quando profit >= 0.05")
+            else:
+                log("   - TP não foi atingido durante teste (condições de mercado)")
+        else:
+            log("❌ TP-ONLY BEHAVIOR: Problemas detectados")
+        
+        if test_results.get("sl_only_contract_created"):
+            log("✅ SL-ONLY BEHAVIOR: Testado")
+            if test_results.get("sl_only_sell_at_sl"):
+                log("   - Vende quando profit <= -0.05 (sem TP ativo)")
+            else:
+                log("   - SL não foi atingido durante teste")
+        else:
+            log("ℹ️  SL-ONLY BEHAVIOR: Não testado (opcional)")
+        
+        # Report all JSON responses
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        return tp_critical_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
+
+def monitor_contract_websocket(contract_id, duration, expected_behavior, log_func):
+    """
+    Monitor a contract via WebSocket and track behavior based on expected_behavior
+    expected_behavior: "tp_only" or "sl_only"
+    """
+    try:
+        import websocket
+        import threading
+        import json as json_lib
+        
+        ws_url = f"wss://auto-trading-check.preview.emergentagent.com/api/ws/contract/{contract_id}"
+        log_func(f"   📡 Conectando WebSocket: {ws_url}")
+        
+        result = {
+            "connection_established": False,
+            "messages_received": [],
+            "no_sell_at_negative": True,  # Assume true until proven false
+            "sell_at_tp": False,
+            "sell_at_sl": False,
+            "max_profit": 0.0,
+            "min_profit": 0.0,
+            "profit_timeline": []
+        }
+        
+        monitoring_start_time = time.time()
+        
+        def on_message(ws, message):
+            try:
+                data = json_lib.loads(message)
+                result["messages_received"].append(data)
+                
+                profit = data.get('profit', 0)
+                status = data.get('status', 'unknown')
+                is_expired = data.get('is_expired', False)
+                
+                if profit is not None:
+                    profit_float = float(profit)
+                    elapsed = time.time() - monitoring_start_time
+                    
+                    result["max_profit"] = max(result["max_profit"], profit_float)
+                    result["min_profit"] = min(result["min_profit"], profit_float)
+                    
+                    profit_entry = {
+                        "time": elapsed,
+                        "profit": profit_float,
+                        "status": status,
+                        "is_expired": is_expired
+                    }
+                    result["profit_timeline"].append(profit_entry)
+                    
+                    log_func(f"   📨 t={elapsed:.1f}s: profit={profit_float:.4f}, status={status}, expired={is_expired}")
+                    
+                    # Check for violations based on expected behavior
+                    if expected_behavior == "tp_only":
+                        # For TP-only: should never sell with negative profit
+                        if profit_float < 0 and (status == 'sold' or is_expired):
+                            result["no_sell_at_negative"] = False
+                            log_func(f"   🚨 VIOLAÇÃO TP-ONLY: Vendeu com profit negativo {profit_float:.4f}!")
+                        
+                        # Should sell when profit >= 0.05
+                        if profit_float >= 0.05 and (status == 'sold' or is_expired):
+                            result["sell_at_tp"] = True
+                            log_func(f"   ✅ TP ATINGIDO: Vendeu com profit {profit_float:.4f} >= 0.05")
+                    
+                    elif expected_behavior == "sl_only":
+                        # For SL-only: should sell when profit <= -0.05
+                        if profit_float <= -0.05 and (status == 'sold' or is_expired):
+                            result["sell_at_sl"] = True
+                            log_func(f"   ✅ SL ATINGIDO: Vendeu com profit {profit_float:.4f} <= -0.05")
+                
+            except Exception as e:
+                log_func(f"   ⚠️  Error parsing WebSocket message: {e}")
+        
+        def on_open(ws):
+            result["connection_established"] = True
+            log_func("   ✅ WebSocket connection established")
+        
+        def on_error(ws, error):
+            log_func(f"   ❌ WebSocket error: {error}")
+        
+        def on_close(ws, close_status_code, close_msg):
+            log_func(f"   🔌 WebSocket closed: {close_status_code}")
+        
+        # Create WebSocket connection
+        ws = websocket.WebSocketApp(ws_url,
+                                  on_open=on_open,
+                                  on_message=on_message,
+                                  on_error=on_error,
+                                  on_close=on_close)
+        
+        # Run WebSocket in a separate thread
+        ws_thread = threading.Thread(target=ws.run_forever)
+        ws_thread.daemon = True
+        ws_thread.start()
+        
+        # Monitor for specified duration
+        log_func(f"   ⏱️  Monitorando por {duration} segundos...")
+        
+        for second in range(duration):
+            time.sleep(1)
+            elapsed = second + 1
+            
+            if elapsed % 15 == 0:  # Log every 15 seconds
+                log_func(f"   📊 Status (t={elapsed}s): messages={len(result['messages_received'])}, "
+                        f"profit_range=[{result['min_profit']:.4f}, {result['max_profit']:.4f}]")
+            
+            # Early exit if contract expired
+            if len(result["messages_received"]) > 0:
+                latest_msg = result["messages_received"][-1]
+                if latest_msg.get('is_expired', False) and elapsed >= 30:
+                    log_func(f"   ⏰ Contrato expirou em {elapsed}s - finalizando monitoramento")
+                    break
+        
+        # Close WebSocket
+        ws.close()
+        
+        return result
+        
+    except ImportError:
+        log_func("   ❌ WebSocket library not available")
+        return {"error": "websocket library not available", "connection_established": False}
+    except Exception as e:
+        log_func(f"   ❌ WebSocket monitoring failed: {e}")
+        return {"error": str(e), "connection_established": False}
+
+
 def test_riskmanager_no_sell_at_loss():
     """
     Execute the RiskManager validation test to ensure it does NOT sell at a loss
