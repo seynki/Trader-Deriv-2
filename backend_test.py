@@ -44,15 +44,16 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
-def test_riskmanager_final_fix_validation():
+def test_rsi_reinforced_backtest():
     """
-    RETESTE APÓS FIX FINAL: Validar correção da lógica SL-only (require_non_negative=False quando SL disparar)
+    Test RSI Reinforced Backtest Endpoint
     
-    Cenários a validar:
-    A) TP-ONLY (sem SL): NÃO vender quando profit < 0, vender imediatamente ao atingir profit >= +0.05
-    B) SL-ONLY (sem TP): Vender imediatamente quando profit <= -0.05 (permitir venda com lucro negativo)
-    
-    Confirmar que para SL-only não aparece mais '⏸️ Lucro negativo... aguardando voltar ao positivo'
+    Sequência de testes conforme review request português:
+    1) Saúde inicial - GET /api/deriv/status
+    2) Backtest padrão (config A+D default)
+    3) Sensibilidade de parâmetros (bandwidth e reentry)
+    4) Multi-timeframe (HTF) efeito
+    5) Edge cases
     """
     
     base_url = "https://trade-precision-2.preview.emergentagent.com"
@@ -63,64 +64,73 @@ def test_riskmanager_final_fix_validation():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "🛡️" + "="*68)
-    log("RETESTE APÓS FIX FINAL: RiskManager SL-only Fix Validation")
-    log("🛡️" + "="*68)
+    log("\n" + "📊" + "="*68)
+    log("TESTE RSI REINFORCED BACKTEST ENDPOINT")
+    log("📊" + "="*68)
     log("📋 Test Plan (Portuguese Review Request):")
-    log("   CENÁRIO A) TP-ONLY (sem SL):")
-    log("   1) GET /api/deriv/status → connected=true, authenticated=true")
-    log("   2) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'CALL',")
-    log("      duration:5, duration_unit:'t', stake:1.0, currency:'USD',")
-    log("      take_profit_usd:0.05, stop_loss_usd:null}")
-    log("   3) WS /api/ws/contract/{id} por até 60s")
-    log("      - NÃO vender quando profit < 0 (ex.: -0.05)")
-    log("      - Vender imediatamente ao atingir profit >= +0.05")
-    log("")
-    log("   CENÁRIO B) SL-ONLY (sem TP):")
-    log("   4) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'PUT',")
-    log("      duration:5, duration_unit:'t', stake:1.0, currency:'USD',")
-    log("      stop_loss_usd:0.05, take_profit_usd:null}")
-    log("   5) WS /api/ws/contract/{id} por até 60s")
-    log("      - Vender imediatamente quando profit <= -0.05 (permitir venda com lucro negativo)")
-    log("      - NÃO deve aparecer '⏸️ Lucro negativo... aguardando voltar ao positivo'")
+    log("   1) Saúde inicial - GET /api/deriv/status → aguardar 3-5s pós-start se necessário")
+    log("   2) Backtest padrão (config A+D default)")
+    log("   3) Sensibilidade de parâmetros (bandwidth e reentry)")
+    log("   4) Multi-timeframe (HTF) efeito")
+    log("   5) Edge cases")
+    log("   Validar resposta 200 com campos: total_signals (>=0), wins, losses, winrate (0..1), equity_final, max_drawdown")
     
     test_results = {
         "deriv_connectivity": False,
-        "tp_only_contract_created": False,
-        "tp_only_websocket_monitoring": False,
-        "tp_only_no_sell_at_negative": False,
-        "tp_only_sell_at_tp": False,
-        "sl_only_contract_created": False,
-        "sl_only_websocket_monitoring": False,
-        "sl_only_sell_at_sl": False,
-        "sl_only_no_blocking_message": False
+        "backtest_default": False,
+        "sensitivity_bandwidth": False,
+        "sensitivity_reentry": False,
+        "htf_factor_3": False,
+        "htf_factor_8": False,
+        "edge_case_small_count": False,
+        "edge_case_5m_granularity": False
     }
     
     json_responses = {}
     
     try:
-        # Test 1: GET /api/deriv/status
-        log("\n🔍 TEST 1: GET /api/deriv/status")
+        # Test 1: GET /api/deriv/status - Saúde inicial
+        log("\n🔍 TEST 1: Saúde inicial")
+        log("   GET /api/deriv/status → aguardar 3-5s pós-start se necessário")
         
-        response = session.get(f"{api_url}/deriv/status", timeout=10)
-        log(f"   GET /api/deriv/status: {response.status_code}")
+        # Wait up to 5 seconds for connection
+        for attempt in range(5):
+            try:
+                response = session.get(f"{api_url}/deriv/status", timeout=10)
+                log(f"   GET /api/deriv/status (attempt {attempt + 1}): {response.status_code}")
+                
+                if response.status_code == 200:
+                    status_data = response.json()
+                    json_responses["deriv_status"] = status_data
+                    log(f"   Response: {json.dumps(status_data, indent=2)}")
+                    
+                    connected = status_data.get('connected')
+                    authenticated = status_data.get('authenticated')
+                    
+                    log(f"   📊 Deriv API Status:")
+                    log(f"      Connected: {connected}")
+                    log(f"      Authenticated: {authenticated}")
+                    
+                    if connected == True and authenticated == True:
+                        test_results["deriv_connectivity"] = True
+                        log("✅ Test 1 OK: Deriv API conectada e autenticada")
+                        break
+                    else:
+                        log(f"   ⏳ Aguardando conexão... (connected={connected}, auth={authenticated})")
+                        if attempt < 4:
+                            time.sleep(1)
+                else:
+                    log(f"❌ Deriv Status FALHOU - HTTP {response.status_code}")
+                    if attempt < 4:
+                        time.sleep(1)
+                        
+            except Exception as e:
+                log(f"   ⚠️  Attempt {attempt + 1} failed: {e}")
+                if attempt < 4:
+                    time.sleep(1)
         
-        if response.status_code == 200:
-            status_data = response.json()
-            json_responses["deriv_status"] = status_data
-            log(f"   Response: {json.dumps(status_data, indent=2)}")
-            
-            connected = status_data.get('connected')
-            authenticated = status_data.get('authenticated')
-            
-            if connected == True and authenticated == True:
-                test_results["deriv_connectivity"] = True
-                log("✅ Test 1 OK: Deriv API conectada e autenticada")
-            else:
-                log(f"❌ Test 1 FALHOU: connected={connected}, auth={authenticated}")
-                return False, test_results, json_responses
-        else:
-            log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
+        if not test_results["deriv_connectivity"]:
+            log("❌ Test 1 FALHOU: Deriv API não conectou após 5s")
             return False, test_results, json_responses
         
         # Test 2: TP-only scenario
