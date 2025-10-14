@@ -3508,6 +3508,92 @@ async def ml_engine_backtest(request: MLEngineTrainRequest):
         raise HTTPException(status_code=500, detail=f"Erro no backtest ML Engine: {str(e)}")
 
 # Include the router in the main app
+
+# -------------------------------------------------------------
+# RSI Reforçado (RSI + Bandas de Bollinger no RSI + Confirmação Multi-timeframe)
+# -------------------------------------------------------------
+from rsi_reinforced import RsiReinforcedParams, generate_signals, backtest_signals
+
+class RsiReinforcedRequest(BaseModel):
+    symbol: str
+    granularity: int = 60  # seconds per candle (Deriv granularity)
+    count: int = 1000
+    # Params
+    rsi_period: int = 14
+    rsi_bb_length: int = 20
+    rsi_bb_k: float = 2.0
+    higher_tf_factor: int = 5
+    confirm_with_midline: bool = True
+    confirm_with_slope: bool = True
+    slope_lookback: int = 3
+    min_bandwidth: float = 10.0
+    reentry_only: bool = True
+    distance_from_mid_min: float = 8.0
+    horizon: int = 3
+    payout_ratio: float = 0.95
+
+class RsiReinforcedResponse(BaseModel):
+    symbol: str
+    granularity: int
+    count: int
+    params: Dict[str, Any]
+    total_signals: int
+    wins: int
+    losses: int
+    winrate: float
+    equity_final: float
+    max_drawdown: float
+
+@api_router.post("/indicators/rsi_reinforced/backtest", response_model=RsiReinforcedResponse)
+async def rsi_reinforced_backtest(req: RsiReinforcedRequest):
+    # 1) obter candles via Deriv
+    candles = await _strategy._get_candles(req.symbol, req.granularity, req.count)
+    if not candles:
+        raise HTTPException(status_code=400, detail="No candles returned")
+    df = pd.DataFrame(candles)
+    # Normalizar nomes
+    if 'open' not in df.columns and 'open' in df:
+        pass
+    # Converter índice temporal
+    if 'timestamp' in df.columns:
+        df.index = pd.to_datetime(df['timestamp'], unit='s')
+    elif 'epoch' in df.columns:
+        df.index = pd.to_datetime(df['epoch'], unit='s')
+    else:
+        df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+    df = df[[c for c in ['open','high','low','close','volume'] if c in df.columns]].astype(float)
+
+    params = RsiReinforcedParams(
+        rsi_period=req.rsi_period,
+        rsi_bb_length=req.rsi_bb_length,
+        rsi_bb_k=req.rsi_bb_k,
+        higher_tf_factor=req.higher_tf_factor,
+        confirm_with_midline=req.confirm_with_midline,
+        confirm_with_slope=req.confirm_with_slope,
+        slope_lookback=req.slope_lookback,
+        min_bandwidth=req.min_bandwidth,
+        reentry_only=req.reentry_only,
+        distance_from_mid_min=req.distance_from_mid_min,
+        horizon=req.horizon,
+        payout_ratio=req.payout_ratio,
+    )
+
+    df2, signals = generate_signals(df, params)
+    metrics = backtest_signals(df2, signals, params)
+
+    return RsiReinforcedResponse(
+        symbol=req.symbol,
+        granularity=req.granularity,
+        count=len(df2),
+        params=params.__dict__,
+        total_signals=metrics['total_signals'],
+        wins=metrics['wins'],
+        losses=metrics['losses'],
+        winrate=metrics['winrate'],
+        equity_final=metrics['equity_final'],
+        max_drawdown=metrics['max_drawdown'],
+    )
+
 app.include_router(api_router)
 
 app.add_middleware(
