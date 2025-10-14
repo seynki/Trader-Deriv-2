@@ -276,72 +276,142 @@ def test_rsi_reinforced_backtest():
             except:
                 log(f"   Error text: {response.text}")
         
-        # Test 4: SL-only scenario (optional)
-        log("\n🔍 TEST 4: SL-only scenario (opcional)")
-        log("   POST /api/deriv/buy com stop_loss_usd=0.05, take_profit_usd=null")
+        # Test 5: Multi-timeframe (HTF) efeito - higher_tf_factor=3
+        log("\n🔍 TEST 5: Multi-timeframe (HTF) efeito - higher_tf_factor=3")
+        log("   Executar com higher_tf_factor=3 (vs 5 padrão)")
         
-        sl_only_payload = {
-            "symbol": "R_10",
-            "type": "CALLPUT", 
-            "contract_type": "PUT",
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1.0,
-            "currency": "USD",
-            "stop_loss_usd": 0.05,
-            "take_profit_usd": None
-        }
+        htf3_payload = default_payload.copy()
+        htf3_payload["higher_tf_factor"] = 3
         
-        log(f"   Payload: {json.dumps(sl_only_payload, indent=2)}")
+        log(f"   Payload alterado: higher_tf_factor={htf3_payload['higher_tf_factor']}")
         
-        response = session.post(f"{api_url}/deriv/buy", json=sl_only_payload, timeout=20)
-        log(f"   POST /api/deriv/buy (SL-only): {response.status_code}")
+        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=htf3_payload, timeout=30)
+        log(f"   POST /api/indicators/rsi_reinforced/backtest (htf_factor=3): {response.status_code}")
         
-        sl_contract_id = None
         if response.status_code == 200:
-            buy_data = response.json()
-            json_responses["deriv_buy_sl_only"] = buy_data
-            log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            htf3_data = response.json()
+            json_responses["htf_factor_3"] = htf3_data
             
-            sl_contract_id = buy_data.get('contract_id')
-            if sl_contract_id is not None:
-                test_results["sl_only_contract_created"] = True
-                log("✅ Test 4 OK: Contrato SL-only criado")
-                log(f"   🎯 Contract ID: {sl_contract_id}")
-            else:
-                log("❌ Test 4 FALHOU: Contract ID não retornado")
+            htf3_winrate = htf3_data.get('winrate', 0.0)
+            default_winrate = json_responses.get("backtest_default", {}).get('winrate', 0.0)
+            
+            log(f"   📊 HTF Factor=3 Results:")
+            log(f"      Winrate (htf_factor=3): {htf3_winrate:.3f}")
+            log(f"      Winrate (htf_factor=5): {default_winrate:.3f}")
+            log(f"      Change: {htf3_winrate - default_winrate:+.3f}")
+            
+            test_results["htf_factor_3"] = True
+            log("✅ Test 5 OK: higher_tf_factor=3 executado com sucesso")
         else:
-            log(f"❌ Test 4 FALHOU - HTTP {response.status_code}")
+            log(f"❌ Test 5 FALHOU - HTTP {response.status_code}")
             try:
                 error_data = response.json()
-                json_responses["deriv_buy_sl_only"] = error_data
+                json_responses["htf_factor_3"] = error_data
                 log(f"   Error: {error_data}")
             except:
                 log(f"   Error text: {response.text}")
         
-        # Test 5: Monitor SL-only contract
-        if sl_contract_id:
-            log("\n🔍 TEST 5: Monitor SL-only contract via WebSocket")
-            log("   Verificar comportamento: Vender quando profit <= -0.05 (sem TP ativo)")
+        # Test 6: Multi-timeframe (HTF) efeito - higher_tf_factor=8
+        log("\n🔍 TEST 6: Multi-timeframe (HTF) efeito - higher_tf_factor=8")
+        log("   Executar com higher_tf_factor=8 (vs 5 padrão)")
+        
+        htf8_payload = default_payload.copy()
+        htf8_payload["higher_tf_factor"] = 8
+        
+        log(f"   Payload alterado: higher_tf_factor={htf8_payload['higher_tf_factor']}")
+        
+        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=htf8_payload, timeout=30)
+        log(f"   POST /api/indicators/rsi_reinforced/backtest (htf_factor=8): {response.status_code}")
+        
+        if response.status_code == 200:
+            htf8_data = response.json()
+            json_responses["htf_factor_8"] = htf8_data
             
-            sl_monitoring_result = monitor_contract_websocket(
-                contract_id=sl_contract_id,
-                duration=60,
-                expected_behavior="sl_only",
-                log_func=log
-            )
+            htf8_winrate = htf8_data.get('winrate', 0.0)
+            default_winrate = json_responses.get("backtest_default", {}).get('winrate', 0.0)
             
-            if sl_monitoring_result["connection_established"]:
-                test_results["sl_only_websocket_monitoring"] = True
-                log("✅ Test 5 OK: WebSocket monitoring SL-only funcionando")
-                
-                if sl_monitoring_result["sell_at_sl"]:
-                    test_results["sl_only_sell_at_sl"] = True
-                    log("✅ SL-ONLY RULE: Vendeu quando profit <= -0.05")
-                else:
-                    log("ℹ️  SL-ONLY RULE: SL não foi atingido durante monitoramento")
+            log(f"   📊 HTF Factor=8 Results:")
+            log(f"      Winrate (htf_factor=8): {htf8_winrate:.3f}")
+            log(f"      Winrate (htf_factor=5): {default_winrate:.3f}")
+            log(f"      Change: {htf8_winrate - default_winrate:+.3f}")
             
-            json_responses["sl_only_monitoring"] = sl_monitoring_result
+            test_results["htf_factor_8"] = True
+            log("✅ Test 6 OK: higher_tf_factor=8 executado com sucesso")
+        else:
+            log(f"❌ Test 6 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                json_responses["htf_factor_8"] = error_data
+                log(f"   Error: {error_data}")
+            except:
+                log(f"   Error text: {response.text}")
+        
+        # Test 7: Edge case - count=200 (poucos candles)
+        log("\n🔍 TEST 7: Edge case - count=200 (poucos candles)")
+        log("   Executar com count=200 (vs 1200 padrão)")
+        
+        small_count_payload = default_payload.copy()
+        small_count_payload["count"] = 200
+        
+        log(f"   Payload alterado: count={small_count_payload['count']}")
+        
+        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=small_count_payload, timeout=30)
+        log(f"   POST /api/indicators/rsi_reinforced/backtest (count=200): {response.status_code}")
+        
+        if response.status_code == 200:
+            small_count_data = response.json()
+            json_responses["edge_case_small_count"] = small_count_data
+            
+            small_signals = small_count_data.get('total_signals', 0)
+            
+            log(f"   📊 Small Count Results:")
+            log(f"      Total Signals (count=200): {small_signals}")
+            log(f"      Candles processed: {small_count_data.get('count', 0)}")
+            
+            test_results["edge_case_small_count"] = True
+            log("✅ Test 7 OK: count=200 executado com sucesso")
+        else:
+            log(f"❌ Test 7 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                json_responses["edge_case_small_count"] = error_data
+                log(f"   Error: {error_data}")
+            except:
+                log(f"   Error text: {response.text}")
+        
+        # Test 8: Edge case - granularity=300 (5m) com count=600
+        log("\n🔍 TEST 8: Edge case - granularity=300 (5m) com count=600")
+        log("   Executar com granularity=300, count=600 (vs 60s, 1200 padrão)")
+        
+        granularity_payload = default_payload.copy()
+        granularity_payload["granularity"] = 300
+        granularity_payload["count"] = 600
+        
+        log(f"   Payload alterado: granularity={granularity_payload['granularity']}, count={granularity_payload['count']}")
+        
+        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=granularity_payload, timeout=30)
+        log(f"   POST /api/indicators/rsi_reinforced/backtest (5m, count=600): {response.status_code}")
+        
+        if response.status_code == 200:
+            granularity_data = response.json()
+            json_responses["edge_case_5m_granularity"] = granularity_data
+            
+            granularity_signals = granularity_data.get('total_signals', 0)
+            
+            log(f"   📊 5m Granularity Results:")
+            log(f"      Total Signals (5m, count=600): {granularity_signals}")
+            log(f"      Candles processed: {granularity_data.get('count', 0)}")
+            
+            test_results["edge_case_5m_granularity"] = True
+            log("✅ Test 8 OK: granularity=300 (5m) executado com sucesso")
+        else:
+            log(f"❌ Test 8 FALHOU - HTTP {response.status_code}")
+            try:
+                error_data = response.json()
+                json_responses["edge_case_5m_granularity"] = error_data
+                log(f"   Error: {error_data}")
+            except:
+                log(f"   Error text: {response.text}")
         
         # Final analysis
         log("\n" + "🏁" + "="*68)
