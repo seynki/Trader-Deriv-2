@@ -453,6 +453,21 @@
 ##   -message: "🛡️ RISKMANAGER TP/SL SEPARATION TESTING COMPLETADO (2025-10-02): ✅ 4/5 CRITÉRIOS ATENDIDOS COM BUG DETECTADO - Executado teste completo conforme review request portuguesa para validar separação TP/SL: 1) CONECTIVIDADE ✅ GET /api/deriv/status: connected=true, authenticated=true, environment=DEMO 2) TP-ONLY SCENARIO ✅ POST /api/deriv/buy {symbol:'R_10', contract_type:'CALL', take_profit_usd:0.05, stop_loss_usd:null} → contract_id=295717567408, logs confirmam '🛡️ RiskManager ATIVO: TP=0.05 USD, SL=None USD', '🎯 TP atingido: lucro 0.9300 >= 0.0500', CRÍTICO: '⏸️ Lucro negativo (-0.05, -0.58, -0.64). Aguardando voltar ao positivo' - NUNCA VENDEU COM PROFIT NEGATIVO ✅ 3) SL-ONLY SCENARIO ✅ POST /api/deriv/buy {symbol:'R_10', contract_type:'PUT', stop_loss_usd:0.05, take_profit_usd:null} → contract_id=295717630888, logs confirmam '🛡️ RiskManager ATIVO: TP=None USD, SL=0.05 USD', '🛑 SL atingido: lucro -1.0000 <= -0.0500' 4) BUG CRÍTICO DETECTADO ❌ SL-only ainda aplica require_non_negative mesmo com SL ativo: '⏸️ Lucro negativo (-1.00). Aguardando voltar ao positivo' - deveria vender imediatamente quando profit <= -0.05. RESULTADO: Taxa sucesso 80% (4/5), TP-ONLY funcionando PERFEITAMENTE (implementação correta da review request), SL-ONLY detecta threshold mas não executa venda por bug na linha 249 server.py. RECOMENDAÇÃO URGENTE: Corrigir require_non_negative=False quando apenas SL estiver ativo (tp is None and sl > 0)."
 
 ## backend:
+##   - task: "RSI Reforçado (RSI + Bandas de Bollinger no RSI + Confirmação Multi-timeframe) Backtest Endpoint"
+##     implemented: true
+##     working: true
+##     file: "/app/backend/server.py, /app/backend/rsi_reinforced.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Atualizei o backend adicionando um novo endpoint para backtest do 'RSI Reforçado' (RSI com Bandas de Bollinger aplicadas ao RSI + confirmação multi-timeframe). Endpoint POST /api/indicators/rsi_reinforced/backtest com parâmetros configuráveis: rsi_period, rsi_bb_length, rsi_bb_k, higher_tf_factor, confirm_with_midline, confirm_with_slope, slope_lookback, min_bandwidth, reentry_only, distance_from_mid_min, horizon, payout_ratio. Retorna métricas: total_signals, wins, losses, winrate, equity_final, max_drawdown."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "📊 RSI REINFORCED BACKTEST ENDPOINT VALIDADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 8 CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme solicitação portuguesa: 1) SAÚDE INICIAL ✅ GET /api/deriv/status aguardado 3-5s pós-start, retorna 200 com connected=true, authenticated=true, environment=DEMO 2) BACKTEST PADRÃO ✅ POST /api/indicators/rsi_reinforced/backtest com config A+D default (R_100, granularity=60, count=1200, todos os parâmetros padrão) retorna 200 com campos obrigatórios: total_signals=11, wins=2, losses=9, winrate=0.182, equity_final=-7.1, max_drawdown=-8.05 3) SENSIBILIDADE BANDWIDTH ✅ min_bandwidth=5.0 vs 10.0 padrão: total_signals manteve 11 (comportamento esperado) 4) SENSIBILIDADE REENTRY ✅ reentry_only=false vs true padrão: total_signals aumentou de 11→23 (+12 sinais) conforme esperado 5) HTF FACTOR=3 ✅ higher_tf_factor=3 vs 5 padrão: winrate=0.000 vs 0.182 (mudança registrada) 6) HTF FACTOR=8 ✅ higher_tf_factor=8 vs 5 padrão: winrate=0.286 vs 0.182 (+0.104 melhoria) 7) EDGE CASE SMALL COUNT ✅ count=200 vs 1200 padrão: retorna 200, total_signals=3, candles_processed=200 8) EDGE CASE 5M GRANULARITY ✅ granularity=300 (5m), count=600: retorna 200, total_signals=9, candles_processed=600. RESULTADO CRÍTICO: Taxa sucesso 100% (8/8 testes), endpoint permaneceu estável sem 500/timeout durante todos os testes, todos os JSONs capturados e reportados. Sistema RSI Reforçado com multi-timeframe funcionando PERFEITAMENTE conforme especificado."
+
 ##   - task: "Trailing Stop para CALL/PUT (Deriv) + Config API"
 ##     implemented: true
 ##     working: "NA"
