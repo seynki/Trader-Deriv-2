@@ -2529,21 +2529,24 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🛡️ RETESTE APÓS FIX FINAL: RiskManager TP/SL Separation")
+    print("📊 TESTE RSI REINFORCED BACKTEST ENDPOINT")
     print("="*70)
     
     try:
-        success, results, responses = test_riskmanager_final_fix_validation()
+        success, results, responses = test_rsi_reinforced_backtest()
         
         if success:
-            print("\n🎉 RETESTE CONCLUÍDO COM SUCESSO!")
-            print("✅ TP-ONLY: NÃO vende na perda, vende imediatamente ao atingir TP >= 0.05")
-            print("✅ SL-ONLY: Vende imediatamente quando profit <= -0.05 (permite lucro negativo)")
-            print("✅ Fix aplicado: require_non_negative=False para SL-only funcionando")
+            print("\n🎉 TESTE RSI REINFORCED CONCLUÍDO COM SUCESSO!")
+            print("✅ Saúde inicial: Deriv API conectada e autenticada")
+            print("✅ Backtest padrão: Executado com campos obrigatórios")
+            print("✅ Sensibilidade parâmetros: min_bandwidth e reentry_only testados")
+            print("✅ Multi-timeframe: HTF factors 3 e 8 testados")
+            print("✅ Edge cases: count=200 e granularity=300 processados")
+            print("✅ Endpoint estável: Sem 500/timeout durante todos os testes")
         else:
-            print("\n❌ RETESTE FALHOU!")
-            print("⚠️  Verificar correção da lógica SL-only")
-            print("🚨 Possível problema: SL-only ainda bloqueando venda com lucro negativo")
+            print("\n❌ TESTE RSI REINFORCED FALHOU!")
+            print("⚠️  Verificar implementação do endpoint RSI Reinforced")
+            print("🚨 Possíveis problemas: conectividade, parâmetros ou processamento")
             
         # Exit with appropriate code
         sys.exit(0 if success else 1)
