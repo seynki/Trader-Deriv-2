@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
 """
-Backend Testing - RiskManager TP/SL Final Fix Validation
-Tests the updated RiskManager behavior for TP-only and SL-only scenarios
-
-RETESTE APÓS FIX FINAL: Corrigi a lógica para SL-only (require_non_negative=False quando SL disparar). 
-Por favor revalidar ambos cenários.
+Backend Testing - RSI Reinforced Backtest Endpoint
+Tests the new RSI Reinforced (RSI com Bandas de Bollinger aplicadas ao RSI + confirmação multi-timeframe) endpoint
 
 Test Plan (Portuguese Review Request):
-Cenários a validar (usar conta configurada):
-A) TP-ONLY (sem SL)
-1) GET /api/deriv/status → connected=true, authenticated=true
-2) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t', stake:1.0, currency:'USD', take_profit_usd:0.05, stop_loss_usd:null}
-3) WS /api/ws/contract/{id} por até 60s
-   - NÃO vender quando profit < 0 (ex.: -0.05)
-   - Vender imediatamente ao atingir profit >= +0.05
+Atualizei o backend adicionando um novo endpoint para backtest do "RSI Reforçado" (RSI com Bandas de Bollinger aplicadas ao RSI + confirmação multi-timeframe). 
+Por favor, testar apenas backend com a sequência abaixo. Não testar frontend.
 
-B) SL-ONLY (sem TP)
-1) POST /api/deriv/buy {symbol:'R_10', type:'CALLPUT', contract_type:'PUT', duration:5, duration_unit:'t', stake:1.0, currency:'USD', stop_loss_usd:0.05, take_profit_usd:null}
-2) WS /api/ws/contract/{id} por até 60s
-   - Vender imediatamente quando profit <= -0.05 (permitir venda com lucro negativo agora)
+1) Saúde inicial
+- GET /api/deriv/status → aguardar 3-5s pós-start se necessário. Esperado: 200, connected=true, authenticated=true.
 
-O que registrar:
-- contract_id de cada cenário
-- Logs chaves: '🛡️ RiskManager ATIVO...', '🎯 TP atingido...' (A), '🛑 SL atingido...' (B), 
-- Confirmar que para SL-only não aparece mais a mensagem de bloqueio '⏸️ Lucro negativo... aguardando voltar ao positivo' e que a venda é disparada.
+2) Backtest padrão (config A+D default)
+- POST /api/indicators/rsi_reinforced/backtest com body:
+  {"symbol":"R_100","granularity":60,"count":1200,
+   "rsi_period":14, "rsi_bb_length":20, "rsi_bb_k":2.0,
+   "higher_tf_factor":5, "confirm_with_midline":true, "confirm_with_slope":true,
+   "slope_lookback":3, "min_bandwidth":10.0, "reentry_only":true,
+   "distance_from_mid_min":8.0, "horizon":3, "payout_ratio":0.95}
+- Validar resposta 200 com campos: total_signals (>=0), wins, losses, winrate (0..1), equity_final, max_drawdown.
 
-Notes: Use configured account. No frontend testing. Use only /api prefix.
+3) Sensibilidade de parâmetros (bandwidth e reentry)
+- Executar o mesmo endpoint variando: (a) min_bandwidth=5.0, (b) reentry_only=false. Confirmar que total_signals aumenta ou se mantém vs caso padrão.
+
+4) Multi-timeframe (HTF) efeito
+- Executar com higher_tf_factor=3 e higher_tf_factor=8. Confirmar que respostas são 200 e que winrate muda (apenas registrar, sem expectativa rígida).
+
+5) Edge cases
+- count=200 (poucos candles) → ainda retorna 200. 
+- granularity=300 (5m) com count=600 → 200.
+
+Incluir no relatório final os JSONs de cada chamada (ou resumos) e destacar se o endpoint permaneceu estável e sem 500/timeout. 
+Não executar ordens reais. Prefixo /api está correto.
 """
 
 import requests
