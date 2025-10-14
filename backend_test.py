@@ -133,45 +133,67 @@ def test_rsi_reinforced_backtest():
             log("❌ Test 1 FALHOU: Deriv API não conectou após 5s")
             return False, test_results, json_responses
         
-        # Test 2: TP-only scenario
-        log("\n🔍 TEST 2: TP-only scenario")
-        log("   POST /api/deriv/buy com take_profit_usd=0.05, stop_loss_usd=null")
+        # Test 2: Backtest padrão (config A+D default)
+        log("\n🔍 TEST 2: Backtest padrão (config A+D default)")
+        log("   POST /api/indicators/rsi_reinforced/backtest")
         
-        tp_only_payload = {
-            "symbol": "R_10",
-            "type": "CALLPUT", 
-            "contract_type": "CALL",
-            "duration": 5,
-            "duration_unit": "t",
-            "stake": 1.0,
-            "currency": "USD",
-            "take_profit_usd": 0.05,
-            "stop_loss_usd": None
+        default_payload = {
+            "symbol": "R_100",
+            "granularity": 60,
+            "count": 1200,
+            "rsi_period": 14,
+            "rsi_bb_length": 20,
+            "rsi_bb_k": 2.0,
+            "higher_tf_factor": 5,
+            "confirm_with_midline": True,
+            "confirm_with_slope": True,
+            "slope_lookback": 3,
+            "min_bandwidth": 10.0,
+            "reentry_only": True,
+            "distance_from_mid_min": 8.0,
+            "horizon": 3,
+            "payout_ratio": 0.95
         }
         
-        log(f"   Payload: {json.dumps(tp_only_payload, indent=2)}")
+        log(f"   Payload: {json.dumps(default_payload, indent=2)}")
         
-        response = session.post(f"{api_url}/deriv/buy", json=tp_only_payload, timeout=20)
-        log(f"   POST /api/deriv/buy (TP-only): {response.status_code}")
+        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=default_payload, timeout=30)
+        log(f"   POST /api/indicators/rsi_reinforced/backtest (default): {response.status_code}")
         
-        tp_contract_id = None
         if response.status_code == 200:
-            buy_data = response.json()
-            json_responses["deriv_buy_tp_only"] = buy_data
-            log(f"   Response: {json.dumps(buy_data, indent=2)}")
+            backtest_data = response.json()
+            json_responses["backtest_default"] = backtest_data
+            log(f"   Response: {json.dumps(backtest_data, indent=2)}")
             
-            tp_contract_id = buy_data.get('contract_id')
-            if tp_contract_id is not None:
-                test_results["tp_only_contract_created"] = True
-                log("✅ Test 2 OK: Contrato TP-only criado")
-                log(f"   🎯 Contract ID: {tp_contract_id}")
+            # Validate required fields
+            required_fields = ["total_signals", "wins", "losses", "winrate", "equity_final", "max_drawdown"]
+            all_fields_present = all(field in backtest_data for field in required_fields)
+            
+            if all_fields_present:
+                total_signals = backtest_data.get('total_signals', 0)
+                winrate = backtest_data.get('winrate', 0.0)
+                
+                log(f"   📊 Backtest Results:")
+                log(f"      Total Signals: {total_signals}")
+                log(f"      Wins: {backtest_data.get('wins', 0)}")
+                log(f"      Losses: {backtest_data.get('losses', 0)}")
+                log(f"      Winrate: {winrate:.3f}")
+                log(f"      Equity Final: {backtest_data.get('equity_final', 0.0)}")
+                log(f"      Max Drawdown: {backtest_data.get('max_drawdown', 0.0)}")
+                
+                if total_signals >= 0 and 0.0 <= winrate <= 1.0:
+                    test_results["backtest_default"] = True
+                    log("✅ Test 2 OK: Backtest padrão executado com sucesso")
+                else:
+                    log(f"❌ Test 2 FALHOU: Valores inválidos - signals={total_signals}, winrate={winrate}")
             else:
-                log("❌ Test 2 FALHOU: Contract ID não retornado")
+                missing_fields = [f for f in required_fields if f not in backtest_data]
+                log(f"❌ Test 2 FALHOU: Campos obrigatórios ausentes: {missing_fields}")
         else:
             log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
             try:
                 error_data = response.json()
-                json_responses["deriv_buy_tp_only"] = error_data
+                json_responses["backtest_default"] = error_data
                 log(f"   Error: {error_data}")
             except:
                 log(f"   Error text: {response.text}")
