@@ -415,7 +415,7 @@ def test_rsi_reinforced_backtest():
         
         # Final analysis
         log("\n" + "🏁" + "="*68)
-        log("RESULTADO FINAL: RiskManager TP/SL Separation")
+        log("RESULTADO FINAL: RSI Reinforced Backtest Endpoint")
         log("🏁" + "="*68)
         
         passed_tests = sum(test_results.values())
@@ -428,41 +428,71 @@ def test_rsi_reinforced_backtest():
         log(f"   Taxa de sucesso: {success_rate:.1f}%")
         
         # Critical validation
-        tp_critical_success = (test_results.get("deriv_connectivity") and 
-                              test_results.get("tp_only_contract_created") and
-                              test_results.get("tp_only_websocket_monitoring") and
-                              test_results.get("tp_only_no_sell_at_negative"))
+        endpoint_stability = (test_results.get("deriv_connectivity") and 
+                             test_results.get("backtest_default") and
+                             test_results.get("sensitivity_bandwidth") and
+                             test_results.get("sensitivity_reentry") and
+                             test_results.get("htf_factor_3") and
+                             test_results.get("htf_factor_8") and
+                             test_results.get("edge_case_small_count") and
+                             test_results.get("edge_case_5m_granularity"))
         
-        log(f"\n🔍 VALIDAÇÃO CRÍTICA - TP/SL SEPARATION:")
-        if tp_critical_success:
-            log("✅ TP-ONLY BEHAVIOR: Funcionando corretamente")
-            log("   - Contrato criado com TP=0.05, SL=null")
-            log("   - NÃO vende com profit negativo")
-            if test_results.get("tp_only_sell_at_tp"):
-                log("   - Vende quando profit >= 0.05")
-            else:
-                log("   - TP não foi atingido durante teste (condições de mercado)")
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - ENDPOINT STABILITY:")
+        if endpoint_stability:
+            log("✅ RSI REINFORCED ENDPOINT: Funcionando corretamente")
+            log("   - Conectividade Deriv estabelecida")
+            log("   - Backtest padrão executado com sucesso")
+            log("   - Sensibilidade de parâmetros testada")
+            log("   - Multi-timeframe (HTF) efeito validado")
+            log("   - Edge cases processados sem erro")
+            log("   - Endpoint permaneceu estável sem 500/timeout")
         else:
-            log("❌ TP-ONLY BEHAVIOR: Problemas detectados")
+            log("❌ RSI REINFORCED ENDPOINT: Problemas detectados")
+            failed_tests = [k for k, v in test_results.items() if not v]
+            log(f"   Testes falharam: {failed_tests}")
         
-        if test_results.get("sl_only_contract_created"):
-            log("✅ SL-ONLY BEHAVIOR: Testado")
-            if test_results.get("sl_only_sell_at_sl"):
-                log("   - Vende quando profit <= -0.05 (sem TP ativo)")
-            else:
-                log("   - SL não foi atingido durante teste")
-        else:
-            log("ℹ️  SL-ONLY BEHAVIOR: Não testado (opcional)")
+        # Summary of key results
+        log(f"\n📈 RESUMO DOS RESULTADOS:")
+        if "backtest_default" in json_responses:
+            default_data = json_responses["backtest_default"]
+            log(f"   Backtest Padrão:")
+            log(f"      - Total Signals: {default_data.get('total_signals', 'N/A')}")
+            log(f"      - Winrate: {default_data.get('winrate', 'N/A'):.3f}")
+            log(f"      - Equity Final: {default_data.get('equity_final', 'N/A')}")
+        
+        if "sensitivity_bandwidth" in json_responses and "sensitivity_reentry" in json_responses:
+            bandwidth_signals = json_responses["sensitivity_bandwidth"].get('total_signals', 0)
+            reentry_signals = json_responses["sensitivity_reentry"].get('total_signals', 0)
+            default_signals = json_responses.get("backtest_default", {}).get('total_signals', 0)
+            
+            log(f"   Sensibilidade de Parâmetros:")
+            log(f"      - min_bandwidth=5.0: {bandwidth_signals} sinais ({bandwidth_signals - default_signals:+d})")
+            log(f"      - reentry_only=false: {reentry_signals} sinais ({reentry_signals - default_signals:+d})")
+        
+        if "htf_factor_3" in json_responses and "htf_factor_8" in json_responses:
+            htf3_winrate = json_responses["htf_factor_3"].get('winrate', 0.0)
+            htf8_winrate = json_responses["htf_factor_8"].get('winrate', 0.0)
+            default_winrate = json_responses.get("backtest_default", {}).get('winrate', 0.0)
+            
+            log(f"   Multi-timeframe (HTF) Efeito:")
+            log(f"      - htf_factor=3: winrate={htf3_winrate:.3f} ({htf3_winrate - default_winrate:+.3f})")
+            log(f"      - htf_factor=8: winrate={htf8_winrate:.3f} ({htf8_winrate - default_winrate:+.3f})")
         
         # Report all JSON responses
         log(f"\n📄 TODOS OS JSONs RETORNADOS:")
         log("="*50)
         for step_name, json_data in json_responses.items():
             log(f"\n🔹 {step_name.upper()}:")
-            log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            if isinstance(json_data, dict) and len(str(json_data)) > 1000:
+                # Summarize large responses
+                summary = {k: v for k, v in json_data.items() if k in ['symbol', 'granularity', 'count', 'total_signals', 'wins', 'losses', 'winrate', 'equity_final', 'max_drawdown']}
+                log(json.dumps(summary, indent=2, ensure_ascii=False))
+                log("   ... (response truncated for brevity)")
+            else:
+                log(json.dumps(json_data, indent=2, ensure_ascii=False))
             log("-" * 30)
         
-        return tp_critical_success, test_results, json_responses
+        return endpoint_stability, test_results, json_responses
         
     except Exception as e:
         log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
