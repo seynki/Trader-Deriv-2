@@ -3,7 +3,7 @@ from typing import Dict, Any
 import pandas as pd
 from .base import BaseStrategy, StrategyContext, StrategyDecision
 # Load river model directly to avoid circular imports with server
-from backend import river_online_model
+import river_online_model
 
 
 class RiverStrategy(BaseStrategy):
