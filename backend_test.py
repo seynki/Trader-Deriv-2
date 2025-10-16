@@ -1,36 +1,17 @@
 #!/usr/bin/env python3
 """
-Backend Testing - RSI Reinforced Backtest Endpoint
-Tests the new RSI Reinforced (RSI com Bandas de Bollinger aplicadas ao RSI + confirmação multi-timeframe) endpoint
+Backend Testing - Phase 1: Estratégias + Decision Engine + Regime
+Tests the Phase 1 implementation after Decision Engine and Strategies integration
 
 Test Plan (Portuguese Review Request):
-Atualizei o backend adicionando um novo endpoint para backtest do "RSI Reforçado" (RSI com Bandas de Bollinger aplicadas ao RSI + confirmação multi-timeframe). 
-Por favor, testar apenas backend com a sequência abaixo. Não testar frontend.
-
-1) Saúde inicial
-- GET /api/deriv/status → aguardar 3-5s pós-start se necessário. Esperado: 200, connected=true, authenticated=true.
-
-2) Backtest padrão (config A+D default)
-- POST /api/indicators/rsi_reinforced/backtest com body:
-  {"symbol":"R_100","granularity":60,"count":1200,
-   "rsi_period":14, "rsi_bb_length":20, "rsi_bb_k":2.0,
-   "higher_tf_factor":5, "confirm_with_midline":true, "confirm_with_slope":true,
-   "slope_lookback":3, "min_bandwidth":10.0, "reentry_only":true,
-   "distance_from_mid_min":8.0, "horizon":3, "payout_ratio":0.95}
-- Validar resposta 200 com campos: total_signals (>=0), wins, losses, winrate (0..1), equity_final, max_drawdown.
-
-3) Sensibilidade de parâmetros (bandwidth e reentry)
-- Executar o mesmo endpoint variando: (a) min_bandwidth=5.0, (b) reentry_only=false. Confirmar que total_signals aumenta ou se mantém vs caso padrão.
-
-4) Multi-timeframe (HTF) efeito
-- Executar com higher_tf_factor=3 e higher_tf_factor=8. Confirmar que respostas são 200 e que winrate muda (apenas registrar, sem expectativa rígida).
-
-5) Edge cases
-- count=200 (poucos candles) → ainda retorna 200. 
-- granularity=300 (5m) com count=600 → 200.
-
-Incluir no relatório final os JSONs de cada chamada (ou resumos) e destacar se o endpoint permaneceu estável e sem 500/timeout. 
-Não executar ordens reais. Prefixo /api está correto.
+Teste rápido do backend após Fase 1 (NÃO testar frontend):
+1) Confirmar saúde: GET /api/deriv/status deve retornar 200 com connected (true/false), authenticated (true/false) sem erro
+2) Iniciar StrategyRunner: POST /api/strategy/start com payload padrão (ou vazio) → aguardar 6-10s → GET /api/strategy/status 2-3x
+   - Esperado: running=true, last_run_at atualizando
+   - last_reason pode conter "DecisionEngine" se a rota nova for usada; se não, deve seguir a lógica antiga normalmente
+3) Checar compatibilidade Deriv: POST /api/deriv/proposal com body {symbol:'R_10', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t', stake:1, currency:'USD'} deve retornar 200
+4) Verificar que novas rotas de arquivos não quebraram: importar decision_engine e strategies não deve gerar 500 nos endpoints existentes
+Observações: não executar /api/deriv/buy real; apenas proposal. Se /api/strategy/stop existir, pare após o teste.
 """
 
 import requests
