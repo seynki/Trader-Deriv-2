@@ -345,7 +345,7 @@ def test_phase1_decision_engine():
         
         # Final analysis
         log("\n" + "🏁" + "="*68)
-        log("RESULTADO FINAL: RSI Reinforced Backtest Endpoint")
+        log("RESULTADO FINAL: PHASE 1 - ESTRATÉGIAS + DECISION ENGINE + REGIME")
         log("🏁" + "="*68)
         
         passed_tests = sum(test_results.values())
@@ -357,56 +357,73 @@ def test_phase1_decision_engine():
         log(f"   Testes bem-sucedidos: {passed_tests}")
         log(f"   Taxa de sucesso: {success_rate:.1f}%")
         
-        # Critical validation
-        endpoint_stability = (test_results.get("deriv_connectivity") and 
-                             test_results.get("backtest_default") and
-                             test_results.get("sensitivity_bandwidth") and
-                             test_results.get("sensitivity_reentry") and
-                             test_results.get("htf_factor_3") and
-                             test_results.get("htf_factor_8") and
-                             test_results.get("edge_case_small_count") and
-                             test_results.get("edge_case_5m_granularity"))
+        # Critical validation for Phase 1
+        phase1_success = (test_results.get("deriv_connectivity") and 
+                         test_results.get("strategy_start") and
+                         test_results.get("strategy_status_running") and
+                         test_results.get("deriv_proposal_compatibility") and
+                         test_results.get("endpoints_not_broken"))
         
-        log(f"\n🔍 VALIDAÇÃO CRÍTICA - ENDPOINT STABILITY:")
-        if endpoint_stability:
-            log("✅ RSI REINFORCED ENDPOINT: Funcionando corretamente")
-            log("   - Conectividade Deriv estabelecida")
-            log("   - Backtest padrão executado com sucesso")
-            log("   - Sensibilidade de parâmetros testada")
-            log("   - Multi-timeframe (HTF) efeito validado")
-            log("   - Edge cases processados sem erro")
-            log("   - Endpoint permaneceu estável sem 500/timeout")
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - PHASE 1 SUCCESS:")
+        if phase1_success:
+            log("✅ PHASE 1 IMPLEMENTAÇÃO: Funcionando corretamente")
+            log("   - Saúde do sistema confirmada (GET /api/deriv/status)")
+            log("   - StrategyRunner inicia e executa (POST /api/strategy/start)")
+            log("   - Status mostra running=true e last_run_at atualizando")
+            log("   - Compatibilidade Deriv mantida (POST /api/deriv/proposal)")
+            log("   - Endpoints existentes não quebraram (sem 500s)")
+            log("   - Importações decision_engine e strategies funcionando")
         else:
-            log("❌ RSI REINFORCED ENDPOINT: Problemas detectados")
+            log("❌ PHASE 1 IMPLEMENTAÇÃO: Problemas detectados")
             failed_tests = [k for k, v in test_results.items() if not v]
             log(f"   Testes falharam: {failed_tests}")
         
         # Summary of key results
         log(f"\n📈 RESUMO DOS RESULTADOS:")
-        if "backtest_default" in json_responses:
-            default_data = json_responses["backtest_default"]
-            log(f"   Backtest Padrão:")
-            log(f"      - Total Signals: {default_data.get('total_signals', 'N/A')}")
-            log(f"      - Winrate: {default_data.get('winrate', 'N/A'):.3f}")
-            log(f"      - Equity Final: {default_data.get('equity_final', 'N/A')}")
         
-        if "sensitivity_bandwidth" in json_responses and "sensitivity_reentry" in json_responses:
-            bandwidth_signals = json_responses["sensitivity_bandwidth"].get('total_signals', 0)
-            reentry_signals = json_responses["sensitivity_reentry"].get('total_signals', 0)
-            default_signals = json_responses.get("backtest_default", {}).get('total_signals', 0)
-            
-            log(f"   Sensibilidade de Parâmetros:")
-            log(f"      - min_bandwidth=5.0: {bandwidth_signals} sinais ({bandwidth_signals - default_signals:+d})")
-            log(f"      - reentry_only=false: {reentry_signals} sinais ({reentry_signals - default_signals:+d})")
+        # Deriv connectivity
+        if "deriv_status" in json_responses:
+            status_data = json_responses["deriv_status"]
+            log(f"   Saúde do Sistema:")
+            log(f"      - Connected: {status_data.get('connected', 'N/A')}")
+            log(f"      - Authenticated: {status_data.get('authenticated', 'N/A')}")
+            log(f"      - Environment: {status_data.get('environment', 'N/A')}")
         
-        if "htf_factor_3" in json_responses and "htf_factor_8" in json_responses:
-            htf3_winrate = json_responses["htf_factor_3"].get('winrate', 0.0)
-            htf8_winrate = json_responses["htf_factor_8"].get('winrate', 0.0)
-            default_winrate = json_responses.get("backtest_default", {}).get('winrate', 0.0)
-            
-            log(f"   Multi-timeframe (HTF) Efeito:")
-            log(f"      - htf_factor=3: winrate={htf3_winrate:.3f} ({htf3_winrate - default_winrate:+.3f})")
-            log(f"      - htf_factor=8: winrate={htf8_winrate:.3f} ({htf8_winrate - default_winrate:+.3f})")
+        # Strategy status
+        if "strategy_status_checks" in json_responses:
+            status_checks = json_responses["strategy_status_checks"]
+            if status_checks:
+                first_check = status_checks[0]
+                last_check = status_checks[-1]
+                log(f"   StrategyRunner Status:")
+                log(f"      - Running: {last_check.get('running', 'N/A')}")
+                log(f"      - Last Run At (primeiro): {first_check.get('last_run_at', 'N/A')}")
+                log(f"      - Last Run At (último): {last_check.get('last_run_at', 'N/A')}")
+                log(f"      - Last Reason: {last_check.get('last_reason', 'N/A')}")
+                
+                # Check for DecisionEngine usage
+                last_reason = last_check.get('last_reason', '')
+                if last_reason and "DecisionEngine" in str(last_reason):
+                    log(f"      🎯 DecisionEngine DETECTADO em uso!")
+                elif last_reason:
+                    log(f"      ℹ️  Lógica antiga em uso (normal se DecisionEngine não ativo)")
+        
+        # Deriv proposal compatibility
+        if "deriv_proposal" in json_responses:
+            proposal_data = json_responses["deriv_proposal"]
+            if not proposal_data.get('error'):
+                log(f"   Compatibilidade Deriv:")
+                log(f"      - Proposal ID: {proposal_data.get('id', 'N/A')}")
+                log(f"      - Payout: {proposal_data.get('payout', 'N/A')}")
+                log(f"      - Ask Price: {proposal_data.get('ask_price', 'N/A')}")
+        
+        # Endpoints stability
+        if "endpoints_test" in json_responses:
+            endpoints_data = json_responses["endpoints_test"]
+            log(f"   Estabilidade dos Endpoints:")
+            log(f"      - Endpoints testados: {endpoints_data.get('total_endpoints', 'N/A')}")
+            log(f"      - Endpoints funcionando: {endpoints_data.get('endpoints_working', 'N/A')}")
+            log(f"      - Taxa de sucesso: {endpoints_data.get('success_rate', 'N/A'):.1f}%")
         
         # Report all JSON responses
         log(f"\n📄 TODOS OS JSONs RETORNADOS:")
@@ -415,14 +432,19 @@ def test_phase1_decision_engine():
             log(f"\n🔹 {step_name.upper()}:")
             if isinstance(json_data, dict) and len(str(json_data)) > 1000:
                 # Summarize large responses
-                summary = {k: v for k, v in json_data.items() if k in ['symbol', 'granularity', 'count', 'total_signals', 'wins', 'losses', 'winrate', 'equity_final', 'max_drawdown']}
-                log(json.dumps(summary, indent=2, ensure_ascii=False))
-                log("   ... (response truncated for brevity)")
+                if step_name == "strategy_status_checks" and isinstance(json_data, list):
+                    log(f"   Status checks realizados: {len(json_data)}")
+                    for i, check in enumerate(json_data):
+                        log(f"   Check {i+1}: running={check.get('running')}, last_run_at={check.get('last_run_at')}")
+                else:
+                    summary = {k: v for k, v in json_data.items() if k in ['connected', 'authenticated', 'running', 'last_run_at', 'last_reason', 'id', 'payout', 'ask_price']}
+                    log(json.dumps(summary, indent=2, ensure_ascii=False))
+                    log("   ... (response truncated for brevity)")
             else:
                 log(json.dumps(json_data, indent=2, ensure_ascii=False))
             log("-" * 30)
         
-        return endpoint_stability, test_results, json_responses
+        return phase1_success, test_results, json_responses
         
     except Exception as e:
         log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
