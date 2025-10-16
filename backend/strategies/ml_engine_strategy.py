@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 import pandas as pd
 from .base import BaseStrategy, StrategyContext, StrategyDecision
-from backend import ml_engine
+import ml_engine
 from pathlib import Path
 import glob
 
