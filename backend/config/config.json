@@ -1,0 +1,10 @@
+{
+  "weights": {
+    "river": 0.35,
+    "ma_crossover": 0.2,
+    "rsi_reinforced": 0.2,
+    "ml_engine": 0.25
+  },
+  "decision_threshold": 0.55,
+  "min_strategies_agree": 1
+}
