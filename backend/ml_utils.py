@@ -22,6 +22,93 @@ CHAMP_PATH = ML_DIR / "champion.json"
 logger = logging.getLogger(__name__)
 
 
+
+# ---------------------- Market Regime Detection ----------------------
+
+def detect_market_regime(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Detecta regime de mercado a partir de OHLCV recentes.
+    Retorna um dicionário com chaves:
+      - adx: último valor ADX(14)
+      - bb_width: largura das bandas de Bollinger(20, 2.0)
+      - returns_vol_20: volatilidade dos retornos (desvio padrão 20)
+      - trend_strength: "strong_trend" | "trend" | "range" | "unknown"
+      - volatility: "high" | "medium" | "low"
+      - regime_name: string amigável combinando força de tendência e vol
+    Requisitos mínimos: colunas high, low, close (volume opcional)
+    """
+    out = {
+        "adx": None,
+        "bb_width": None,
+        "returns_vol_20": None,
+        "trend_strength": "unknown",
+        "volatility": "medium",
+        "regime_name": "unknown",
+    }
+    if df is None or df.empty:
+        return out
+    cols = set(df.columns)
+    need = {"high", "low", "close"}
+    if not need.issubset(cols):
+        # tentar renomear se vierem como maiúsculas
+        try:
+            c = df.rename(columns={"High": "high", "Low": "low", "Close": "close"}).copy()
+        except Exception:
+            return out
+    else:
+        c = df.copy()
+    # ADX(14)
+    try:
+        adx_series = adx(c["high"], c["low"], c["close"], 14)
+        adx_last = float(adx_series.dropna().iloc[-1]) if not adx_series.dropna().empty else None
+        out["adx"] = adx_last
+    except Exception:
+        adx_last = None
+    # BB width
+    try:
+        mid, up, lo = bollinger(c["close"], 20, 2.0)
+        bb_width = ((up - lo) / (mid.replace(0, np.nan))).replace([np.inf, -np.inf], np.nan)
+        out["bb_width"] = float(bb_width.dropna().iloc[-1]) if not bb_width.dropna().empty else None
+    except Exception:
+        pass
+    # returns volatility (20)
+    try:
+        ret = c["close"].pct_change().rolling(20).std()
+        out["returns_vol_20"] = float(ret.dropna().iloc[-1]) if not ret.dropna().empty else None
+    except Exception:
+        pass
+    # Trend strength classification (baseado em ADX)
+    ts = "unknown"
+    if adx_last is not None:
+        if adx_last >= 30:
+            ts = "strong_trend"
+        elif adx_last >= 20:
+            ts = "trend"
+        else:
+            ts = "range"
+    out["trend_strength"] = ts
+    # Volatility bucket
+    vol = out.get("returns_vol_20")
+    if vol is not None:
+        if vol >= 0.010:  # ~1%
+            vol_bucket = "high"
+        elif vol >= 0.004:
+            vol_bucket = "medium"
+        else:
+            vol_bucket = "low"
+    else:
+        # fallback baseado em bb_width relativa
+        bbw = out.get("bb_width") or 0
+        if bbw >= 0.02:
+            vol_bucket = "high"
+        elif bbw >= 0.008:
+            vol_bucket = "medium"
+        else:
+            vol_bucket = "low"
+    out["volatility"] = vol_bucket
+    out["regime_name"] = f"{ts}:{vol_bucket}"
+    return out
+
 def ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
 
