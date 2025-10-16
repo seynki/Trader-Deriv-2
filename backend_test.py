@@ -57,13 +57,12 @@ def test_phase1_decision_engine():
     
     test_results = {
         "deriv_connectivity": False,
-        "backtest_default": False,
-        "sensitivity_bandwidth": False,
-        "sensitivity_reentry": False,
-        "htf_factor_3": False,
-        "htf_factor_8": False,
-        "edge_case_small_count": False,
-        "edge_case_5m_granularity": False
+        "strategy_start": False,
+        "strategy_status_running": False,
+        "strategy_status_updating": False,
+        "deriv_proposal_compatibility": False,
+        "endpoints_not_broken": False,
+        "strategy_stop": False
     }
     
     json_responses = {}
