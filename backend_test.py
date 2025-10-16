@@ -56,7 +56,7 @@ def test_rsi_reinforced_backtest():
     5) Edge cases
     """
     
-    base_url = "https://trade-precision-2.preview.emergentagent.com"
+    base_url = "https://market-regime.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -644,7 +644,7 @@ def test_riskmanager_no_sell_at_loss():
     5) Registrar IDs e tempos.
     """
     
-    base_url = "https://trade-precision-2.preview.emergentagent.com"
+    base_url = "https://market-regime.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -1097,7 +1097,7 @@ def test_riskmanager_take_profit_immediate():
     Execute the RiskManager Take Profit immediate test plan as requested in Portuguese review
     """
     
-    base_url = "https://trade-precision-2.preview.emergentagent.com"
+    base_url = "https://market-regime.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -1637,7 +1637,7 @@ def test_ml_stop_loss_system():
     Execute the ML Stop Loss Inteligente System validation test plan
     """
     
-    base_url = "https://trade-precision-2.preview.emergentagent.com"
+    base_url = "https://market-regime.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
@@ -2053,7 +2053,7 @@ def test_ml_engine_and_risk_stops():
     Execute the ML Engine + Risk Stops validation test plan
     """
     
-    base_url = "https://trade-precision-2.preview.emergentagent.com"
+    base_url = "https://market-regime.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})

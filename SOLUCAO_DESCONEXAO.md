@@ -6,7 +6,7 @@ A aplicação mostra "Desconectado" quando rodando localmente com docker-compose
 ## Causas Identificadas
 
 ### 1. Configuração de URL Incorreta
-- O arquivo `/frontend/.env` aponta para `https://trade-precision-2.preview.emergentagent.com`  
+- O arquivo `/frontend/.env` aponta para `https://market-regime.preview.emergentagent.com`  
 - Quando roda localmente, deveria apontar para `http://localhost:8001`
 
 ### 2. Erro no Código JavaScript 
@@ -81,8 +81,8 @@ Após aplicar uma das soluções, teste:
 - WebSocket: `ws://localhost:8001/api/ws/ticks`
 
 ### Produção (Emergent):
-- Frontend: `https://trade-precision-2.preview.emergentagent.com`
-- Backend API: `https://trade-precision-2.preview.emergentagent.com/api`
+- Frontend: `https://market-regime.preview.emergentagent.com`
+- Backend API: `https://market-regime.preview.emergentagent.com/api`
 - WebSocket: `wss://fica-desconectado.preview.emergentagent.com/api/ws/ticks`
 
 ## Logs para Debug

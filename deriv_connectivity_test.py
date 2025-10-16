@@ -31,7 +31,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 class DerivConnectivityTester:
-    def __init__(self, base_url="https://trade-precision-2.preview.emergentagent.com"):
+    def __init__(self, base_url="https://market-regime.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0
