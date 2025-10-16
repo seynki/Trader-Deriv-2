@@ -25,16 +25,15 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
-def test_rsi_reinforced_backtest():
+def test_phase1_decision_engine():
     """
-    Test RSI Reinforced Backtest Endpoint
+    Test Phase 1: Estratégias + Decision Engine + Regime
     
     Sequência de testes conforme review request português:
-    1) Saúde inicial - GET /api/deriv/status
-    2) Backtest padrão (config A+D default)
-    3) Sensibilidade de parâmetros (bandwidth e reentry)
-    4) Multi-timeframe (HTF) efeito
-    5) Edge cases
+    1) Confirmar saúde: GET /api/deriv/status
+    2) Iniciar StrategyRunner: POST /api/strategy/start → aguardar 6-10s → GET /api/strategy/status 2-3x
+    3) Checar compatibilidade Deriv: POST /api/deriv/proposal
+    4) Verificar que novas rotas não quebraram endpoints existentes
     """
     
     base_url = "https://market-regime.preview.emergentagent.com"
