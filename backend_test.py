@@ -2481,24 +2481,24 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("📊 TESTE RSI REINFORCED BACKTEST ENDPOINT")
+    print("🚀 TESTE PHASE 1: ESTRATÉGIAS + DECISION ENGINE + REGIME")
     print("="*70)
     
     try:
-        success, results, responses = test_rsi_reinforced_backtest()
+        success, results, responses = test_phase1_decision_engine()
         
         if success:
-            print("\n🎉 TESTE RSI REINFORCED CONCLUÍDO COM SUCESSO!")
-            print("✅ Saúde inicial: Deriv API conectada e autenticada")
-            print("✅ Backtest padrão: Executado com campos obrigatórios")
-            print("✅ Sensibilidade parâmetros: min_bandwidth e reentry_only testados")
-            print("✅ Multi-timeframe: HTF factors 3 e 8 testados")
-            print("✅ Edge cases: count=200 e granularity=300 processados")
-            print("✅ Endpoint estável: Sem 500/timeout durante todos os testes")
+            print("\n🎉 TESTE PHASE 1 CONCLUÍDO COM SUCESSO!")
+            print("✅ Saúde do sistema: GET /api/deriv/status funcionando")
+            print("✅ StrategyRunner: POST /api/strategy/start iniciando corretamente")
+            print("✅ Status atualizando: running=true, last_run_at atualizando")
+            print("✅ Compatibilidade Deriv: POST /api/deriv/proposal funcionando")
+            print("✅ Endpoints estáveis: Importações não quebraram endpoints existentes")
+            print("✅ Decision Engine: Integração funcionando sem erros")
         else:
-            print("\n❌ TESTE RSI REINFORCED FALHOU!")
-            print("⚠️  Verificar implementação do endpoint RSI Reinforced")
-            print("🚨 Possíveis problemas: conectividade, parâmetros ou processamento")
+            print("\n❌ TESTE PHASE 1 FALHOU!")
+            print("⚠️  Verificar implementação da Phase 1")
+            print("🚨 Possíveis problemas: decision_engine, strategies ou integração")
             
         # Exit with appropriate code
         sys.exit(0 if success else 1)
