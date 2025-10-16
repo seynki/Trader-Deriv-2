@@ -309,6 +309,30 @@
 ##       -agent: "testing"
 ##       -comment: "TESTE DE CONECTIVIDADE FRONTEND CONCLUÍDO COM SUCESSO (2025-08-28): ✅ Página carrega corretamente sem erros de compilação ✅ Status mostra 'Conectado à Deriv (DEMO)' ao invés de 'Desconectado' ✅ Todos os índices de volatilidade (R_10, R_25, R_50, R_75, R_100) são clicáveis sem erros ✅ Nenhum erro crítico de WebSocket detectado ✅ Interface funcional e responsiva ✅ Corrigido erro de compilação React hooks exhaustive-deps. PROBLEMA DE DESCONEXÃO RESOLVIDO! O frontend agora se conecta corretamente ao backend da Deriv ao invés do backend da plataforma Emergent. Minor: Alguns 400 errors para símbolos inválidos (CRYETHUSD, FRXUSDJPY, US30) são esperados pois não são símbolos válidos da Deriv."
 ## metadata:
+## backend:
+##   - task: "Phase 1: Estratégias + Decision Engine + Regime"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/strategies/*, /app/backend/decision_engine.py, /app/backend/ml_utils.py, /app/backend/config/config.json, /app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Fase 1 concluída: 1) Centralizado indicadores e criado detect_market_regime() em ml_utils.py 2) Nova pasta backend/strategies com BaseStrategy + (Hybrid, RSIReinforced, MACrossover, RiverStrategy, MLEngine) + registry 3) Criado decision_engine.py (votação ponderada com pesos em backend/config/config.json) 4) Integração mínima no StrategyRunner: detecta regime e usa DecisionEngine; fallback para lógica antiga se necessário. Mantida conexão Deriv intacta."
+##
+## test_plan:
+##   current_focus:
+##     - "Phase 1: Estratégias + Decision Engine + Regime"
+##   stuck_tasks:
+##     - "None"
+##   test_all: false
+##   test_priority: "high_first"
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor validar backend após Fase 1: 1) GET /api/deriv/status (connected/authenticated) 2) POST /api/strategy/start (modo paper default) e monitorar /api/strategy/status por ~10-20s; verificar que a decisão pode vir do DecisionEngine (last_reason contém 'DecisionEngine') ou cair no fallback sem quebrar. 3) Verificar que nenhum endpoint existente foi quebrado (e.g., /api/deriv/proposal, /api/deriv/buy não precisam executar compra; apenas proposta). Não testar frontend agora."
+
 ##   created_by: "main_agent"
 ##   version: "1.0"
 ##   test_sequence: 7
