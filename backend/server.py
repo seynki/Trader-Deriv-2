@@ -1863,7 +1863,34 @@ class StrategyRunner:
                 except Exception:
                     pass
 
-                signal = self._decide_signal(candles)
+                # Build pandas DataFrame for decision engine and regime
+                try:
+                    df = pd.DataFrame(candles)
+                    if 'timestamp' in df.columns:
+                        df.index = pd.to_datetime(df['timestamp'], unit='s')
+                    elif 'epoch' in df.columns:
+                        df.index = pd.to_datetime(df['epoch'], unit='s')
+                    else:
+                        df.index = pd.date_range(start='2024-01-01', periods=len(df), freq='1min')
+                except Exception:
+                    df = pd.DataFrame(candles)
+                # Detect market regime
+                regime = detect_market_regime(df) if callable(detect_market_regime) else None
+                # Decision engine (fallback to old logic if missing)
+                signal = None
+                if deceng is not None:
+                    try:
+                        engine = deceng.WeightedVotingDecisionEngine()
+                        ctx = deceng.StrategyContext(symbol=self.params.symbol, timeframe=f"{self.params.granularity}s", regime=regime)
+                        res = engine.evaluate(df, ctx)
+                        if res.get('decision') in ('RISE','FALL'):
+                            signal = {"side": res['decision'], "reason": f"DecisionEngine score={res.get('score'):.2f}"}
+                            self.last_reason = f"DecisionEngine: {res.get('votes')}"
+                    except Exception as e:
+                        logger.warning(f"Decision engine fallback: {e}")
+                        signal = None
+                if signal is None:
+                    signal = self._decide_signal(candles)
                 if not signal:
                     await asyncio.sleep(cooldown_seconds)
                     continue
