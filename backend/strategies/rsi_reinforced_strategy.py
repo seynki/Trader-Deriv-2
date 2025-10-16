@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import pandas as pd
 from .base import BaseStrategy, StrategyContext, StrategyDecision
-from backend.rsi_reinforced import RsiReinforcedParams, generate_signals
+from rsi_reinforced import RsiReinforcedParams, generate_signals
 
 
 class RSIReinforcedStrategy(BaseStrategy):
