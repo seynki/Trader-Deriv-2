@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 import pandas as pd
-from .strategies import StrategyContext
-from .strategies import registry as strat_registry
+from strategies import StrategyContext
+from strategies import registry as strat_registry
 
 CONFIG_DIR = Path(__file__).parent / "config"
 CONFIG_DIR.mkdir(exist_ok=True)
