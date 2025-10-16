@@ -42,6 +42,18 @@ app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+# Decision engine (weighted voting)
+try:
+    import decision_engine as deceng
+except Exception as _de_err:
+    deceng = None
+
+# Regime detection from ml_utils
+try:
+    from ml_utils import detect_market_regime
+except Exception:
+    detect_market_regime = None
+
 
 # -------------------------------------------------------------
 # Deriv Integration (Demo-ready): WS ticks + proposal/buy + tracking
