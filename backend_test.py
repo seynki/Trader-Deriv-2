@@ -44,16 +44,16 @@ def test_phase1_decision_engine():
     def log(message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
-    log("\n" + "📊" + "="*68)
-    log("TESTE RSI REINFORCED BACKTEST ENDPOINT")
-    log("📊" + "="*68)
+    log("\n" + "🚀" + "="*68)
+    log("TESTE PHASE 1: ESTRATÉGIAS + DECISION ENGINE + REGIME")
+    log("🚀" + "="*68)
     log("📋 Test Plan (Portuguese Review Request):")
-    log("   1) Saúde inicial - GET /api/deriv/status → aguardar 3-5s pós-start se necessário")
-    log("   2) Backtest padrão (config A+D default)")
-    log("   3) Sensibilidade de parâmetros (bandwidth e reentry)")
-    log("   4) Multi-timeframe (HTF) efeito")
-    log("   5) Edge cases")
-    log("   Validar resposta 200 com campos: total_signals (>=0), wins, losses, winrate (0..1), equity_final, max_drawdown")
+    log("   1) Confirmar saúde: GET /api/deriv/status deve retornar 200 com connected/authenticated")
+    log("   2) Iniciar StrategyRunner: POST /api/strategy/start → aguardar 6-10s → GET /api/strategy/status 2-3x")
+    log("      - Esperado: running=true, last_run_at atualizando")
+    log("      - last_reason pode conter 'DecisionEngine' se rota nova for usada")
+    log("   3) Checar compatibilidade Deriv: POST /api/deriv/proposal com R_10 CALL")
+    log("   4) Verificar que novas rotas não quebraram endpoints existentes")
     
     test_results = {
         "deriv_connectivity": False,
