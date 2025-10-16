@@ -107,70 +107,38 @@ def test_phase1_decision_engine():
             log(f"❌ Test 1 FALHOU - Exception: {e}")
             json_responses["deriv_status"] = {"error": str(e)}
         
-        # Test 2: Backtest padrão (config A+D default)
-        log("\n🔍 TEST 2: Backtest padrão (config A+D default)")
-        log("   POST /api/indicators/rsi_reinforced/backtest")
+        # Test 2: POST /api/strategy/start - Iniciar StrategyRunner
+        log("\n🔍 TEST 2: Iniciar StrategyRunner")
+        log("   POST /api/strategy/start com payload padrão (ou vazio)")
         
-        default_payload = {
-            "symbol": "R_100",
-            "granularity": 60,
-            "count": 1200,
-            "rsi_period": 14,
-            "rsi_bb_length": 20,
-            "rsi_bb_k": 2.0,
-            "higher_tf_factor": 5,
-            "confirm_with_midline": True,
-            "confirm_with_slope": True,
-            "slope_lookback": 3,
-            "min_bandwidth": 10.0,
-            "reentry_only": True,
-            "distance_from_mid_min": 8.0,
-            "horizon": 3,
-            "payout_ratio": 0.95
-        }
+        # Try with empty payload first (default)
+        start_payload = {}
         
-        log(f"   Payload: {json.dumps(default_payload, indent=2)}")
+        log(f"   Payload: {json.dumps(start_payload, indent=2)}")
         
-        response = session.post(f"{api_url}/indicators/rsi_reinforced/backtest", json=default_payload, timeout=30)
-        log(f"   POST /api/indicators/rsi_reinforced/backtest (default): {response.status_code}")
-        
-        if response.status_code == 200:
-            backtest_data = response.json()
-            json_responses["backtest_default"] = backtest_data
-            log(f"   Response: {json.dumps(backtest_data, indent=2)}")
+        try:
+            response = session.post(f"{api_url}/strategy/start", json=start_payload, timeout=15)
+            log(f"   POST /api/strategy/start: {response.status_code}")
             
-            # Validate required fields
-            required_fields = ["total_signals", "wins", "losses", "winrate", "equity_final", "max_drawdown"]
-            all_fields_present = all(field in backtest_data for field in required_fields)
-            
-            if all_fields_present:
-                total_signals = backtest_data.get('total_signals', 0)
-                winrate = backtest_data.get('winrate', 0.0)
+            if response.status_code == 200:
+                start_data = response.json()
+                json_responses["strategy_start"] = start_data
+                log(f"   Response: {json.dumps(start_data, indent=2)}")
                 
-                log(f"   📊 Backtest Results:")
-                log(f"      Total Signals: {total_signals}")
-                log(f"      Wins: {backtest_data.get('wins', 0)}")
-                log(f"      Losses: {backtest_data.get('losses', 0)}")
-                log(f"      Winrate: {winrate:.3f}")
-                log(f"      Equity Final: {backtest_data.get('equity_final', 0.0)}")
-                log(f"      Max Drawdown: {backtest_data.get('max_drawdown', 0.0)}")
-                
-                if total_signals >= 0 and 0.0 <= winrate <= 1.0:
-                    test_results["backtest_default"] = True
-                    log("✅ Test 2 OK: Backtest padrão executado com sucesso")
-                else:
-                    log(f"❌ Test 2 FALHOU: Valores inválidos - signals={total_signals}, winrate={winrate}")
+                test_results["strategy_start"] = True
+                log("✅ Test 2 OK: StrategyRunner iniciado com sucesso")
             else:
-                missing_fields = [f for f in required_fields if f not in backtest_data]
-                log(f"❌ Test 2 FALHOU: Campos obrigatórios ausentes: {missing_fields}")
-        else:
-            log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
-            try:
-                error_data = response.json()
-                json_responses["backtest_default"] = error_data
-                log(f"   Error: {error_data}")
-            except:
-                log(f"   Error text: {response.text}")
+                log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategy_start"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    json_responses["strategy_start"] = {"error": response.text}
+        except Exception as e:
+            log(f"❌ Test 2 FALHOU - Exception: {e}")
+            json_responses["strategy_start"] = {"error": str(e)}
         
         # Test 3: Sensibilidade de parâmetros (bandwidth)
         log("\n🔍 TEST 3: Sensibilidade de parâmetros - min_bandwidth")
