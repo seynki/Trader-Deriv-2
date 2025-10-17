@@ -773,6 +773,107 @@ async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None,
                 chosen_symbol = alt
 
     return {
+class StrategyAuditRequest(BaseModel):
+    strategyId: str = "decision_engine"  # currently supports 'decision_engine'
+    symbol: str = "R_10"
+    timeframe: str = "1m"  # e.g., '1m', '3m', '5m'
+    dateFrom: Optional[str] = None
+    dateTo: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+
+class StrategyAuditResponse(BaseModel):
+    id: str
+    strategyId: str
+    symbol: str
+    timeframe: str
+    metrics: Dict[str, Any]
+    saved_to: str
+    created_at: int
+
+@api_router.post("/strategies/audit")
+async def strategies_audit(req: StrategyAuditRequest):
+    """Executa um audit/backtest simples usando dados locais CSV (se existir) e salva métricas em backtests/results.json.
+    Para decision_engine, usa WeightedVotingDecisionEngine com pesos de config atual.
+    """
+    # 1) Tentar CSV local
+    df = load_csv_ohlcv(req.symbol, req.timeframe)
+    if df is None or df.empty:
+        # fallback: obter candles via Deriv para permitir teste rápido mesmo sem CSVs
+        try:
+            gran = map_timeframe_to_granularity(req.timeframe)
+            candles = await _strategy._get_candles(req.symbol, gran, 1200)
+            if not candles or len(candles) < 100:
+                raise HTTPException(status_code=400, detail="Dados insuficientes para audit")
+            df = pd.DataFrame(candles)
+            if 'timestamp' in df.columns:
+                df.index = pd.to_datetime(df['timestamp'], unit='s')
+            elif 'epoch' in df.columns:
+                df.index = pd.to_datetime(df['epoch'], unit='s')
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Falha ao carregar dados: {e}")
+    # 2) Slice por datas
+    df = slice_df_date(df, req.dateFrom, req.dateTo)
+    if len(df) < 100:
+        raise HTTPException(status_code=400, detail="Poucos candles após filtros")
+    # 3) Construir engine
+    if req.strategyId == "decision_engine":
+        if deceng is None:
+            raise HTTPException(status_code=500, detail="Decision engine indisponível")
+        cfg = deceng.load_config()
+        def make_engine(_cfg=None):
+            return deceng.WeightedVotingDecisionEngine(cfg)
+    else:
+        raise HTTPException(status_code=400, detail=f"Estratégia não suportada: {req.strategyId}")
+    # 4) Rodar backtest
+    metrics = decision_engine_backtest(df, make_engine, cfg)
+    # 5) Persistir
+    run_id = str(uuid.uuid4())
+    record = {
+        "id": run_id,
+        "strategyId": req.strategyId,
+        "symbol": req.symbol,
+        "timeframe": req.timeframe,
+        "dateFrom": req.dateFrom,
+        "dateTo": req.dateTo,
+        "params": req.params or {},
+        "metrics": {
+            **metrics,
+            "win_rate": round(float(metrics.get("win_rate", 0.0)), 4),
+            "pnl_total": round(float(metrics.get("pnl_total", 0.0)), 4),
+            "ev_per_trade": round(float(metrics.get("ev_per_trade", 0.0)), 4),
+            "max_drawdown": round(float(metrics.get("max_drawdown", 0.0)), 4),
+        },
+        "created_at": int(time.time()),
+    }
+    append_run_to_results(record)
+    return StrategyAuditResponse(
+        id=run_id,
+        strategyId=req.strategyId,
+        symbol=req.symbol,
+        timeframe=req.timeframe,
+        metrics=record["metrics"],
+        saved_to=str(Path(__file__).parent / "backtests" / "results.json"),
+        created_at=record["created_at"],
+    )
+
+@api_router.get("/strategies/report")
+async def strategies_report(id: Optional[str] = None):
+    """Retorna relatório consolidado. Se id for fornecido, retorna o run específico; caso contrário, todos os runs."""
+    if id:
+        run = load_run_from_results(id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run não encontrado")
+        return run
+    # retornar tudo
+    try:
+        import json
+        p = Path(__file__).parent / "backtests" / "results.json"
+        return json.loads(p.read_text())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao ler resultados: {e}")
+
         "tried": tried,
         "first_supported": chosen_symbol,
         "results": results,
