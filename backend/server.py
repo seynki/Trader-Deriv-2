@@ -288,6 +288,12 @@ class DerivStatus(BaseModel):
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
+from backtesting_utils import map_timeframe_to_granularity, load_csv_ohlcv, slice_df_date, decision_engine_backtest, append_run_to_results, load_run_from_results
+try:
+    from optuna_optimizer import optimize_decision_engine
+except Exception:
+    optimize_decision_engine = None
+
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class StatusCheckCreate(BaseModel):
