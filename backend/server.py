@@ -880,12 +880,6 @@ async def strategies_report(id: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao ler resultados: {e}")
 
-        "tried": tried,
-        "first_supported": chosen_symbol,
-        "results": results,
-        "product_type": product_type or "basic",
-    }
-
 @api_router.post("/deriv/proposal")
 async def deriv_proposal(req: BuyRequest):
     if not _deriv.connected:
