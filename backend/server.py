@@ -2641,7 +2641,7 @@ async def river_backtest_run(request: RiverBacktestRequest):
         low_prices = [float(c["low"]) for c in candles_data]
         
         adx_values = IND_adx_list(high_prices, low_prices, close_prices)
-        rsi_values = _rsi(close_prices)
+        rsi_values = IND_rsi_list(close_prices)
         bb_values = IND_bollinger_dict(close_prices, 20, 2.0)
         
         results = []
