@@ -1306,30 +1306,17 @@ class StrategyRunner:
                     return True  # Bloquear: RSI overextended
                         
             # 🎯 STOP LOSS 3: Divergência MACD (sinal de reversão)
-            if self.params.macd_divergence_stop and len(close) >= 26:
-                macd_line = []
-                macd_signal = []
-                for i in range(26, len(close)):
-                    # Using ta_ema would require series; keep simplified divergence calc or skip
-                    ema_slow = _ema(close[:i+1], 26)
-                    if ema_fast is not None and ema_slow is not None:
-                        macd_val = ema_fast - ema_slow
-                        macd_line.append(macd_val)
-                        
-                if len(macd_line) >= 9:
-                    # Calcular sinal MACD
-                    for i in range(9, len(macd_line)):
-                        macd_sig = _ema(macd_line[:i+1], 9)
-                        if macd_sig is not None:
-                            macd_signal.append(macd_sig)
-                            
-                    # Verificar divergência (MACD caindo while preço subindo ou vice-versa) 
-                    if len(macd_signal) >= 5:
-                        recent_macd = macd_signal[-5:]
-                        recent_prices = close[-5:]
+            if self.params.macd_divergence_stop and len(close) >= 35:
+                # Usar implementação MACD do ml_utils para obter linha e sinal
+                macd_res = IND_macd_dict_list(close, 12, 26, 9)
+                macd_signal_series = macd_res.get("signal") or []
+                # Verificar divergência (MACD caindo enquanto preço sobe ou vice-versa)
+                if len(macd_signal_series) >= 5:
+                    recent_macd = [x for x in macd_signal_series[-5:] if x is not None]
+                    recent_prices = close[-5:]
+                    if len(recent_macd) == 5:
                         macd_trend = recent_macd[-1] - recent_macd[0]
                         price_trend = recent_prices[-1] - recent_prices[0]
-                        
                         # Divergência bearish: preço sobe, MACD desce
                         # Divergência bullish: preço desce, MACD sobe
                         if (price_trend > 0 and macd_trend < -0.001) or (price_trend < 0 and macd_trend > 0.001):
