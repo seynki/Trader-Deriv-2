@@ -931,7 +931,9 @@
 
 ## test_plan:
 ##   current_focus:
-##     - "RiskManager TP-only fix (0.05 USD): vender apenas quando lucro >= +0.05; nunca vender em -0.05"
+##     - "Phase 1 Endpoints: POST /api/strategies/audit"
+##     - "Phase 1 Endpoints: GET /api/strategies/report"
+##     - "Phase 1 Endpoints: GET /api/deriv/status (validation)"
 ##   stuck_tasks:
 ##     - "None"
 ##   test_all: false
