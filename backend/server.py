@@ -1728,7 +1728,7 @@ class StrategyRunner:
 
         rsi_arr = _rsi(close)
         last_rsi = next((x for x in reversed(rsi_arr) if x is not None), None)
-        bb = _bollinger(close, 20, self.params.bbands_k)
+        bb = IND_bollinger_dict(close, 20, self.params.bbands_k)
         last_price = close[-1]
         last_upper = next((x for x in reversed(bb["upper"]) if x is not None), None)
         last_lower = next((x for x in reversed(bb["lower"]) if x is not None), None)
