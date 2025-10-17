@@ -773,6 +773,12 @@ async def deriv_contracts_for_smart(symbol: str, currency: Optional[str] = None,
                 chosen_symbol = alt
 
     return {
+        "tried": tried,
+        "first_supported": chosen_symbol,
+        "results": results,
+        "product_type": product_type or "basic",
+    }
+
 class StrategyAuditRequest(BaseModel):
     strategyId: str = "decision_engine"  # currently supports 'decision_engine'
     symbol: str = "R_10"
