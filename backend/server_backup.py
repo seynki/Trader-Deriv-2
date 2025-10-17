@@ -58,6 +58,60 @@ SUPPORTED_SYMBOLS = [
 ]
 
 class BuyRequest(BaseModel):
+
+# Regime/technicals from ml_utils (for legacy runner too)
+try:
+    from ml_utils import (
+        rsi as ta_rsi,
+        macd as ta_macd,
+        bollinger as ta_bollinger,
+        adx as ta_adx,
+        ema as ta_ema,
+        sma as ta_sma,
+    )
+except Exception:
+    ta_rsi = ta_macd = ta_bollinger = ta_adx = ta_ema = ta_sma = None
+
+# Simple wrappers to adapt pandas-based indicators to list outputs
+try:
+    import pandas as _pd
+    def IND_adx_list(high, low, close, period: int = 14):
+        s = ta_adx(_pd.Series(high), _pd.Series(low), _pd.Series(close), period) if ta_adx else _pd.Series([])
+        return s.tolist()
+    def IND_rsi_list(close, period: int = 14):
+        s = ta_rsi(_pd.Series(close), period) if ta_rsi else _pd.Series([])
+        return s.tolist()
+    def IND_macd_dict_list(close, fast: int, slow: int, signal: int):
+        if ta_macd:
+            line, sig, hist = ta_macd(_pd.Series(close), fast, slow, signal)
+            return {"line": line.tolist(), "signal": sig.tolist(), "hist": hist.tolist()}
+        return {"line": [], "signal": [], "hist": []}
+    def IND_bollinger_dict(close, period: int, k: float):
+        if ta_bollinger:
+            mid, up, lo = ta_bollinger(_pd.Series(close), period, k)
+            return {"upper": up.tolist(), "mid": mid.tolist(), "lower": lo.tolist()}
+        return {"upper": [], "mid": [], "lower": []}
+    def IND_sma_last(arr, n: int):
+        if ta_sma:
+            s = ta_sma(_pd.Series(arr), n)
+            try:
+                v = s.iloc[-1]
+                return float(v) if _pd.notna(v) else None
+            except Exception:
+                return None
+        return None
+except Exception:
+    def IND_adx_list(*args, **kwargs):
+        return []
+    def IND_rsi_list(*args, **kwargs):
+        return []
+    def IND_macd_dict_list(*args, **kwargs):
+        return {"line": [], "signal": [], "hist": []}
+    def IND_bollinger_dict(*args, **kwargs):
+        return {"upper": [], "mid": [], "lower": []}
+    def IND_sma_last(*args, **kwargs):
+        return None
+
     # General
     symbol: str
     type: Optional[str] = "CALLPUT"  # CALLPUT | ACCUMULATOR | TURBOS | MULTIPLIERS
