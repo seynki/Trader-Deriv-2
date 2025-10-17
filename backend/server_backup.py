@@ -948,7 +948,7 @@ class StrategyRunner:
         adx_arr = IND_adx_list(high, low, close)
         last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
 
-        ma_fast = _sma(close, self.params.fast_ma)
+        ma_fast = IND_sma_last(close, self.params.fast_ma)
         ma_slow = _sma(close, self.params.slow_ma)
         prev_fast = _sma(close[:-1], self.params.fast_ma)
         prev_slow = _sma(close[:-1], self.params.slow_ma)
