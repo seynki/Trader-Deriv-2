@@ -1294,7 +1294,7 @@ class StrategyRunner:
             low = [float(c["low"]) for c in candles]
             
             # 🎯 STOP LOSS 1: ADX muito fraco (sem tendência)
-            adx_values = _adx(high, low, close, 14)
+            adx_values = IND_adx_list(high, low, close, 14)
             last_adx = adx_values[-1] if adx_values else None
             if last_adx is not None and last_adx < self.params.min_adx_for_trade:
                 return True  # Bloquear: ADX muito fraco
