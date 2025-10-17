@@ -54,6 +54,48 @@ try:
         detect_market_regime,
         rsi as ta_rsi,
         macd as ta_macd,
+
+# Helper wrappers to use ml_utils (pandas-based) with existing list-based logic
+# These keep our code simple and avoid duplicating indicator implementations
+try:
+    import pandas as _pd
+    def IND_adx_list(high: List[float], low: List[float], close: List[float], period: int = 14):
+        s = ta_adx(_pd.Series(high), _pd.Series(low), _pd.Series(close), period) if ta_adx else _pd.Series([])
+        return s.tolist()
+    def IND_rsi_list(close: List[float], period: int = 14):
+        s = ta_rsi(_pd.Series(close), period) if ta_rsi else _pd.Series([])
+        return s.tolist()
+    def IND_macd_dict_list(close: List[float], fast: int, slow: int, signal: int):
+        if ta_macd:
+            line, sig, hist = ta_macd(_pd.Series(close), fast, slow, signal)
+            return {"line": line.tolist(), "signal": sig.tolist(), "hist": hist.tolist()}
+        return {"line": [], "signal": [], "hist": []}
+    def IND_bollinger_dict(close: List[float], period: int, k: float):
+        if ta_bollinger:
+            mid, up, lo = ta_bollinger(_pd.Series(close), period, k)
+            return {"upper": up.tolist(), "mid": mid.tolist(), "lower": lo.tolist()}
+        return {"upper": [], "mid": [], "lower": []}
+    def IND_sma_last(arr: List[float], n: int) -> Optional[float]:
+        if ta_sma:
+            s = ta_sma(_pd.Series(arr), n)
+            try:
+                v = s.iloc[-1]
+                return float(v) if _pd.notna(v) else None
+            except Exception:
+                return None
+        return None
+except Exception:
+    def IND_adx_list(*args, **kwargs):
+        return []
+    def IND_rsi_list(*args, **kwargs):
+        return []
+    def IND_macd_dict_list(*args, **kwargs):
+        return {"line": [], "signal": [], "hist": []}
+    def IND_bollinger_dict(*args, **kwargs):
+        return {"upper": [], "mid": [], "lower": []}
+    def IND_sma_last(*args, **kwargs):
+        return None
+
         bollinger as ta_bollinger,
         adx as ta_adx,
         ema as ta_ema,
