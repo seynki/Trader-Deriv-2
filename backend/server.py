@@ -1301,7 +1301,7 @@ class StrategyRunner:
                 
             # 🎯 STOP LOSS 2: RSI overextended (mercado sobrecomprado/sobrevendido)
             if self.params.rsi_overextended_stop:
-                rsi_values = _rsi(close, 14)
+                rsi_values = IND_rsi_list(close, 14)
                 last_rsi = next((x for x in reversed(rsi_values) if x is not None), None)
                 if last_rsi is not None and (last_rsi > 85 or last_rsi < 15):  # Condições extremas
                     return True  # Bloquear: RSI overextended
