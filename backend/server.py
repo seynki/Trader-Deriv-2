@@ -1311,7 +1311,7 @@ class StrategyRunner:
                 macd_line = []
                 macd_signal = []
                 for i in range(26, len(close)):
-                    ema_fast = _ema(close[:i+1], 12)
+                    # Using ta_ema would require series; keep simplified divergence calc or skip
                     ema_slow = _ema(close[:i+1], 26)
                     if ema_fast is not None and ema_slow is not None:
                         macd_val = ema_fast - ema_slow
