@@ -54,6 +54,14 @@ try:
         detect_market_regime,
         rsi as ta_rsi,
         macd as ta_macd,
+        bollinger as ta_bollinger,
+        adx as ta_adx,
+        ema as ta_ema,
+        sma as ta_sma,
+    )
+except Exception:
+    detect_market_regime = None
+    ta_rsi = ta_macd = ta_bollinger = ta_adx = ta_ema = ta_sma = None
 
 # Helper wrappers to use ml_utils (pandas-based) with existing list-based logic
 # These keep our code simple and avoid duplicating indicator implementations
@@ -95,15 +103,6 @@ except Exception:
         return {"upper": [], "mid": [], "lower": []}
     def IND_sma_last(*args, **kwargs):
         return None
-
-        bollinger as ta_bollinger,
-        adx as ta_adx,
-        ema as ta_ema,
-        sma as ta_sma,
-    )
-except Exception:
-    detect_market_regime = None
-    ta_rsi = ta_macd = ta_bollinger = ta_adx = ta_ema = ta_sma = None
 
 
 # -------------------------------------------------------------
