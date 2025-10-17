@@ -945,7 +945,7 @@ class StrategyRunner:
         high = [float(c.get("high")) for c in candles]
         low = [float(c.get("low")) for c in candles]
 
-        adx_arr = _adx(high, low, close)
+        adx_arr = IND_adx_list(high, low, close)
         last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
 
         ma_fast = _sma(close, self.params.fast_ma)
