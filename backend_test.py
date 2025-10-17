@@ -2864,24 +2864,28 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🚀 TESTE PHASE 1: ESTRATÉGIAS + DECISION ENGINE + REGIME")
+    print("🚀 TESTE PHASE 1: NOVOS ENDPOINTS ESTRATÉGIAS")
     print("="*70)
     
     try:
-        success, results, responses = test_phase1_decision_engine()
+        success, results, responses = test_phase1_new_endpoints()
         
         if success:
-            print("\n🎉 TESTE PHASE 1 CONCLUÍDO COM SUCESSO!")
-            print("✅ Saúde do sistema: GET /api/deriv/status funcionando")
-            print("✅ StrategyRunner: POST /api/strategy/start iniciando corretamente")
-            print("✅ Status atualizando: running=true, last_run_at atualizando")
-            print("✅ Compatibilidade Deriv: POST /api/deriv/proposal funcionando")
-            print("✅ Endpoints estáveis: Importações não quebraram endpoints existentes")
-            print("✅ Decision Engine: Integração funcionando sem erros")
+            print("\n🎉 TESTE PHASE 1 NOVOS ENDPOINTS CONCLUÍDO COM SUCESSO!")
+            print("✅ POST /api/strategies/audit: Funcionando e retornando métricas")
+            print("✅ backend/backtests/results.json: Atualizado com novos runs")
+            print("✅ GET /api/strategies/report: Funcionando e contendo runs")
+            print("✅ GET /api/deriv/status: Funcionando sem quebrar conexão")
+            print("✅ Fallback para Deriv WS: Funcionando quando CSV local não existe")
         else:
-            print("\n❌ TESTE PHASE 1 FALHOU!")
-            print("⚠️  Verificar implementação da Phase 1")
-            print("🚨 Possíveis problemas: decision_engine, strategies ou integração")
+            print("\n❌ TESTE PHASE 1 NOVOS ENDPOINTS FALHOU!")
+            print("⚠️  Verificar implementação dos novos endpoints")
+            print("🚨 Possíveis problemas: strategies/audit, strategies/report ou deriv/status")
+            
+            # Show which specific tests failed
+            failed_tests = [k for k, v in results.items() if not v and k != 'error']
+            if failed_tests:
+                print(f"🔍 Testes que falharam: {failed_tests}")
             
         # Exit with appropriate code
         sys.exit(0 if success else 1)
