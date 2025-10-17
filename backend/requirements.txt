@@ -39,3 +39,4 @@ lightgbm>=4.0.0
 # torch removed to keep image lightweight; ML Engine will degrade to LightGBM-only when torch is absent
 tqdm>=4.65.0
 shap>=0.42.0
+optuna>=3.6.0
