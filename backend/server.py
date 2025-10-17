@@ -48,11 +48,20 @@ try:
 except Exception as _de_err:
     deceng = None
 
-# Regime detection from ml_utils
+# Regime detection and technicals from ml_utils
 try:
-    from ml_utils import detect_market_regime
+    from ml_utils import (
+        detect_market_regime,
+        rsi as ta_rsi,
+        macd as ta_macd,
+        bollinger as ta_bollinger,
+        adx as ta_adx,
+        ema as ta_ema,
+        sma as ta_sma,
+    )
 except Exception:
     detect_market_regime = None
+    ta_rsi = ta_macd = ta_bollinger = ta_adx = ta_ema = ta_sma = None
 
 
 # -------------------------------------------------------------
