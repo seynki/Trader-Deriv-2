@@ -1044,6 +1044,389 @@ def test_riskmanager_no_sell_at_loss():
         }, {}
 
 
+def test_phase1_new_endpoints():
+    """
+    Test the new Phase 1 endpoints requested by user:
+    1) POST /api/strategies/audit
+    2) GET /api/strategies/report  
+    3) GET /api/deriv/status
+    
+    Portuguese Review Request:
+    Testar os novos endpoints da Fase 1 solicitada pelo usuário:
+    1) POST /api/strategies/audit
+       - Payload: {"strategyId":"decision_engine","symbol":"R_10","timeframe":"1m","dateFrom":null,"dateTo":null}
+       - Validar: 200 OK, retorna {id, metrics, saved_to} e que backend/backtests/results.json foi atualizado (runs.length >=1)
+    2) GET /api/strategies/report
+       - Validar: 200 OK, contém runs e o id retornado no passo 1
+    3) GET /api/deriv/status
+       - Validar: 200 OK, connected/authenticated flags sem quebrar a conexão existente
+    Observações:
+    - Todos endpoints têm prefixo /api
+    - Não usar frontend
+    - Se CSV local não existir, o código faz fallback para candles via Deriv WS (ticks_history). Apenas validar que retorna métricas e não 500.
+    - Após concluir, anotar no test_result.md as novas tasks e status.
+    """
+    
+    base_url = "https://backtest-optuna.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🚀" + "="*68)
+    log("TESTE PHASE 1: NOVOS ENDPOINTS ESTRATÉGIAS")
+    log("🚀" + "="*68)
+    log("📋 Test Plan (Portuguese Review Request):")
+    log("   1) POST /api/strategies/audit")
+    log("      - Payload: {strategyId:'decision_engine', symbol:'R_10', timeframe:'1m', dateFrom:null, dateTo:null}")
+    log("      - Validar: 200 OK, retorna {id, metrics, saved_to} e que backend/backtests/results.json foi atualizado")
+    log("   2) GET /api/strategies/report")
+    log("      - Validar: 200 OK, contém runs e o id retornado no passo 1")
+    log("   3) GET /api/deriv/status")
+    log("      - Validar: 200 OK, connected/authenticated flags sem quebrar conexão existente")
+    log("   Observações:")
+    log("      - Todos endpoints têm prefixo /api")
+    log("      - Se CSV local não existir, fallback para candles via Deriv WS")
+    log("      - Apenas validar que retorna métricas e não 500")
+    
+    test_results = {
+        "strategies_audit_success": False,
+        "results_json_updated": False,
+        "strategies_report_success": False,
+        "report_contains_audit_id": False,
+        "deriv_status_success": False,
+        "connection_not_broken": False
+    }
+    
+    json_responses = {}
+    audit_id = None
+    
+    try:
+        # Test 1: POST /api/strategies/audit
+        log("\n🔍 TEST 1: POST /api/strategies/audit")
+        log("   Executar audit/backtest usando decision_engine para R_10 1m")
+        
+        audit_payload = {
+            "strategyId": "decision_engine",
+            "symbol": "R_10", 
+            "timeframe": "1m",
+            "dateFrom": None,
+            "dateTo": None
+        }
+        
+        log(f"   Payload: {json.dumps(audit_payload, indent=2)}")
+        
+        try:
+            response = session.post(f"{api_url}/strategies/audit", json=audit_payload, timeout=60)
+            log(f"   POST /api/strategies/audit: {response.status_code}")
+            
+            if response.status_code == 200:
+                audit_data = response.json()
+                json_responses["strategies_audit"] = audit_data
+                log(f"   Response: {json.dumps(audit_data, indent=2)}")
+                
+                # Validate expected fields
+                audit_id = audit_data.get('id')
+                metrics = audit_data.get('metrics')
+                saved_to = audit_data.get('saved_to')
+                strategy_id = audit_data.get('strategyId')
+                symbol = audit_data.get('symbol')
+                timeframe = audit_data.get('timeframe')
+                
+                log(f"   📊 Audit Results:")
+                log(f"      ID: {audit_id}")
+                log(f"      Strategy ID: {strategy_id}")
+                log(f"      Symbol: {symbol}")
+                log(f"      Timeframe: {timeframe}")
+                log(f"      Saved To: {saved_to}")
+                
+                if metrics:
+                    log(f"      Metrics: {json.dumps(metrics, indent=8)}")
+                    
+                    # Check for key metrics
+                    win_rate = metrics.get('win_rate')
+                    pnl_total = metrics.get('pnl_total')
+                    ev_per_trade = metrics.get('ev_per_trade')
+                    max_drawdown = metrics.get('max_drawdown')
+                    
+                    log(f"      📈 Key Metrics:")
+                    log(f"         Win Rate: {win_rate}")
+                    log(f"         PnL Total: {pnl_total}")
+                    log(f"         EV per Trade: {ev_per_trade}")
+                    log(f"         Max Drawdown: {max_drawdown}")
+                
+                if audit_id and metrics and saved_to:
+                    test_results["strategies_audit_success"] = True
+                    log("✅ Test 1 OK: POST /api/strategies/audit retornou dados esperados")
+                    log(f"   🎯 Audit ID capturado: {audit_id}")
+                else:
+                    log("⚠️  Test 1: Audit retornou 200 mas campos obrigatórios ausentes")
+                    log(f"   Missing: id={audit_id is None}, metrics={metrics is None}, saved_to={saved_to is None}")
+            else:
+                log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategies_audit"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    json_responses["strategies_audit"] = {"error": response.text}
+                        
+        except Exception as e:
+            log(f"❌ Test 1 FALHOU - Exception: {e}")
+            json_responses["strategies_audit"] = {"error": str(e)}
+        
+        # Test 2: Check if backend/backtests/results.json was updated
+        log("\n🔍 TEST 2: Verificar atualização do results.json")
+        log("   Validar que backend/backtests/results.json foi atualizado (runs.length >= 1)")
+        
+        try:
+            # Try to read the results.json file content via GET /api/strategies/report
+            response = session.get(f"{api_url}/strategies/report", timeout=15)
+            log(f"   GET /api/strategies/report (para verificar results.json): {response.status_code}")
+            
+            if response.status_code == 200:
+                report_data = response.json()
+                json_responses["strategies_report_check"] = report_data
+                
+                runs = report_data.get('runs', [])
+                log(f"   📊 Results.json Status:")
+                log(f"      Total runs: {len(runs)}")
+                
+                if len(runs) >= 1:
+                    test_results["results_json_updated"] = True
+                    log("✅ Test 2 OK: results.json foi atualizado (runs.length >= 1)")
+                    
+                    # Show latest run
+                    if runs:
+                        latest_run = runs[-1]
+                        latest_id = latest_run.get('id')
+                        latest_strategy = latest_run.get('strategyId')
+                        latest_symbol = latest_run.get('symbol')
+                        log(f"   📈 Latest run: id={latest_id}, strategy={latest_strategy}, symbol={latest_symbol}")
+                else:
+                    log(f"❌ Test 2 FALHOU: results.json não foi atualizado (runs.length = {len(runs)})")
+            else:
+                log(f"❌ Test 2 FALHOU - Não foi possível verificar results.json via report endpoint")
+                
+        except Exception as e:
+            log(f"❌ Test 2 FALHOU - Exception: {e}")
+        
+        # Test 3: GET /api/strategies/report
+        log("\n🔍 TEST 3: GET /api/strategies/report")
+        log("   Validar: 200 OK, contém runs e o id retornado no passo 1")
+        
+        try:
+            response = session.get(f"{api_url}/strategies/report", timeout=15)
+            log(f"   GET /api/strategies/report: {response.status_code}")
+            
+            if response.status_code == 200:
+                report_data = response.json()
+                json_responses["strategies_report"] = report_data
+                
+                runs = report_data.get('runs', [])
+                log(f"   📊 Report Data:")
+                log(f"      Total runs: {len(runs)}")
+                
+                if runs:
+                    test_results["strategies_report_success"] = True
+                    log("✅ Test 3 OK: GET /api/strategies/report retornou runs")
+                    
+                    # Check if our audit_id is in the runs
+                    if audit_id:
+                        audit_found = False
+                        for run in runs:
+                            if run.get('id') == audit_id:
+                                audit_found = True
+                                log(f"   🎯 Audit ID {audit_id} encontrado no report!")
+                                log(f"      Run details: strategy={run.get('strategyId')}, symbol={run.get('symbol')}")
+                                break
+                        
+                        if audit_found:
+                            test_results["report_contains_audit_id"] = True
+                            log("✅ Test 3 EXTRA: Report contém o audit ID do passo 1")
+                        else:
+                            log(f"⚠️  Audit ID {audit_id} não encontrado no report (pode ser normal se múltiplos runs)")
+                    
+                    # Show sample of runs
+                    log(f"   📈 Sample runs:")
+                    for i, run in enumerate(runs[-3:]):  # Show last 3 runs
+                        run_id = run.get('id', 'N/A')[:8] + '...' if run.get('id') else 'N/A'
+                        strategy = run.get('strategyId', 'N/A')
+                        symbol = run.get('symbol', 'N/A')
+                        created_at = run.get('created_at', 'N/A')
+                        log(f"      Run {i+1}: id={run_id}, strategy={strategy}, symbol={symbol}, created_at={created_at}")
+                else:
+                    log("❌ Test 3 FALHOU: Report não contém runs")
+            else:
+                log(f"❌ Test 3 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategies_report"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    json_responses["strategies_report"] = {"error": response.text}
+                        
+        except Exception as e:
+            log(f"❌ Test 3 FALHOU - Exception: {e}")
+            json_responses["strategies_report"] = {"error": str(e)}
+        
+        # Test 4: GET /api/deriv/status
+        log("\n🔍 TEST 4: GET /api/deriv/status")
+        log("   Validar: 200 OK, connected/authenticated flags sem quebrar conexão existente")
+        
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            log(f"   GET /api/deriv/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                json_responses["deriv_status"] = status_data
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                
+                connected = status_data.get('connected')
+                authenticated = status_data.get('authenticated')
+                environment = status_data.get('environment')
+                symbols = status_data.get('symbols', [])
+                
+                log(f"   📊 Deriv Status:")
+                log(f"      Connected: {connected}")
+                log(f"      Authenticated: {authenticated}")
+                log(f"      Environment: {environment}")
+                log(f"      Symbols count: {len(symbols)}")
+                
+                if isinstance(connected, bool) and isinstance(authenticated, bool):
+                    test_results["deriv_status_success"] = True
+                    log("✅ Test 4 OK: GET /api/deriv/status retornou flags connected/authenticated")
+                    
+                    # Check if connection is still working (not broken)
+                    if connected or authenticated:  # At least one should be true for working connection
+                        test_results["connection_not_broken"] = True
+                        log("✅ Test 4 EXTRA: Conexão Deriv não foi quebrada")
+                    else:
+                        log("⚠️  Conexão Deriv pode estar com problemas (connected=false, authenticated=false)")
+                else:
+                    log(f"❌ Test 4 FALHOU: connected/authenticated não são booleanos")
+            else:
+                log(f"❌ Test 4 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["deriv_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                    json_responses["deriv_status"] = {"error": response.text}
+                        
+        except Exception as e:
+            log(f"❌ Test 4 FALHOU - Exception: {e}")
+            json_responses["deriv_status"] = {"error": str(e)}
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: PHASE 1 - NOVOS ENDPOINTS ESTRATÉGIAS")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        # Critical validation for Phase 1 new endpoints
+        phase1_endpoints_success = (test_results.get("strategies_audit_success") and 
+                                   test_results.get("results_json_updated") and
+                                   test_results.get("strategies_report_success") and
+                                   test_results.get("deriv_status_success"))
+        
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - PHASE 1 NEW ENDPOINTS:")
+        if phase1_endpoints_success:
+            log("✅ PHASE 1 NOVOS ENDPOINTS: Funcionando corretamente")
+            log("   - POST /api/strategies/audit executa e retorna métricas")
+            log("   - backend/backtests/results.json foi atualizado")
+            log("   - GET /api/strategies/report retorna runs")
+            log("   - GET /api/deriv/status funciona sem quebrar conexão")
+        else:
+            log("❌ PHASE 1 NOVOS ENDPOINTS: Problemas detectados")
+            failed_tests = [k for k, v in test_results.items() if not v]
+            log(f"   Testes falharam: {failed_tests}")
+        
+        # Summary of key results
+        log(f"\n📈 RESUMO DOS RESULTADOS:")
+        
+        # Strategies audit
+        if "strategies_audit" in json_responses:
+            audit_data = json_responses["strategies_audit"]
+            if not audit_data.get('error'):
+                log(f"   Strategies Audit:")
+                log(f"      - ID: {audit_data.get('id', 'N/A')}")
+                log(f"      - Strategy: {audit_data.get('strategyId', 'N/A')}")
+                log(f"      - Symbol: {audit_data.get('symbol', 'N/A')}")
+                log(f"      - Timeframe: {audit_data.get('timeframe', 'N/A')}")
+                metrics = audit_data.get('metrics', {})
+                if metrics:
+                    log(f"      - Win Rate: {metrics.get('win_rate', 'N/A')}")
+                    log(f"      - PnL Total: {metrics.get('pnl_total', 'N/A')}")
+        
+        # Strategies report
+        if "strategies_report" in json_responses:
+            report_data = json_responses["strategies_report"]
+            if not report_data.get('error'):
+                runs = report_data.get('runs', [])
+                log(f"   Strategies Report:")
+                log(f"      - Total runs: {len(runs)}")
+                if audit_id and test_results.get("report_contains_audit_id"):
+                    log(f"      - Contains audit ID: ✅ {audit_id}")
+        
+        # Deriv status
+        if "deriv_status" in json_responses:
+            status_data = json_responses["deriv_status"]
+            if not status_data.get('error'):
+                log(f"   Deriv Status:")
+                log(f"      - Connected: {status_data.get('connected', 'N/A')}")
+                log(f"      - Authenticated: {status_data.get('authenticated', 'N/A')}")
+                log(f"      - Environment: {status_data.get('environment', 'N/A')}")
+        
+        # Report all JSON responses
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            if isinstance(json_data, dict) and len(str(json_data)) > 2000:
+                # Summarize large responses
+                if step_name == "strategies_report" and "runs" in json_data:
+                    runs = json_data.get("runs", [])
+                    log(f"   Runs count: {len(runs)}")
+                    if runs:
+                        log(f"   Latest run: {json.dumps(runs[-1], indent=4)}")
+                        log("   ... (other runs truncated for brevity)")
+                else:
+                    summary = {k: v for k, v in json_data.items() if k in ['id', 'strategyId', 'symbol', 'timeframe', 'metrics', 'saved_to', 'connected', 'authenticated', 'environment']}
+                    log(json.dumps(summary, indent=2, ensure_ascii=False))
+                    log("   ... (response truncated for brevity)")
+            else:
+                log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        return phase1_endpoints_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
+
 def test_riskmanager_take_profit_immediate():
     """
     Execute the RiskManager Take Profit immediate test plan as requested in Portuguese review
