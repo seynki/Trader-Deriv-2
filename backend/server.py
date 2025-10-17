@@ -2087,7 +2087,7 @@ class StrategyRunner:
                                 closes_g = [float(c.get('close')) for c in candles]
                                 highs_g = [float(c.get('high')) for c in candles]
                                 lows_g = [float(c.get('low')) for c in candles]
-                                adx_vals_g = _adx(highs_g, lows_g, closes_g)
+                                adx_vals_g = IND_adx_list(highs_g, lows_g, closes_g)
                                 last_adx_g = next((x for x in reversed(adx_vals_g) if x is not None), None)
                             except Exception:
                                 last_adx_g = None
