@@ -732,7 +732,7 @@ class StrategyStatus(BaseModel):
     last_reason: Optional[str] = None
     last_run_at: Optional[int] = None
 
-# ---- indicator helpers (python versions) ----
+# ---- indicator helpers replaced by ml_utils imports (see active server.py). Keeping legacy below for reference. ----
 
 def _sma(arr: List[float], n: int, i: Optional[int] = None) -> Optional[float]:
     if i is None:
