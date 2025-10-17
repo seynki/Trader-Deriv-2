@@ -953,7 +953,7 @@ class StrategyRunner:
         prev_fast = IND_sma_last(close[:-1], self.params.fast_ma)
         prev_slow = IND_sma_last(close[:-1], self.params.slow_ma)
 
-        macd_res = _macd(close, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
+        macd_res = IND_macd_dict_list(close, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
         last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
         last_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
 
