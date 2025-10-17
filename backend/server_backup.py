@@ -957,7 +957,7 @@ class StrategyRunner:
         last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
         last_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
 
-        rsi_arr = _rsi(close)
+        rsi_arr = IND_rsi_list(close)
         last_rsi = next((x for x in reversed(rsi_arr) if x is not None), None)
         bb = _bollinger(close, 20, self.params.bbands_k)
         last_price = close[-1]
