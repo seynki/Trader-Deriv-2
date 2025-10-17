@@ -70,3 +70,20 @@ class WeightedVotingDecisionEngine:
                 side = "FALL"
                 score = votes["FALL"]
         return {"decision": side, "score": score, "votes": votes, "details": details, "used_strategies": active_strats}
+
+
+def decide_trade(df: pd.DataFrame, ctx: StrategyContext, config: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Convenience function to decide a trade using the weighted voting engine.
+    Returns a dict with keys: side (RISE/FALL/None), reason, and meta (full engine output).
+    """
+    try:
+        engine = WeightedVotingDecisionEngine(config or load_config())
+        res = engine.evaluate(df, ctx)
+        decision = res.get("decision")
+        if decision in ("RISE", "FALL"):
+            score = float(res.get("score", 0.0))
+            return {"side": decision, "reason": f"DecisionEngine score={score:.2f}", "meta": res}
+        return {"side": None, "reason": "DecisionEngine neutral", "meta": res}
+    except Exception as e:
+        return {"side": None, "reason": f"DecisionEngine error: {e}", "meta": {"error": str(e)}}
+
