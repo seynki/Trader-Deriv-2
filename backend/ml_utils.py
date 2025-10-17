@@ -113,6 +113,12 @@ def ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
 
 
+
+def sma(series: pd.Series, period: int) -> pd.Series:
+    """Simple moving average"""
+    return series.rolling(period).mean()
+
+
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     up = delta.clip(lower=0)
