@@ -2642,7 +2642,7 @@ async def river_backtest_run(request: RiverBacktestRequest):
         
         adx_values = _adx(high_prices, low_prices, close_prices)
         rsi_values = _rsi(close_prices)
-        bb_values = _bollinger(close_prices, 20, 2.0)
+        bb_values = IND_bollinger_dict(close_prices, 20, 2.0)
         
         results = []
         
