@@ -1658,14 +1658,29 @@ class StrategyRunner:
 
     def _decide_signal(self, candles: List[Dict[str, Any]]) -> Optional[Dict[str, str]]:
         """
-        LÓGICA HÍBRIDA: River Online Learning (condição principal) + Indicadores Técnicos (confirmação)
-        1. River analisa o último candle e dá prob_up
-        2. Se River sinalizar (prob_up >= threshold para CALL ou prob_up <= 1-threshold para PUT)
-        3. Então verificamos se os indicadores técnicos confirmam o sinal
-        4. Só executa trade se AMBOS concordarem
+        Integração DecisionEngine + Fallback atual:
+        1) Tenta decidir via decision_engine.decide_trade (votação ponderada de estratégias)
+        2) Se neutro/erro, cai no comportamento atual: River + confirmação por indicadores técnicos
         """
         if len(candles) == 0:
             return None
+        
+        # === PASSO 0: TENTAR DECISION ENGINE (Weighted Voting) ===
+        try:
+            df = pd.DataFrame(candles)
+            if 'timestamp' in df.columns:
+                df.index = pd.to_datetime(df['timestamp'], unit='s')
+            elif 'epoch' in df.columns:
+                df.index = pd.to_datetime(df['epoch'], unit='s')
+            regime = detect_market_regime(df) if callable(detect_market_regime) else None
+            if deceng is not None and hasattr(deceng, 'decide_trade'):
+                ctx = deceng.StrategyContext(symbol=self.params.symbol, timeframe=f"{self.params.granularity}s", regime=regime)
+                de = deceng.decide_trade(df, ctx)
+                if de and de.get('side') in ('RISE','FALL'):
+                    self.last_reason = f"DecisionEngine: {de.get('meta', {}).get('votes')}"
+                    return {"side": de['side'], "reason": de.get('reason', 'DecisionEngine')}
+        except Exception as e:
+            logger.warning(f"DecisionEngine in _decide_signal falhou: {e}")
         
         # === PASSO 1: CONSULTAR RIVER (CONDIÇÃO PRINCIPAL) ===
         last_candle = candles[-1]
