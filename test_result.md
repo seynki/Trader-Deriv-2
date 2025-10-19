@@ -944,3 +944,28 @@
 ##   -message: "Favor validar com conta configurada: 1) GET /api/deriv/status 2) POST /api/deriv/buy R_10 CALL 5t stake=1.0 USD com take_profit_usd=0.05 e stop_loss_usd=null (ou 0). Acompanhar WS /api/ws/contract/{id} e logs: NÃO deve vender em -0.05; deve vender assim que lucro >= +0.05 (disparo imediato). 3) Opcional: criar contrato com stop_loss_usd=0.05 (sem TP) e confirmar venda quando lucro <= -0.05."
 ##   -agent: "testing"
 ##   -message: "🚀 PHASE 1 NOVOS ENDPOINTS ESTRATÉGIAS VALIDADOS COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo conforme solicitação portuguesa dos novos endpoints da Fase 1: 1) POST /api/strategies/audit ✅ Payload {strategyId:'decision_engine', symbol:'R_10', timeframe:'1m', dateFrom:null, dateTo:null} retorna 200 OK com id='8a81a7df-20db-46e1-bc73-1b0258a61d6a', metrics completas {trades:0, wins:0, losses:0, win_rate:0.0, pnl_total:0.0, ev_per_trade:0.0, max_drawdown:0.0, sharpe:null}, saved_to='/app/backend/backtests/results.json', created_at=1760663052 2) RESULTS.JSON ATUALIZADO ✅ backend/backtests/results.json foi atualizado com runs.length=1 (>=1 conforme solicitado), contém o run completo com todos os campos obrigatórios 3) GET /api/strategies/report ✅ Retorna 200 OK com runs array contendo 1 run, inclui o audit ID '8a81a7df-20db-46e1-bc73-1b0258a61d6a' do passo anterior confirmando integração perfeita entre endpoints 4) GET /api/deriv/status ✅ Retorna 200 OK com connected=true, authenticated=true, environment=DEMO, symbols=[15 símbolos incluindo R_10], conexão Deriv não foi quebrada pelos novos endpoints 5) FALLBACK DERIV WS ✅ Sistema usa fallback automático para candles via Deriv WS quando CSV local não existe, retorna métricas válidas sem erro 500 conforme especificado. RESULTADO CRÍTICO: Taxa sucesso 100% (6/6 testes), todos os novos endpoints Phase 1 funcionando PERFEITAMENTE - audit executa e persiste, report integra corretamente, deriv status mantém estabilidade, fallback automático operacional. Sistema pronto para auditorias completas de estratégias decision_engine com persistência e relatórios consolidados."
+
+## backend:
+##   - task: "Archive server_backup.py to legacy"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/legacy/server_backup.py"
+##     stuck_count: 0
+##     priority: "low"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Arquivo movido de backend/server_backup.py para backend/legacy/server_backup.py. Verificado que não há imports restantes. Objetivo: manter código legado arquivado sem quebrar endpoints atuais."
+
+## test_plan:
+##   current_focus:
+##     - "Backend smoke após arquivar server_backup.py"
+##   stuck_tasks: []
+##   test_all: false
+##   test_priority: "high_first"
+
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor validar que o arquivamento não quebrou nada: 1) GET /api/status 2) GET /api/deriv/status (connected/authenticated) 3) GET /api/strategy/status 4) GET /api/auto-bot/status 5) GET /api/ml/river/status 6) POST /api/strategies/audit e GET /api/strategies/report. NÃO testar /api/audit (ainda não criado)."
+
