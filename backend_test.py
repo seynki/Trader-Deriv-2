@@ -3259,7 +3259,7 @@ if __name__ == "__main__":
         
         if success:
             print("\n🎉 BACKEND SMOKE TESTS: SUCESSO TOTAL!")
-            print("✅ POST /api/status funcionando")
+            print("✅ GET /api/ funcionando")
             print("✅ GET /api/deriv/status com connected/authenticated/env")
             print("✅ GET /api/strategy/status com estrutura usual")
             print("✅ GET /api/auto-bot/status funcionando")
