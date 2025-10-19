@@ -1651,6 +1651,86 @@ class StrategyRunner:
         if len(candles) == 0:
             return None
         
+        # === PASSO 0.1: TENTAR NOVA ASSINATURA (adapter) decision_engine.decide_trade(symbol, timeframe, prices, indicators, context) ===
+        try:
+            if deceng is not None and hasattr(deceng, "decide_trade"):
+                df_prices = pd.DataFrame(candles)
+                if 'timestamp' in df_prices.columns:
+                    df_prices.index = pd.to_datetime(df_prices['timestamp'], unit='s')
+                elif 'epoch' in df_prices.columns:
+                    df_prices.index = pd.to_datetime(df_prices['epoch'], unit='s')
+                # regime via ml_utils
+                regime = detect_market_regime(df_prices) if callable(detect_market_regime) else None
+
+                # montar preços (listas recentes)
+                closes = [float(c.get("close", 0)) for c in candles]
+                highs = [float(c.get("high", 0)) for c in candles]
+                lows = [float(c.get("low", 0)) for c in candles]
+                opens = [float(c.get("open", 0)) for c in candles]
+                volumes = [float(c.get("volume", 0)) for c in candles]
+
+                # indicadores principais
+                rsi_series = IND_rsi_list(closes)
+                last_rsi = next((x for x in reversed(rsi_series) if x is not None), None)
+                macd_res = IND_macd_dict_list(closes, self.params.macd_fast, self.params.macd_slow, self.params.macd_sig)
+                last_macd = next((x for x in reversed(macd_res["line"]) if x is not None), None)
+                last_macd_sig = next((x for x in reversed(macd_res["signal"]) if x is not None), None)
+                bb = IND_bollinger_dict(closes, 20, self.params.bbands_k)
+                last_bb_up = next((x for x in reversed(bb["upper"]) if x is not None), None)
+                last_bb_dn = next((x for x in reversed(bb["lower"]) if x is not None), None)
+                adx_arr = IND_adx_list(highs, lows, closes)
+                last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
+                ema_fast = IND_ema_last(closes, self.params.fast_ma)
+                ema_slow = IND_ema_last(closes, self.params.slow_ma)
+
+                prices = {
+                    "open": opens,
+                    "high": highs,
+                    "low": lows,
+                    "close": closes,
+                    "volume": volumes,
+                }
+                indicators = {
+                    "rsi_last": last_rsi,
+                    "macd_last": last_macd,
+                    "macd_signal_last": last_macd_sig,
+                    "bb_upper_last": last_bb_up,
+                    "bb_lower_last": last_bb_dn,
+                    "adx_last": last_adx,
+                    "ema_fast": ema_fast,
+                    "ema_slow": ema_slow,
+                }
+                context = {
+                    "symbol": self.params.symbol,
+                    "timeframe": f"{self.params.granularity}s",
+                    "regime": regime,
+                    "river_threshold": self.params.river_threshold,
+                    "ml_gate": self.params.ml_gate,
+                    "timestamp": int(time.time()),
+                }
+
+                # Tentar nova assinatura primeiro; se não compatível, cairá no except e usaremos a assinatura antiga
+                de_res = deceng.decide_trade(self.params.symbol, f"{self.params.granularity}s", prices, indicators, context)
+                # Mapear resposta esperada {action:'buy|sell|hold', confidence:float, reason:str}
+                if isinstance(de_res, dict):
+                    action = de_res.get("action")
+                    reason = de_res.get("reason") or "DecisionEngine"
+                    if action in ("buy", "sell", "hold"):
+                        if action == "buy":
+                            self.last_reason = f"DecisionEngine (adapter): {reason}"
+                            return {"side": "RISE", "reason": reason}
+                        if action == "sell":
+                            self.last_reason = f"DecisionEngine (adapter): {reason}"
+                            return {"side": "FALL", "reason": reason}
+                        # hold => sem sinal
+                        self.last_reason = f"DecisionEngine (adapter): hold"
+                        return None
+        except TypeError:
+            # Provavelmente a assinatura antiga (df, ctx) - seguirá no PASSO 0 abaixo
+            pass
+        except Exception as e:
+            logger.warning(f"DecisionEngine adapter signature falhou: {e}")
+
         # === PASSO 0: TENTAR DECISION ENGINE (Weighted Voting) ===
         try:
             df = pd.DataFrame(candles)
