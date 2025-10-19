@@ -16,7 +16,7 @@ def test_strategy_analysis():
     print("📋 Objetivo: Verificar se a estratégia está processando ticks e fazendo análises")
     print("📋 Verificar se está fazendo contratos (paper mode)")
     
-    base_url = "https://derivbot-upgrade.preview.emergentagent.com/api"
+    base_url = "https://strategy-validator-2.preview.emergentagent.com/api"
     
     # 1. Check initial strategy status
     print("\n1. VERIFICANDO STATUS INICIAL DA ESTRATÉGIA")

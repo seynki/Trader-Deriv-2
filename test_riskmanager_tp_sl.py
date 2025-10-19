@@ -26,7 +26,7 @@ def log(message):
 def test_riskmanager_tp_sl_validation():
     """Execute the RiskManager TP/SL validation test"""
     
-    base_url = "https://derivbot-upgrade.preview.emergentagent.com"
+    base_url = "https://strategy-validator-2.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     session = requests.Session()
     session.headers.update({'Content-Type': 'application/json'})
