@@ -29,6 +29,389 @@ except ImportError:
     print("Warning: websocket-client not installed. WebSocket tests will be skipped.")
     websocket = None
 
+def test_backend_smoke_tests():
+    """
+    Backend Smoke Tests após mover server_backup.py
+    
+    Sequência de testes conforme review request português:
+    1) GET /api/status retorna 200
+    2) GET /api/deriv/status retorna 200 com connected/authenticated/env
+    3) GET /api/strategy/status retorna 200 com estrutura usual
+    4) GET /api/auto-bot/status retorna 200
+    5) GET /api/ml/river/status retorna 200
+    6) POST /api/strategies/audit com payload mínimo e depois GET /api/strategies/report
+    
+    Foco: Garantir que mover server_backup.py não impactou os endpoints atuais.
+    """
+    
+    base_url = "https://strategy-validator-2.preview.emergentagent.com"
+    api_url = f"{base_url}/api"
+    session = requests.Session()
+    session.headers.update({'Content-Type': 'application/json'})
+    
+    def log(message):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    log("\n" + "🔍" + "="*68)
+    log("BACKEND SMOKE TESTS - APÓS MOVER server_backup.py")
+    log("🔍" + "="*68)
+    log("📋 Test Plan (Portuguese Review Request):")
+    log("   1) GET /api/status retorna 200")
+    log("   2) GET /api/deriv/status retorna 200 com connected/authenticated/env")
+    log("   3) GET /api/strategy/status retorna 200 com estrutura usual")
+    log("   4) GET /api/auto-bot/status retorna 200")
+    log("   5) GET /api/ml/river/status retorna 200")
+    log("   6) POST /api/strategies/audit com payload mínimo + GET /api/strategies/report")
+    log("   Foco: Garantir que mover server_backup.py não impactou endpoints atuais")
+    
+    test_results = {
+        "api_status": False,
+        "deriv_status": False,
+        "strategy_status": False,
+        "auto_bot_status": False,
+        "ml_river_status": False,
+        "strategies_audit": False,
+        "strategies_report": False
+    }
+    
+    json_responses = {}
+    
+    try:
+        # Test 1: GET /api/status
+        log("\n🔍 TEST 1: GET /api/status")
+        log("   Verificar se endpoint básico retorna 200")
+        
+        try:
+            response = session.get(f"{api_url}/status", timeout=10)
+            log(f"   GET /api/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                status_data = response.json()
+                json_responses["api_status"] = status_data
+                log(f"   Response: {json.dumps(status_data, indent=2)}")
+                test_results["api_status"] = True
+                log("✅ Test 1 OK: GET /api/status retorna 200")
+            else:
+                log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["api_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 1 FALHOU - Exception: {e}")
+            json_responses["api_status"] = {"error": str(e)}
+        
+        # Test 2: GET /api/deriv/status
+        log("\n🔍 TEST 2: GET /api/deriv/status")
+        log("   Verificar connected/authenticated/env")
+        
+        try:
+            response = session.get(f"{api_url}/deriv/status", timeout=10)
+            log(f"   GET /api/deriv/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                deriv_data = response.json()
+                json_responses["deriv_status"] = deriv_data
+                log(f"   Response: {json.dumps(deriv_data, indent=2)}")
+                
+                connected = deriv_data.get('connected')
+                authenticated = deriv_data.get('authenticated')
+                environment = deriv_data.get('environment')
+                
+                log(f"   📊 Deriv Status:")
+                log(f"      Connected: {connected}")
+                log(f"      Authenticated: {authenticated}")
+                log(f"      Environment: {environment}")
+                
+                if isinstance(connected, bool) and isinstance(authenticated, bool) and environment:
+                    test_results["deriv_status"] = True
+                    log("✅ Test 2 OK: GET /api/deriv/status com connected/authenticated/env")
+                else:
+                    log(f"❌ Test 2 FALHOU: Campos obrigatórios ausentes ou inválidos")
+            else:
+                log(f"❌ Test 2 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["deriv_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 2 FALHOU - Exception: {e}")
+            json_responses["deriv_status"] = {"error": str(e)}
+        
+        # Test 3: GET /api/strategy/status
+        log("\n🔍 TEST 3: GET /api/strategy/status")
+        log("   Verificar estrutura usual do strategy status")
+        
+        try:
+            response = session.get(f"{api_url}/strategy/status", timeout=10)
+            log(f"   GET /api/strategy/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                strategy_data = response.json()
+                json_responses["strategy_status"] = strategy_data
+                log(f"   Response: {json.dumps(strategy_data, indent=2)}")
+                
+                # Check for expected fields
+                running = strategy_data.get('running')
+                mode = strategy_data.get('mode')
+                symbol = strategy_data.get('symbol')
+                
+                log(f"   📊 Strategy Status:")
+                log(f"      Running: {running}")
+                log(f"      Mode: {mode}")
+                log(f"      Symbol: {symbol}")
+                
+                if isinstance(running, bool):
+                    test_results["strategy_status"] = True
+                    log("✅ Test 3 OK: GET /api/strategy/status com estrutura usual")
+                else:
+                    log(f"❌ Test 3 FALHOU: Estrutura inválida")
+            else:
+                log(f"❌ Test 3 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategy_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 3 FALHOU - Exception: {e}")
+            json_responses["strategy_status"] = {"error": str(e)}
+        
+        # Test 4: GET /api/auto-bot/status
+        log("\n🔍 TEST 4: GET /api/auto-bot/status")
+        log("   Verificar se auto-bot endpoint retorna 200")
+        
+        try:
+            response = session.get(f"{api_url}/auto-bot/status", timeout=10)
+            log(f"   GET /api/auto-bot/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                autobot_data = response.json()
+                json_responses["auto_bot_status"] = autobot_data
+                log(f"   Response: {json.dumps(autobot_data, indent=2)}")
+                
+                # Check for expected fields
+                running = autobot_data.get('running')
+                
+                log(f"   📊 Auto-Bot Status:")
+                log(f"      Running: {running}")
+                
+                test_results["auto_bot_status"] = True
+                log("✅ Test 4 OK: GET /api/auto-bot/status retorna 200")
+            else:
+                log(f"❌ Test 4 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["auto_bot_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 4 FALHOU - Exception: {e}")
+            json_responses["auto_bot_status"] = {"error": str(e)}
+        
+        # Test 5: GET /api/ml/river/status
+        log("\n🔍 TEST 5: GET /api/ml/river/status")
+        log("   Verificar se ML River endpoint retorna 200")
+        
+        try:
+            response = session.get(f"{api_url}/ml/river/status", timeout=10)
+            log(f"   GET /api/ml/river/status: {response.status_code}")
+            
+            if response.status_code == 200:
+                river_data = response.json()
+                json_responses["ml_river_status"] = river_data
+                log(f"   Response: {json.dumps(river_data, indent=2)}")
+                
+                # Check for expected fields
+                initialized = river_data.get('initialized')
+                samples = river_data.get('samples')
+                
+                log(f"   📊 ML River Status:")
+                log(f"      Initialized: {initialized}")
+                log(f"      Samples: {samples}")
+                
+                test_results["ml_river_status"] = True
+                log("✅ Test 5 OK: GET /api/ml/river/status retorna 200")
+            else:
+                log(f"❌ Test 5 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["ml_river_status"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 5 FALHOU - Exception: {e}")
+            json_responses["ml_river_status"] = {"error": str(e)}
+        
+        # Test 6: POST /api/strategies/audit
+        log("\n🔍 TEST 6: POST /api/strategies/audit")
+        log("   Executar audit com payload mínimo")
+        
+        audit_payload = {
+            "strategyId": "decision_engine",
+            "symbol": "R_10",
+            "timeframe": "1m"
+        }
+        
+        log(f"   Payload: {json.dumps(audit_payload, indent=2)}")
+        
+        try:
+            response = session.post(f"{api_url}/strategies/audit", json=audit_payload, timeout=60)
+            log(f"   POST /api/strategies/audit: {response.status_code}")
+            
+            if response.status_code == 200:
+                audit_data = response.json()
+                json_responses["strategies_audit"] = audit_data
+                log(f"   Response: {json.dumps(audit_data, indent=2)}")
+                
+                audit_id = audit_data.get('id')
+                metrics = audit_data.get('metrics')
+                
+                log(f"   📊 Audit Results:")
+                log(f"      ID: {audit_id}")
+                log(f"      Metrics: {metrics is not None}")
+                
+                if audit_id and metrics:
+                    test_results["strategies_audit"] = True
+                    log("✅ Test 6 OK: POST /api/strategies/audit executado com sucesso")
+                else:
+                    log(f"❌ Test 6 FALHOU: Campos obrigatórios ausentes")
+            else:
+                log(f"❌ Test 6 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategies_audit"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 6 FALHOU - Exception: {e}")
+            json_responses["strategies_audit"] = {"error": str(e)}
+        
+        # Test 7: GET /api/strategies/report
+        log("\n🔍 TEST 7: GET /api/strategies/report")
+        log("   Verificar se report endpoint retorna 200")
+        
+        try:
+            response = session.get(f"{api_url}/strategies/report", timeout=15)
+            log(f"   GET /api/strategies/report: {response.status_code}")
+            
+            if response.status_code == 200:
+                report_data = response.json()
+                json_responses["strategies_report"] = report_data
+                
+                runs = report_data.get('runs', [])
+                log(f"   📊 Report Data:")
+                log(f"      Total runs: {len(runs)}")
+                
+                test_results["strategies_report"] = True
+                log("✅ Test 7 OK: GET /api/strategies/report retorna 200")
+            else:
+                log(f"❌ Test 7 FALHOU - HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    json_responses["strategies_report"] = error_data
+                    log(f"   Error: {error_data}")
+                except:
+                    log(f"   Error text: {response.text}")
+                        
+        except Exception as e:
+            log(f"❌ Test 7 FALHOU - Exception: {e}")
+            json_responses["strategies_report"] = {"error": str(e)}
+        
+        # Final analysis
+        log("\n" + "🏁" + "="*68)
+        log("RESULTADO FINAL: BACKEND SMOKE TESTS")
+        log("🏁" + "="*68)
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        success_rate = (passed_tests / total_tests) * 100
+        
+        log(f"📊 ESTATÍSTICAS:")
+        log(f"   Testes executados: {total_tests}")
+        log(f"   Testes bem-sucedidos: {passed_tests}")
+        log(f"   Taxa de sucesso: {success_rate:.1f}%")
+        
+        # Critical validation
+        smoke_tests_success = (test_results.get("api_status") and 
+                              test_results.get("deriv_status") and
+                              test_results.get("strategy_status") and
+                              test_results.get("auto_bot_status") and
+                              test_results.get("ml_river_status") and
+                              test_results.get("strategies_audit") and
+                              test_results.get("strategies_report"))
+        
+        log(f"\n🔍 VALIDAÇÃO CRÍTICA - SMOKE TESTS:")
+        if smoke_tests_success:
+            log("✅ SMOKE TESTS: Todos os endpoints funcionando corretamente")
+            log("   - Mover server_backup.py NÃO impactou endpoints atuais")
+            log("   - Todos os 7 endpoints testados retornaram 200")
+            log("   - Estruturas de resposta mantidas")
+        else:
+            log("❌ SMOKE TESTS: Problemas detectados")
+            failed_tests = [k for k, v in test_results.items() if not v]
+            log(f"   Testes falharam: {failed_tests}")
+            log("   - Mover server_backup.py pode ter impactado alguns endpoints")
+        
+        # Summary of key results
+        log(f"\n📈 RESUMO DOS RESULTADOS:")
+        
+        test_names = {
+            "api_status": "1) GET /api/status",
+            "deriv_status": "2) GET /api/deriv/status", 
+            "strategy_status": "3) GET /api/strategy/status",
+            "auto_bot_status": "4) GET /api/auto-bot/status",
+            "ml_river_status": "5) GET /api/ml/river/status",
+            "strategies_audit": "6) POST /api/strategies/audit",
+            "strategies_report": "7) GET /api/strategies/report"
+        }
+        
+        for test_key, passed in test_results.items():
+            test_name = test_names.get(test_key, test_key)
+            status = "✅ SUCESSO" if passed else "❌ FALHOU"
+            log(f"   {test_name}: {status}")
+        
+        # Report all JSON responses
+        log(f"\n📄 TODOS OS JSONs RETORNADOS:")
+        log("="*50)
+        for step_name, json_data in json_responses.items():
+            log(f"\n🔹 {step_name.upper()}:")
+            if isinstance(json_data, dict) and len(str(json_data)) > 1000:
+                # Summarize large responses
+                summary = {k: v for k, v in json_data.items() if k in ['connected', 'authenticated', 'running', 'initialized', 'id', 'metrics']}
+                log(json.dumps(summary, indent=2, ensure_ascii=False))
+                log("   ... (response truncated for brevity)")
+            else:
+                log(json.dumps(json_data, indent=2, ensure_ascii=False))
+            log("-" * 30)
+        
+        return smoke_tests_success, test_results, json_responses
+        
+    except Exception as e:
+        log(f"❌ ERRO CRÍTICO NO TESTE: {e}")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}")
+        
+        return False, {
+            "error": "critical_test_exception",
+            "details": str(e),
+            "test_results": test_results
+        }, {}
+
 def test_phase1_decision_engine():
     """
     Test Phase 1: Estratégias + Decision Engine + Regime
