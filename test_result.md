@@ -948,15 +948,18 @@
 ## backend:
 ##   - task: "Archive server_backup.py to legacy"
 ##     implemented: true
-##     working: "NA"
+##     working: true
 ##     file: "/app/backend/legacy/server_backup.py"
 ##     stuck_count: 0
 ##     priority: "low"
-##     needs_retesting: true
+##     needs_retesting: false
 ##     status_history:
 ##       -working: "NA"
 ##       -agent: "main"
 ##       -comment: "Arquivo movido de backend/server_backup.py para backend/legacy/server_backup.py. Verificado que não há imports restantes. Objetivo: manter código legado arquivado sem quebrar endpoints atuais."
+##       -working: true
+##       -agent: "testing"
+##       -comment: "✅ SMOKE TESTS COMPLETADOS COM SUCESSO TOTAL: Todos os 7 endpoints testados funcionando perfeitamente após arquivamento - GET /api/ (200), GET /api/deriv/status (connected=true, authenticated=true), GET /api/strategy/status (estrutura usual), GET /api/auto-bot/status (200), GET /api/ml/river/status (initialized=true), POST /api/strategies/audit (execução com sucesso), GET /api/strategies/report (5 runs). Taxa sucesso 100% (7/7). CONCLUSÃO: Mover server_backup.py NÃO impactou endpoints atuais. Arquivamento seguro confirmado. Corrigido bug menor MongoDB (if db: → if db is not None:)."
 
 ## test_plan:
 ##   current_focus:
