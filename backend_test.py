@@ -3251,23 +3251,25 @@ def test_ml_engine_and_risk_stops():
         }, {}
 
 if __name__ == "__main__":
-    print("🚀 TESTE PHASE 1: NOVOS ENDPOINTS ESTRATÉGIAS")
+    print("🔍 EXECUTANDO BACKEND SMOKE TESTS")
     print("="*70)
     
     try:
-        success, results, responses = test_phase1_new_endpoints()
+        success, results, responses = test_backend_smoke_tests()
         
         if success:
-            print("\n🎉 TESTE PHASE 1 NOVOS ENDPOINTS CONCLUÍDO COM SUCESSO!")
-            print("✅ POST /api/strategies/audit: Funcionando e retornando métricas")
-            print("✅ backend/backtests/results.json: Atualizado com novos runs")
-            print("✅ GET /api/strategies/report: Funcionando e contendo runs")
-            print("✅ GET /api/deriv/status: Funcionando sem quebrar conexão")
-            print("✅ Fallback para Deriv WS: Funcionando quando CSV local não existe")
+            print("\n🎉 BACKEND SMOKE TESTS: SUCESSO TOTAL!")
+            print("✅ GET /api/status funcionando")
+            print("✅ GET /api/deriv/status com connected/authenticated/env")
+            print("✅ GET /api/strategy/status com estrutura usual")
+            print("✅ GET /api/auto-bot/status funcionando")
+            print("✅ GET /api/ml/river/status funcionando")
+            print("✅ POST /api/strategies/audit executado")
+            print("✅ GET /api/strategies/report funcionando")
+            print("🎯 CONCLUSÃO: Mover server_backup.py NÃO impactou endpoints atuais")
         else:
-            print("\n❌ TESTE PHASE 1 NOVOS ENDPOINTS FALHOU!")
-            print("⚠️  Verificar implementação dos novos endpoints")
-            print("🚨 Possíveis problemas: strategies/audit, strategies/report ou deriv/status")
+            print("\n❌ BACKEND SMOKE TESTS: PROBLEMAS DETECTADOS")
+            print("⚠️  Mover server_backup.py pode ter impactado alguns endpoints")
             
             # Show which specific tests failed
             failed_tests = [k for k, v in results.items() if not v and k != 'error']
