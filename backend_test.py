@@ -77,34 +77,32 @@ def test_backend_smoke_tests():
     json_responses = {}
     
     try:
-        # Test 1: POST /api/status (endpoint is POST, not GET)
-        log("\n🔍 TEST 1: POST /api/status")
+        # Test 1: GET /api/ (root endpoint)
+        log("\n🔍 TEST 1: GET /api/")
         log("   Verificar se endpoint básico retorna 200")
         
-        status_payload = {"client_name": "smoke_test"}
-        
         try:
-            response = session.post(f"{api_url}/status", json=status_payload, timeout=10)
-            log(f"   POST /api/status: {response.status_code}")
+            response = session.get(f"{api_url}/", timeout=10)
+            log(f"   GET /api/: {response.status_code}")
             
             if response.status_code == 200:
                 status_data = response.json()
-                json_responses["api_status"] = status_data
+                json_responses["api_root"] = status_data
                 log(f"   Response: {json.dumps(status_data, indent=2)}")
                 test_results["api_status"] = True
-                log("✅ Test 1 OK: POST /api/status retorna 200")
+                log("✅ Test 1 OK: GET /api/ retorna 200")
             else:
                 log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
                 try:
                     error_data = response.json()
-                    json_responses["api_status"] = error_data
+                    json_responses["api_root"] = error_data
                     log(f"   Error: {error_data}")
                 except:
                     log(f"   Error text: {response.text}")
                         
         except Exception as e:
             log(f"❌ Test 1 FALHOU - Exception: {e}")
-            json_responses["api_status"] = {"error": str(e)}
+            json_responses["api_root"] = {"error": str(e)}
         
         # Test 2: GET /api/deriv/status
         log("\n🔍 TEST 2: GET /api/deriv/status")
