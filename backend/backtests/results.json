@@ -59,6 +59,26 @@
         "sharpe": null
       },
       "created_at": 1760836175
+    },
+    {
+      "id": "40b8b4ba-850c-4bd1-b9d1-beea44bbcacc",
+      "strategyId": "decision_engine",
+      "symbol": "R_10",
+      "timeframe": "1m",
+      "dateFrom": null,
+      "dateTo": null,
+      "params": {},
+      "metrics": {
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "pnl_total": 0.0,
+        "ev_per_trade": 0.0,
+        "max_drawdown": 0.0,
+        "sharpe": null
+      },
+      "created_at": 1760836234
     }
   ]
 }
