@@ -77,20 +77,22 @@ def test_backend_smoke_tests():
     json_responses = {}
     
     try:
-        # Test 1: GET /api/status
-        log("\n🔍 TEST 1: GET /api/status")
+        # Test 1: POST /api/status (endpoint is POST, not GET)
+        log("\n🔍 TEST 1: POST /api/status")
         log("   Verificar se endpoint básico retorna 200")
         
+        status_payload = {"client_name": "smoke_test"}
+        
         try:
-            response = session.get(f"{api_url}/status", timeout=10)
-            log(f"   GET /api/status: {response.status_code}")
+            response = session.post(f"{api_url}/status", json=status_payload, timeout=10)
+            log(f"   POST /api/status: {response.status_code}")
             
             if response.status_code == 200:
                 status_data = response.json()
                 json_responses["api_status"] = status_data
                 log(f"   Response: {json.dumps(status_data, indent=2)}")
                 test_results["api_status"] = True
-                log("✅ Test 1 OK: GET /api/status retorna 200")
+                log("✅ Test 1 OK: POST /api/status retorna 200")
             else:
                 log(f"❌ Test 1 FALHOU - HTTP {response.status_code}")
                 try:
