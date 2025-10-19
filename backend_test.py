@@ -373,7 +373,7 @@ def test_backend_smoke_tests():
         log(f"\n📈 RESUMO DOS RESULTADOS:")
         
         test_names = {
-            "api_status": "1) GET /api/status",
+            "api_status": "1) POST /api/status",
             "deriv_status": "2) GET /api/deriv/status", 
             "strategy_status": "3) GET /api/strategy/status",
             "auto_bot_status": "4) GET /api/auto-bot/status",
