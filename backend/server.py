@@ -1697,8 +1697,8 @@ class StrategyRunner:
                     "bb_upper_last": last_bb_up,
                     "bb_lower_last": last_bb_dn,
                     "adx_last": last_adx,
-                    "ema_fast": ema_fast,
-                    "ema_slow": ema_slow,
+                    "ma_fast": ma_fast,
+                    "ma_slow": ma_slow,
                 }
                 context = {
                     "symbol": self.params.symbol,
