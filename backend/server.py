@@ -1680,8 +1680,8 @@ class StrategyRunner:
                 last_bb_dn = next((x for x in reversed(bb["lower"]) if x is not None), None)
                 adx_arr = IND_adx_list(highs, lows, closes)
                 last_adx = next((x for x in reversed(adx_arr) if x is not None), None)
-                ema_fast = IND_ema_last(closes, self.params.fast_ma)
-                ema_slow = IND_ema_last(closes, self.params.slow_ma)
+                ma_fast = IND_sma_last(closes, self.params.fast_ma)
+                ma_slow = IND_sma_last(closes, self.params.slow_ma)
 
                 prices = {
                     "open": opens,
