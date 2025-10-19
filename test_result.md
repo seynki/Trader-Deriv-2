@@ -487,7 +487,7 @@
 ##
 ## test_plan:
 ##   current_focus:
-##     - "StrategyRunner: integrar decision_engine.decide_trade (adapter) com fallback"
+##     - "None"
 ##   stuck_tasks:
 ##     - "None"
 ##   test_all: false
