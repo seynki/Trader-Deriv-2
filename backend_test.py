@@ -56,7 +56,7 @@ def test_backend_smoke_tests():
     log("BACKEND SMOKE TESTS - APÓS MOVER server_backup.py")
     log("🔍" + "="*68)
     log("📋 Test Plan (Portuguese Review Request):")
-    log("   1) GET /api/status retorna 200")
+    log("   1) POST /api/status retorna 200")
     log("   2) GET /api/deriv/status retorna 200 com connected/authenticated/env")
     log("   3) GET /api/strategy/status retorna 200 com estrutura usual")
     log("   4) GET /api/auto-bot/status retorna 200")
