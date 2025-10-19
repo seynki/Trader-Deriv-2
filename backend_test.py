@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-Backend Testing - Phase 1: Estratégias + Decision Engine + Regime
-Tests the Phase 1 implementation after Decision Engine and Strategies integration
+Backend Testing - Smoke Tests após mover server_backup.py
 
 Test Plan (Portuguese Review Request):
-Teste rápido do backend após Fase 1 (NÃO testar frontend):
-1) Confirmar saúde: GET /api/deriv/status deve retornar 200 com connected (true/false), authenticated (true/false) sem erro
-2) Iniciar StrategyRunner: POST /api/strategy/start com payload padrão (ou vazio) → aguardar 6-10s → GET /api/strategy/status 2-3x
-   - Esperado: running=true, last_run_at atualizando
-   - last_reason pode conter "DecisionEngine" se a rota nova for usada; se não, deve seguir a lógica antiga normalmente
-3) Checar compatibilidade Deriv: POST /api/deriv/proposal com body {symbol:'R_10', type:'CALLPUT', contract_type:'CALL', duration:5, duration_unit:'t', stake:1, currency:'USD'} deve retornar 200
-4) Verificar que novas rotas de arquivos não quebraram: importar decision_engine e strategies não deve gerar 500 nos endpoints existentes
-Observações: não executar /api/deriv/buy real; apenas proposal. Se /api/strategy/stop existir, pare após o teste.
+Executar backend smoke tests após arquivar backend/server_backup.py (agora em backend/legacy/server_backup.py). 
+Foco: Garantir que mover server_backup.py não impactou os endpoints atuais.
+
+Testes solicitados:
+1) GET /api/status retorna 200
+2) GET /api/deriv/status retorna 200 com connected/authenticated/env
+3) GET /api/strategy/status retorna 200 com estrutura usual
+4) GET /api/auto-bot/status retorna 200
+5) GET /api/ml/river/status retorna 200
+6) POST /api/strategies/audit com payload mínimo {strategyId:'decision_engine', symbol:'R_10', timeframe:'1m'} e depois GET /api/strategies/report
+
+NÃO testar endpoint novo /api/audit (a ser criado depois).
+Se algo falhar, capture logs backend e detalhe.
 """
 
 import requests
