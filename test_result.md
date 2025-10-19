@@ -962,8 +962,7 @@
 ##       -comment: "✅ SMOKE TESTS COMPLETADOS COM SUCESSO TOTAL: Todos os 7 endpoints testados funcionando perfeitamente após arquivamento - GET /api/ (200), GET /api/deriv/status (connected=true, authenticated=true), GET /api/strategy/status (estrutura usual), GET /api/auto-bot/status (200), GET /api/ml/river/status (initialized=true), POST /api/strategies/audit (execução com sucesso), GET /api/strategies/report (5 runs). Taxa sucesso 100% (7/7). CONCLUSÃO: Mover server_backup.py NÃO impactou endpoints atuais. Arquivamento seguro confirmado. Corrigido bug menor MongoDB (if db: → if db is not None:)."
 
 ## test_plan:
-##   current_focus:
-##     - "Backend smoke após arquivar server_backup.py"
+##   current_focus: []
 ##   stuck_tasks: []
 ##   test_all: false
 ##   test_priority: "high_first"
