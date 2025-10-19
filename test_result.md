@@ -468,6 +468,32 @@
 ##   -agent: "testing"
 ##   -message: "🎉 AUTO-BOT ENDPOINTS TESTING COMPLETADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS 7 TESTES EXECUTADOS CONFORME REVIEW REQUEST PORTUGUÊS - Testados novos endpoints do bot de seleção automática: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO 2) GET /api/auto-bot/status (inicial) ✅ running=false conforme esperado 3) POST /api/auto-bot/start ✅ bot iniciado com sucesso, aguardado 5s para WebSocket conectar 4) GET /api/auto-bot/status (após start) ✅ running=true, collecting_ticks=true, já coletando ticks de todos os símbolos (R_100,R_75,R_50,R_25,R_10), 1 avaliação executada, best_combo identificado 5) GET /api/auto-bot/results ✅ retorna resultados de avaliação (não vazio) 6) POST /api/auto-bot/stop ✅ bot parado com sucesso 7) GET /api/auto-bot/status (após stop) ✅ running=false. CORREÇÃO CRÍTICA APLICADA: Fixed erro 'deriv_ws is not defined' alterando para '_deriv' no endpoint start. RESULTADO FINAL: Bot de seleção automática funcionando PERFEITAMENTE em modo simulação - WebSocket conecta, coleta ticks em tempo real, executa avaliações, identifica melhor combinação símbolo+timeframe. Taxa de sucesso: 100% (7/7). Sistema pronto para seleção automática de volatility indices."
 ##   -agent: "testing"
+
+## backend:
+##   - task: "StrategyRunner: integrar decision_engine.decide_trade (adapter) com fallback"
+##     implemented: true
+##     working: "NA"
+##     file: "/app/backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       -working: "NA"
+##       -agent: "main"
+##       -comment: "Adicionei chamada adapter no _decide_signal: tenta decision_engine.decide_trade(symbol, timeframe, prices, indicators, context) e, em caso de TypeError, mantém fallback para assinatura antiga (df, ctx) e, se neutro/erro, mantém o comportamento atual River+TA. Parâmetros passados: prices=open/high/low/close/volume arrays; indicators=rsi/macd+signal/bb_upper/bb_lower/adx/smas; context inclui regime detectado (ml_utils.detect_market_regime), symbol, timeframe, river_threshold, ml_gate, timestamp. Mantida compatibilidade com Deriv e loop da estratégia."
+##
+## test_plan:
+##   current_focus:
+##     - "StrategyRunner: integrar decision_engine.decide_trade (adapter) com fallback"
+##   stuck_tasks:
+##     - "None"
+##   test_all: false
+##   test_priority: "high_first"
+##
+## agent_communication:
+##   -agent: "main"
+##   -message: "Favor validar a integração no StrategyRunner: 1) POST /api/strategy/start (modo padrão) e monitorar /api/strategy/status por ~10-20s; 2) Confirmar que não há 500 e que last_run_at atualiza regularmente; 3) A decisão pode vir do DecisionEngine (se assinatura antiga estiver ativa) ou cair no fallback River+TA. Objetivo: garantir compatibilidade e que nada foi quebrado. Não testar frontend agora."
+
 ##   -message: "🚀 SISTEMA COMPLETO AUTO-BOT EXECUÇÃO REAL TESTADO COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado teste completo do sistema de execução real conforme solicitação portuguesa: 1) GET /api/deriv/status ✅ connected=true, authenticated=true, environment=DEMO 2) GET /api/auto-bot/status ✅ auto_execute=true, trades_executed=14 (>=1), running=true, collecting_ticks=true, execution_mode não mostra 'Simulação' 3) Verificação trades reais ✅ último trade: contract_id=294171262228, buy_price=1, payout=1.95, symbol=R_100, direction=PUT 4) Monitoramento continuidade 30s ✅ 6/6 checks running=true, collecting_ticks=true, evaluations aumentando (30→35), tick_counts crescendo (80→92 por símbolo) 5) Execução trades adicionais ✅ 4 novos trades executados durante teste (14→18). LOGS CONFIRMAM: 'Trade REAL executado com sucesso: contract_id=294171304308' e 'contract_id=294171317788'. RESULTADO CRÍTICO: Sistema AUTO-BOT executando TRADES REAIS em conta DEMO funcionando PERFEITAMENTE - conectividade Deriv estabelecida, bot em modo execução real, trades reais confirmados (contract_ids válidos), continuidade operacional por 30s+, novos trades executados quando critérios atendidos. Taxa de sucesso: 80% (4/5 testes passaram, 1 falha menor na verificação histórica). Sistema mostra 'Execução Real' ao invés de 'Simulação' e usa API /deriv/buy da Deriv. Trade conhecido R_75 PUT contract_id: 294171071248 confirmado no contexto."
 ##   -agent: "testing"
 ##   -message: "⚖️ ANÁLISE COMPARATIVA ML ENGINE vs RIVER ONLINE LEARNING COMPLETADA COM SUCESSO TOTAL (2025-01-28): ✅ TODOS OS CRITÉRIOS DA REVIEW REQUEST ATENDIDOS - Executado conforme solicitação portuguesa: Análise comparativa de performance entre ML Engine e River Online Learning com aguardo de 5s para conexão Deriv, todos os testes em modo DEMO, captura de métricas de performance e comparação objetiva. RESULTADOS: 1) ML ENGINE ✅ 100% sucesso (5/5 testes) - Status inicial/pós-treino OK, treinamento Transformer+LGB com 500 candles R_100 (85s), predição com probabilidades calibradas (prob=0.321, confidence=0.357), decisão trade com Kelly Criterion (dry_run=true) 2) RIVER ONLINE ✅ 100% sucesso (5/5 testes) - Status inicial OK (samples=47, acc=0.702), treinamento CSV 15 candles (0.020s), predição rápida (prob_up=0.825, 13 features), decisão trade instantânea (decision=CALL, dry_run=true) 3) ANÁLISE COMPARATIVA: Velocidade VENCEDOR River (0.056s média vs 30-60s ML Engine), Facilidade Retreinamento VENCEDOR River (online vs batch), Qualidade Predições VENCEDOR ML Engine (ensemble sofisticado vs LogReg), Taxa Sucesso EMPATE (100% ambos). RECOMENDAÇÃO FINAL: 🏆 ESTRATÉGIA HÍBRIDA - River para sinais rápidos e adaptação contínua, ML Engine para validação e decisões críticas. Ambos sistemas 100% operacionais com dados reais Deriv em modo DEMO."
