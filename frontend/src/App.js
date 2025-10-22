@@ -429,6 +429,48 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
     return { symbol, contract_type: side, stake: Number(stake), currency: "USD" };
   }
 
+  // Função para calcular RSI (Relative Strength Index)
+  const calculateRSI = (prices, period = 14) => {
+    if (prices.length < period + 1) return null;
+    
+    const changes = [];
+    for (let i = 1; i < prices.length; i++) {
+      changes.push(prices[i] - prices[i - 1]);
+    }
+    
+    // Calcular ganhos e perdas médias
+    let avgGain = 0;
+    let avgLoss = 0;
+    
+    // Primeira média (SMA)
+    for (let i = 0; i < period; i++) {
+      if (changes[i] > 0) {
+        avgGain += changes[i];
+      } else {
+        avgLoss += Math.abs(changes[i]);
+      }
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    
+    // RSI subsequentes (EMA)
+    for (let i = period; i < changes.length; i++) {
+      const change = changes[i];
+      if (change > 0) {
+        avgGain = (avgGain * (period - 1) + change) / period;
+        avgLoss = (avgLoss * (period - 1)) / period;
+      } else {
+        avgGain = (avgGain * (period - 1)) / period;
+        avgLoss = (avgLoss * (period - 1) + Math.abs(change)) / period;
+      }
+    }
+    
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    const rsi = 100 - (100 / (1 + rs));
+    return rsi;
+  };
+
   useEffect(() => {
     if (!enabled) {
       try { wsRef.current?.close(); } catch {}
@@ -452,23 +494,46 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           arr.push(price);
           if (arr.length > period) arr.shift();
           pricesRef.current = arr;
+          
+          // Calcular média para exibição
           const a = arr.reduce((s, x) => s + x, 0) / Math.max(arr.length, 1);
           setAvg(a);
-          if (arr.length < Math.max(3, period)) return; // aguarda dados suficientes
-          // relação com a média
-          const last = arr[arr.length - 1];
-          const prev = arr[arr.length - 2];
-          const relation = last > a ? "above" : last < a ? "below" : "equal";
-          const prevRel = prevRelationRef.current;
+          
+          // Aguardar dados suficientes para RSI (mínimo 15 períodos)
+          if (arr.length < Math.max(15, period)) return;
+          
+          // === ESTRATÉGIA RSI EXTREMO ===
+          // Calcular RSI com período 14
+          const rsi = calculateRSI(arr, 14);
+          if (rsi === null) return;
+          
           const now = Date.now();
           const cooled = now - lastTradeAtRef.current > cooldown * 1000;
-          // Gatilho: cruzamento da média e respeita cooldown
-          if (prevRel && relation !== prevRel && relation !== "equal" && cooled) {
-            const side = relation === "above" ? "CALL" : "PUT";
-            setLastSignal({ ts: now, side, price: last, avg: a });
+          
+          // Verificar se cooldown passou
+          if (!cooled) return;
+          
+          // Lógica RSI Extremo:
+          // CALL: RSI ≤ 25 (oversold extremo)
+          // PUT: RSI ≥ 75 (overbought extremo)
+          let side = null;
+          let reason = "";
+          
+          if (rsi <= 25) {
+            side = "CALL";
+            reason = `RSI extremo oversold (${rsi.toFixed(1)})`;
+          } else if (rsi >= 75) {
+            side = "PUT";
+            reason = `RSI extremo overbought (${rsi.toFixed(1)})`;
+          }
+          
+          // Se há sinal RSI extremo, executar trade
+          if (side) {
+            const last = arr[arr.length - 1];
+            setLastSignal({ ts: now, side, price: last, avg: a, rsi: rsi.toFixed(1) });
             lastTradeAtRef.current = now;
             
-            console.log(`🎯 Sinal detectado: ${side} - Preço: ${last.toFixed(4)}, Média: ${a.toFixed(4)}`);
+            console.log(`🎯 Sinal RSI Extremo detectado: ${side} - Preço: ${last.toFixed(4)}, RSI: ${rsi.toFixed(1)}`);
             
             // Verifica suporte
             if (!isTypeSupported(contractEngine)) {
@@ -485,7 +550,22 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
               // Continua funcionando mesmo com erro
             });
           }
+          
+          /* LÓGICA ANTIGA (CRUZAMENTO DE MÉDIA) - COMENTADA PARA POSSÍVEL USO FUTURO
+          const last = arr[arr.length - 1];
+          const prev = arr[arr.length - 2];
+          const relation = last > a ? "above" : last < a ? "below" : "equal";
+          const prevRel = prevRelationRef.current;
+          // Gatilho: cruzamento da média e respeita cooldown
+          if (prevRel && relation !== prevRel && relation !== "equal" && cooled) {
+            const side = relation === "above" ? "CALL" : "PUT";
+            setLastSignal({ ts: now, side, price: last, avg: a });
+            lastTradeAtRef.current = now;
+            console.log(`🎯 Sinal detectado: ${side} - Preço: ${last.toFixed(4)}, Média: ${a.toFixed(4)}`);
+            // ... resto da lógica
+          }
           prevRelationRef.current = relation;
+          */
         }
       } catch (e) {
         console.error(`❌ Erro no processamento de tick:`, e);
