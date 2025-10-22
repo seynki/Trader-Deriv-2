@@ -730,7 +730,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           </div>
           <div className="flex items-center gap-2 text-sm opacity-80">
             <span>Último sinal:</span>
-            <span>{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side}` : "-"}</span>
+            <span>{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side} • RSI ${lastSignal.rsi || "-"}` : "-"}</span>
           </div>
         </div>
         
