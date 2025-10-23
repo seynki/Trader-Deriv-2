@@ -317,6 +317,8 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
   const [growthRate, setGrowthRate] = useState(0.03);
   const [lastSignal, setLastSignal] = useState(null);
   const [avg, setAvg] = useState(null);
+  const [currentPrice, setCurrentPrice] = useState(null);
+  const [currentRSI, setCurrentRSI] = useState(null);
   const [lastError, setLastError] = useState(null);
   const [support, setSupport] = useState({ basic: null, multipliers: null, turbos: null, accumulator: null });
 
@@ -324,6 +326,15 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
   const pricesRef = useRef([]);
   const prevRelationRef = useRef(null);
   const lastTradeAtRef = useRef(0);
+  
+  // Limpar buffer quando símbolo mudar
+  useEffect(() => {
+    pricesRef.current = [];
+    setAvg(null);
+    setCurrentPrice(null);
+    setCurrentRSI(null);
+    setLastError(null);
+  }, [symbol]);
 
   // Fetch suporte de tipos por símbolo
   useEffect(() => {
