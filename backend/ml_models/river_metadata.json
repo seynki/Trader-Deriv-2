@@ -1,8 +1,8 @@
 {
-  "last_update": "2025-10-02T10:34:48.360363",
-  "sample_count": 174,
-  "accuracy": 0.5919540229885057,
-  "logloss": 0.6246048878110945,
+  "last_update": "2025-10-23T00:16:14.349805",
+  "sample_count": 176,
+  "accuracy": 0.5909090909090909,
+  "logloss": 0.6254134024334965,
   "model_path": "/app/backend/ml_models/river_online_model.pkl",
   "rolling_window": 50
 }
