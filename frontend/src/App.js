@@ -748,13 +748,27 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           )}
 
           )}
-          <div className="flex items-center gap-2 text-sm opacity-80">
-            <span>Média:</span>
-            <span className="font-mono">{avg ? avg.toFixed(4) : "-"}</span>
+        </div>
+        
+        {/* Exibição de dados em tempo real */}
+        <div className="flex flex-wrap items-center gap-4 text-sm border-t pt-3">
+          <div className="flex items-center gap-2">
+            <span className="opacity-70">Preço atual:</span>
+            <span className="font-mono font-semibold text-emerald-400">{currentPrice ? currentPrice.toFixed(4) : "-"}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm opacity-80">
-            <span>Último sinal:</span>
-            <span>{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side} • RSI ${lastSignal.rsi || "-"}` : "-"}</span>
+          <div className="flex items-center gap-2">
+            <span className="opacity-70">RSI (14):</span>
+            <span className={`font-mono font-semibold ${currentRSI !== null ? (currentRSI <= 25 ? 'text-green-400' : currentRSI >= 75 ? 'text-red-400' : 'text-yellow-400') : ''}`}>
+              {currentRSI !== null ? currentRSI.toFixed(1) : "-"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="opacity-70">Média ({period}):</span>
+            <span className="font-mono opacity-70">{avg ? avg.toFixed(4) : "-"}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="opacity-70">Último sinal:</span>
+            <span className="text-xs">{lastSignal ? `${new Date(lastSignal.ts).toLocaleTimeString()} • ${lastSignal.side} • RSI ${lastSignal.rsi || "-"}` : "-"}</span>
           </div>
         </div>
         
