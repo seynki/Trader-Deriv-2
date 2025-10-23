@@ -501,6 +501,10 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         if (msg.type === "tick" && msg.symbol === symbol) {
           const price = Number(msg.price);
           if (!Number.isFinite(price)) return;
+          
+          // Atualizar preço atual
+          setCurrentPrice(price);
+          
           const arr = pricesRef.current.slice();
           arr.push(price);
           if (arr.length > period) arr.shift();
@@ -511,12 +515,21 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           setAvg(a);
           
           // Aguardar dados suficientes para RSI (mínimo 15 períodos)
-          if (arr.length < Math.max(15, period)) return;
+          if (arr.length < Math.max(15, period)) {
+            setCurrentRSI(null);
+            return;
+          }
           
           // === ESTRATÉGIA RSI EXTREMO ===
           // Calcular RSI com período 14
           const rsi = calculateRSI(arr, 14);
-          if (rsi === null) return;
+          if (rsi === null) {
+            setCurrentRSI(null);
+            return;
+          }
+          
+          // Atualizar RSI atual para exibição
+          setCurrentRSI(rsi);
           
           const now = Date.now();
           const cooled = now - lastTradeAtRef.current > cooldown * 1000;
