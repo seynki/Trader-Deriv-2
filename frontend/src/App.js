@@ -307,7 +307,7 @@ function StrategyPanel({ onMlActiveChange }) {
 function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSymbol = "R_10" }) {
   const [enabled, setEnabled] = useState(false);
   const [symbol, setSymbol] = useState(defaultSymbol);
-  const [period, setPeriod] = useState(20); // últimos N preços
+  const [period, setPeriod] = useState(50); // últimos N preços - aumentado para mais suavização
   const [cooldown, setCooldown] = useState(30); // segundos entre trades
   const [contractEngine, setContractEngine] = useState("CALLPUT"); // CALLPUT | ACCUMULATOR | TURBOS | MULTIPLIERS
   const [multiplier, setMultiplier] = useState(200);
