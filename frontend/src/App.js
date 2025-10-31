@@ -514,15 +514,15 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           const a = arr.reduce((s, x) => s + x, 0) / Math.max(arr.length, 1);
           setAvg(a);
           
-          // Aguardar dados suficientes para RSI (mínimo 15 períodos)
-          if (arr.length < Math.max(15, period)) {
+          // Aguardar dados suficientes para RSI (mínimo 30 períodos para RSI(21) suavizado)
+          if (arr.length < Math.max(30, Math.ceil(period * 0.6))) {
             setCurrentRSI(null);
             return;
           }
           
-          // === ESTRATÉGIA RSI EXTREMO ===
-          // Calcular RSI com período 14
-          const rsi = calculateRSI(arr, 14);
+          // === ESTRATÉGIA RSI EXTREMO SUAVIZADO ===
+          // Calcular RSI com período 21 (mais suavizado e assertivo)
+          const rsi = calculateRSI(arr, 21);
           if (rsi === null) {
             setCurrentRSI(null);
             return;
