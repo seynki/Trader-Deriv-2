@@ -666,7 +666,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Período</span>
-            <Input className="w-24" type="number" min={5} max={200} value={period} onChange={(e) => setPeriod(Number(e.target.value||20))} />
+            <Input className="w-24" type="number" min={30} max={200} value={period} onChange={(e) => setPeriod(Number(e.target.value||50))} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Cooldown (s)</span>
