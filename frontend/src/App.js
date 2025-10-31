@@ -637,7 +637,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Entradas automáticas</div>
-            <div className="text-xs opacity-70">Estratégia: RSI Extremo (CALL se RSI ≤25, PUT se RSI ≥75). Backend seguro. Exibe erros detalhados aqui.</div>
+            <div className="text-xs opacity-70">Estratégia: RSI(21) Extremo Suavizado (CALL se RSI ≤25, PUT se RSI ≥75). Mais assertivo com 50 candles. Backend seguro.</div>
           </div>
           <div className="flex items-center gap-3">
             <Switch checked={enabled} onCheckedChange={(v)=>{ setLastError(null); setEnabled(v); }} />
