@@ -541,18 +541,18 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           // Verificar se cooldown passou
           if (!cooled) return;
           
-          // Lógica RSI Extremo:
-          // CALL: RSI ≤ 25 (oversold extremo)
-          // PUT: RSI ≥ 75 (overbought extremo)
+          // Lógica RSI Extremo Configurável:
+          // CALL: RSI ≤ rsiOversold (configurável, padrão 20)
+          // PUT: RSI ≥ rsiOverbought (configurável, padrão 80)
           let side = null;
           let reason = "";
           
-          if (rsi <= 25) {
+          if (rsi <= rsiOversold) {
             side = "CALL";
-            reason = `RSI extremo oversold (${rsi.toFixed(1)})`;
-          } else if (rsi >= 75) {
+            reason = `RSI extremo oversold ${rsi.toFixed(1)} ≤ ${rsiOversold}`;
+          } else if (rsi >= rsiOverbought) {
             side = "PUT";
-            reason = `RSI extremo overbought (${rsi.toFixed(1)})`;
+            reason = `RSI extremo overbought ${rsi.toFixed(1)} ≥ ${rsiOverbought}`;
           }
           
           // Se há sinal RSI extremo, executar trade
