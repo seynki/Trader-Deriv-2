@@ -624,7 +624,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
     return () => {
       try { ws.close(); } catch {}
     };
-  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit, growthRate, buyAdvanced, isTypeSupported]);
+  }, [enabled, symbol, period, cooldown, contractEngine, multiplier, strike, tp, sl, stake, duration, durationUnit, growthRate, buyAdvanced, isTypeSupported, rsiOversold, rsiOverbought]);
 
   return (
     <Card>
