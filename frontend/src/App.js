@@ -321,6 +321,10 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
   const [currentRSI, setCurrentRSI] = useState(null);
   const [lastError, setLastError] = useState(null);
   const [support, setSupport] = useState({ basic: null, multipliers: null, turbos: null, accumulator: null });
+  
+  // Níveis de RSI configuráveis (mais extremos = mais assertivos)
+  const [rsiOversold, setRsiOversold] = useState(20); // CALL quando RSI <= este valor
+  const [rsiOverbought, setRsiOverbought] = useState(80); // PUT quando RSI >= este valor
 
   const wsRef = useRef(null);
   const pricesRef = useRef([]);
