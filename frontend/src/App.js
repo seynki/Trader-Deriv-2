@@ -676,6 +676,17 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
             <span className="text-sm opacity-80">Cooldown (s)</span>
             <Input className="w-24" type="number" min={0} max={600} value={cooldown} onChange={(e) => setCooldown(Number(e.target.value||30))} />
           </div>
+          
+          {/* Configurações RSI Extremo */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80 text-green-400">RSI Oversold (CALL)</span>
+            <Input className="w-20" type="number" min={5} max={50} value={rsiOversold} onChange={(e) => setRsiOversold(Number(e.target.value||20))} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm opacity-80 text-red-400">RSI Overbought (PUT)</span>
+            <Input className="w-20" type="number" min={50} max={95} value={rsiOverbought} onChange={(e) => setRsiOverbought(Number(e.target.value||80))} />
+          </div>
+          
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">Tipo</span>
             <Select value={contractEngine} onValueChange={(v)=>{ setContractEngine(v); setLastError(null); }}>
