@@ -801,6 +801,8 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
               <div>Tipo: {contractEngine}</div>
               <div>Dados: {pricesRef.current?.length || 0}/{period}</div>
               <div>Status: {avg ? "Detectando sinais" : "Aguardando dados"}</div>
+              <div className="text-green-400">CALL: RSI ≤ {rsiOversold}</div>
+              <div className="text-red-400">PUT: RSI ≥ {rsiOverbought}</div>
             </div>
             {lastSignal && (
               <div className="mt-2 text-xs opacity-70">
