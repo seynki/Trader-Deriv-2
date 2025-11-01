@@ -762,7 +762,7 @@ function AutomacaoPanel({ buyAdvanced, stake, duration, durationUnit, defaultSym
           </div>
           <div className="flex items-center gap-2">
             <span className="opacity-70">RSI (21):</span>
-            <span className={`font-mono font-semibold ${currentRSI !== null ? (currentRSI <= 25 ? 'text-green-400' : currentRSI >= 75 ? 'text-red-400' : 'text-yellow-400') : ''}`}>
+            <span className={`font-mono font-semibold ${currentRSI !== null ? (currentRSI <= rsiOversold ? 'text-green-400' : currentRSI >= rsiOverbought ? 'text-red-400' : 'text-yellow-400') : ''}`}>
               {currentRSI !== null ? currentRSI.toFixed(1) : "-"}
             </span>
           </div>
